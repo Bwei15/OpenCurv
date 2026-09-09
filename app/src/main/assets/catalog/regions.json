@@ -1,0 +1,315 @@
+{
+  "note": "Paths follow the layout of download.mapsforge.org (maps/v5/<path>.map). Sizes are rough planning figures; the real size is read from the server before each download. Add your own regions here - the app reads this file at startup and needs no code change.",
+  "regions": [
+    {
+      "path": "europe/germany/baden-wuerttemberg",
+      "name": "Baden-Württemberg",
+      "country": "Germany",
+      "minLat": 47.5,
+      "minLon": 7.5,
+      "maxLat": 49.8,
+      "maxLon": 10.5,
+      "approxSizeMb": 330
+    },
+    {
+      "path": "europe/germany/bayern",
+      "name": "Bayern",
+      "country": "Germany",
+      "minLat": 47.2,
+      "minLon": 8.9,
+      "maxLat": 50.6,
+      "maxLon": 13.9,
+      "approxSizeMb": 470
+    },
+    {
+      "path": "europe/germany/berlin",
+      "name": "Berlin",
+      "country": "Germany",
+      "minLat": 52.3,
+      "minLon": 13.0,
+      "maxLat": 52.7,
+      "maxLon": 13.8,
+      "approxSizeMb": 45
+    },
+    {
+      "path": "europe/germany/brandenburg",
+      "name": "Brandenburg",
+      "country": "Germany",
+      "minLat": 51.3,
+      "minLon": 11.2,
+      "maxLat": 53.6,
+      "maxLon": 14.8,
+      "approxSizeMb": 180
+    },
+    {
+      "path": "europe/germany/bremen",
+      "name": "Bremen",
+      "country": "Germany",
+      "minLat": 53.0,
+      "minLon": 8.4,
+      "maxLat": 53.6,
+      "maxLon": 9.0,
+      "approxSizeMb": 20
+    },
+    {
+      "path": "europe/germany/hamburg",
+      "name": "Hamburg",
+      "country": "Germany",
+      "minLat": 53.3,
+      "minLon": 9.7,
+      "maxLat": 53.8,
+      "maxLon": 10.4,
+      "approxSizeMb": 35
+    },
+    {
+      "path": "europe/germany/hessen",
+      "name": "Hessen",
+      "country": "Germany",
+      "minLat": 49.3,
+      "minLon": 7.7,
+      "maxLat": 51.7,
+      "maxLon": 10.3,
+      "approxSizeMb": 230
+    },
+    {
+      "path": "europe/germany/mecklenburg-vorpommern",
+      "name": "Mecklenburg-Vorpommern",
+      "country": "Germany",
+      "minLat": 53.1,
+      "minLon": 10.5,
+      "maxLat": 54.7,
+      "maxLon": 14.5,
+      "approxSizeMb": 110
+    },
+    {
+      "path": "europe/germany/niedersachsen",
+      "name": "Niedersachsen",
+      "country": "Germany",
+      "minLat": 51.2,
+      "minLon": 6.6,
+      "maxLat": 54.0,
+      "maxLon": 11.6,
+      "approxSizeMb": 330
+    },
+    {
+      "path": "europe/germany/nordrhein-westfalen",
+      "name": "Nordrhein-Westfalen",
+      "country": "Germany",
+      "minLat": 50.3,
+      "minLon": 5.8,
+      "maxLat": 52.6,
+      "maxLon": 9.5,
+      "approxSizeMb": 360
+    },
+    {
+      "path": "europe/germany/rheinland-pfalz",
+      "name": "Rheinland-Pfalz",
+      "country": "Germany",
+      "minLat": 48.9,
+      "minLon": 6.1,
+      "maxLat": 51.0,
+      "maxLon": 8.6,
+      "approxSizeMb": 180
+    },
+    {
+      "path": "europe/germany/saarland",
+      "name": "Saarland",
+      "country": "Germany",
+      "minLat": 49.1,
+      "minLon": 6.3,
+      "maxLat": 49.7,
+      "maxLon": 7.5,
+      "approxSizeMb": 30
+    },
+    {
+      "path": "europe/germany/sachsen",
+      "name": "Sachsen",
+      "country": "Germany",
+      "minLat": 50.1,
+      "minLon": 11.8,
+      "maxLat": 51.7,
+      "maxLon": 15.1,
+      "approxSizeMb": 160
+    },
+    {
+      "path": "europe/germany/sachsen-anhalt",
+      "name": "Sachsen-Anhalt",
+      "country": "Germany",
+      "minLat": 50.9,
+      "minLon": 10.5,
+      "maxLat": 53.1,
+      "maxLon": 13.3,
+      "approxSizeMb": 130
+    },
+    {
+      "path": "europe/germany/schleswig-holstein",
+      "name": "Schleswig-Holstein",
+      "country": "Germany",
+      "minLat": 53.3,
+      "minLon": 7.8,
+      "maxLat": 55.1,
+      "maxLon": 11.4,
+      "approxSizeMb": 130
+    },
+    {
+      "path": "europe/germany/thueringen",
+      "name": "Thüringen",
+      "country": "Germany",
+      "minLat": 50.2,
+      "minLon": 9.8,
+      "maxLat": 51.7,
+      "maxLon": 12.7,
+      "approxSizeMb": 130
+    },
+    {
+      "path": "europe/germany",
+      "name": "Deutschland (ganz)",
+      "country": "Germany",
+      "minLat": 47.2,
+      "minLon": 5.8,
+      "maxLat": 55.1,
+      "maxLon": 15.1,
+      "approxSizeMb": 2600
+    },
+    {
+      "path": "europe/austria",
+      "name": "Österreich",
+      "country": "Alps",
+      "minLat": 46.3,
+      "minLon": 9.5,
+      "maxLat": 49.1,
+      "maxLon": 17.2,
+      "approxSizeMb": 420
+    },
+    {
+      "path": "europe/switzerland",
+      "name": "Schweiz",
+      "country": "Alps",
+      "minLat": 45.8,
+      "minLon": 5.9,
+      "maxLat": 47.9,
+      "maxLon": 10.5,
+      "approxSizeMb": 290
+    },
+    {
+      "path": "europe/italy",
+      "name": "Italien",
+      "country": "Southern Europe",
+      "minLat": 35.4,
+      "minLon": 6.6,
+      "maxLat": 47.1,
+      "maxLon": 18.6,
+      "approxSizeMb": 1600
+    },
+    {
+      "path": "europe/france",
+      "name": "Frankreich",
+      "country": "Western Europe",
+      "minLat": 41.3,
+      "minLon": -5.2,
+      "maxLat": 51.2,
+      "maxLon": 9.6,
+      "approxSizeMb": 2400
+    },
+    {
+      "path": "europe/slovenia",
+      "name": "Slowenien",
+      "country": "Alps",
+      "minLat": 45.4,
+      "minLon": 13.3,
+      "maxLat": 46.9,
+      "maxLon": 16.6,
+      "approxSizeMb": 90
+    },
+    {
+      "path": "europe/czech-republic",
+      "name": "Tschechien",
+      "country": "Central Europe",
+      "minLat": 48.5,
+      "minLon": 12.0,
+      "maxLat": 51.1,
+      "maxLon": 18.9,
+      "approxSizeMb": 300
+    },
+    {
+      "path": "europe/poland",
+      "name": "Polen",
+      "country": "Central Europe",
+      "minLat": 49.0,
+      "minLon": 14.1,
+      "maxLat": 54.9,
+      "maxLon": 24.2,
+      "approxSizeMb": 700
+    },
+    {
+      "path": "europe/belgium",
+      "name": "Belgien",
+      "country": "Western Europe",
+      "minLat": 49.4,
+      "minLon": 2.5,
+      "maxLat": 51.6,
+      "maxLon": 6.4,
+      "approxSizeMb": 170
+    },
+    {
+      "path": "europe/netherlands",
+      "name": "Niederlande",
+      "country": "Western Europe",
+      "minLat": 50.7,
+      "minLon": 3.3,
+      "maxLat": 53.7,
+      "maxLon": 7.3,
+      "approxSizeMb": 290
+    },
+    {
+      "path": "europe/luxembourg",
+      "name": "Luxemburg",
+      "country": "Western Europe",
+      "minLat": 49.4,
+      "minLon": 5.7,
+      "maxLat": 50.2,
+      "maxLon": 6.6,
+      "approxSizeMb": 25
+    },
+    {
+      "path": "europe/denmark",
+      "name": "Dänemark",
+      "country": "Northern Europe",
+      "minLat": 54.5,
+      "minLon": 8.0,
+      "maxLat": 57.8,
+      "maxLon": 15.2,
+      "approxSizeMb": 190
+    },
+    {
+      "path": "europe/croatia",
+      "name": "Kroatien",
+      "country": "Southern Europe",
+      "minLat": 42.3,
+      "minLon": 13.4,
+      "maxLat": 46.6,
+      "maxLon": 19.5,
+      "approxSizeMb": 150
+    },
+    {
+      "path": "europe/spain",
+      "name": "Spanien",
+      "country": "Southern Europe",
+      "minLat": 35.9,
+      "minLon": -9.4,
+      "maxLat": 43.8,
+      "maxLon": 3.4,
+      "approxSizeMb": 900
+    },
+    {
+      "path": "europe/portugal",
+      "name": "Portugal",
+      "country": "Southern Europe",
+      "minLat": 36.9,
+      "minLon": -9.6,
+      "maxLat": 42.2,
+      "maxLon": -6.1,
+      "approxSizeMb": 150
+    }
+  ]
+}

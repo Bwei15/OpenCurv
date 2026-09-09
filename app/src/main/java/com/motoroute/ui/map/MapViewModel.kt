@@ -152,7 +152,7 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun refreshMaps() {
-        mapController.rebuildMapLayer(getApplication())
+        mapController.rebuildMapLayer(getApplication<Application>())
     }
 
     fun consumeMessage() {

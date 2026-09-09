@@ -5,13 +5,16 @@ plugins {
     id("java-library")
 }
 
+// Java 11, matching upstream BRouter: its sources use the diamond operator on
+// anonymous classes, which is a Java 9+ construct. The app module enables core
+// library desugaring, so Java 11 bytecode is fine down to minSdk 26.
 java {
-    sourceCompatibility = JavaVersion.VERSION_1_8
-    targetCompatibility = JavaVersion.VERSION_1_8
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
 }
 
 tasks.withType<JavaCompile>().configureEach {
     options.encoding = "UTF-8"
-    // BRouter's sources are Java 8 clean; -Xlint is noisy on vendored code.
+    // -Xlint is noisy on vendored sources we do not maintain.
     options.compilerArgs.add("-nowarn")
 }

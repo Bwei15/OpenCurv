@@ -62,6 +62,17 @@ class MapController(private val offlineData: OfflineDataRepository) {
     /** False until the first fix has pulled the camera down to riding zoom. */
     private var riderZoomApplied = false
 
+    /**
+     * A camera move asked for while no view was attached.
+     *
+     * Leaving the map screen destroys the Mapsforge view - it holds an activity
+     * context and must not outlive it - so a destination picked in the search
+     * screen arrives while there is nothing to move. Remembering it here is
+     * what makes "search, tap, and the map is there" work.
+     */
+    private var pendingCenter: GeoPoint? = null
+    private var pendingZoom: Int? = null
+
     val hasMaps: Boolean get() = offlineData.hasAny(OfflineFileKind.MAP)
 
     /**
@@ -101,10 +112,22 @@ class MapController(private val offlineData: OfflineDataRepository) {
 
         mapView = view
         rebuildMapLayer(context)
+        pendingCenter?.let { point ->
+            centerOn(point, pendingZoom)
+            pendingCenter = null
+            pendingZoom = null
+        }
         return view
     }
 
     fun detach() {
+        // Remember where the rider was looking: leaving the map for the search
+        // or the settings and coming back to a different part of the country
+        // would be its own kind of snapping back.
+        mapView?.let { view ->
+            pendingCenter = center()
+            pendingZoom = view.model.mapViewPosition.zoomLevel.toInt()
+        }
         routeLayer = null
         positionMarker = null
         destinationMarker = null
@@ -357,8 +380,16 @@ class MapController(private val offlineData: OfflineDataRepository) {
     }
 
     fun centerOn(point: GeoPoint, zoom: Int? = null) {
-        val view = mapView ?: return
-        zoom?.let { view.model.mapViewPosition.setZoomLevel(clampZoom(it), false) }
+        val view = mapView
+        if (view == null) {
+            pendingCenter = point
+            pendingZoom = zoom
+            return
+        }
+        zoom?.let {
+            view.model.mapViewPosition.setZoomLevel(clampZoom(it), false)
+            riderZoomApplied = true
+        }
         view.model.mapViewPosition.setCenter(LatLong(point.latitude, point.longitude))
         cameraPlaced = true
     }

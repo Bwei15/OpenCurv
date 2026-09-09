@@ -19,7 +19,7 @@
     <string name="action_stop">Stop</string>
     <string name="action_start">Start</string>
 
-    <string name="perm_location_rationale">OpenCurv needs your location to navigate. Nothing ever leaves the device — the app has no internet permission.</string>
+    <string name="perm_location_rationale">OpenCurv needs your location to navigate. Your position never leaves the device: navigation runs entirely offline, and the only network access the app has is downloading maps from two fixed servers.</string>
     <string name="perm_grant">Grant location access</string>
 
     <string name="data_maps">Offline maps (.map)</string>
@@ -39,4 +39,14 @@
     <string name="off_route">Off route</string>
     <string name="arrived">You have arrived</string>
     <string name="calculating">Calculating route…</string>
+
+    <string name="download_channel_name">Downloads</string>
+    <string name="download_channel_desc">Progress of offline map downloads</string>
+    <string name="download_notification_title">Downloading offline data</string>
+    <string name="download_preparing">Preparing…</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="download_title">Download maps</string>
+    <string name="download_subtitle">Maps and routing tiles are fetched once, then everything works offline.</string>
+    <string name="download_blocked_navigating">Stop navigation before downloading.</string>
+    <string name="download_offline">No network. Connect to Wi-Fi to download.</string>
 </resources>

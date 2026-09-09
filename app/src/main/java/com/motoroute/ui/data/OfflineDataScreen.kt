@@ -45,6 +45,7 @@ fun OfflineDataScreen(
     profiles: List<OfflineFile>,
     freeSpaceBytes: Long,
     onImport: () -> Unit,
+    onDownload: () -> Unit,
     onDelete: (OfflineFile) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -69,8 +70,11 @@ fun OfflineDataScreen(
             fontSize = 14.sp,
         )
 
+        // Downloading is the path almost everyone wants, so it leads; importing
+        // from a PC stays for riders who already have the files or who want a
+        // region the catalog does not list.
         Button(
-            onClick = onImport,
+            onClick = onDownload,
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = colors.route,
@@ -80,7 +84,21 @@ fun OfflineDataScreen(
                 .fillMaxWidth()
                 .height(GloveTargetSize),
         ) {
-            Text("Import .map / .rd5 / .brf", fontSize = 20.sp, fontWeight = FontWeight.Black)
+            Text("Download maps", fontSize = 20.sp, fontWeight = FontWeight.Black)
+        }
+
+        Button(
+            onClick = onImport,
+            shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = colors.hudBackground,
+                contentColor = colors.hudForeground,
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(GloveTargetSize),
+        ) {
+            Text("Import from this device", fontSize = 18.sp, fontWeight = FontWeight.Bold)
         }
 
         LazyColumn(

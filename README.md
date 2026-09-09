@@ -3,9 +3,16 @@
 An offline, open-source motorcycle navigator for Android that routes for
 **curves**, not for arrival time.
 
-No account, no cloud, no tracking — and no `INTERNET` permission in the
-manifest, so the app is structurally incapable of phoning home. Maps, routing,
-rerouting and voice guidance all run on files stored on the phone.
+No account, no cloud, no tracking. **Riding is completely offline**: maps,
+routing, rerouting and voice guidance all run on files stored on the phone, and
+your position never leaves the device.
+
+The app does have the `INTERNET` permission, for exactly one job — downloading
+those files in the first place, so you do not have to move hundreds of megabytes
+from a PC. That traffic is confined by an Android
+[network security config](app/src/main/res/xml/network_security_config.xml) to
+the two servers the data comes from, enforced by the platform rather than by our
+own code, and downloads are refused while navigation is running.
 
 ---
 
@@ -35,6 +42,11 @@ rerouting and voice guidance all run on files stored on the phone.
 - **Speed limits without a network.** The routing profiles reference the OSM
   `maxspeed` tag, which makes BRouter carry it into the calculated track;
   OpenCurv reads it back out for the HUD. No speed database, no lookups.
+- **Maps download inside the app.** Pick a region and OpenCurv fetches the
+  Mapsforge map *and* works out which BRouter routing tiles cover it — the part
+  of setting up an offline navigator that everyone gets wrong by hand is pure
+  arithmetic, so the app does it. Downloads resume after a dropped connection
+  and survive the screen locking.
 - **Volume keys zoom the map**, and the screen never sleeps while the app is up.
 
 ## What it does not do
@@ -49,21 +61,44 @@ rerouting and voice guidance all run on files stored on the phone.
 
 ## Getting the offline data
 
-OpenCurv ships **no** map data. You need two things, both free:
+OpenCurv ships **no** map data. There are two ways to get it.
 
-1. **A Mapsforge map** (`.map`) — download a region from
-   [download.mapsforge.org](https://download.mapsforge.org/) or build your own
+### In the app (the easy way)
+
+Layers button → **Download maps** → pick a region. OpenCurv queues the Mapsforge
+map and every BRouter tile that covers it, one file at a time, with progress you
+can cancel. Do this on Wi-Fi: a German federal state is 100–400 MB of map plus
+50–150 MB per routing tile, so budget 1–2 GB for a comfortable riding area.
+
+Downloads resume where they left off if the connection drops, keep running while
+the screen is off, and refuse to start while you are navigating.
+
+The region list lives in
+[`app/src/main/assets/catalog/regions.json`](app/src/main/assets/catalog/regions.json)
+— a plain file you can extend with any region the two servers carry, without
+touching code.
+
+### From a PC (the fallback)
+
+If you already have the files, or want a region the catalog does not list:
+
+1. **A Mapsforge map** (`.map`) from
+   [download.mapsforge.org](https://download.mapsforge.org/), or built yourself
    with the Mapsforge map writer.
-2. **BRouter routing tiles** (`.rd5`) — download the 5° × 5° tiles covering your
-   region from [brouter.de/brouter/segments4](https://brouter.de/brouter/segments4/).
-   Germany is mostly `E5_N45.rd5`, `E10_N45.rd5`, `E5_N50.rd5` and `E10_N50.rd5`.
+2. **BRouter routing tiles** (`.rd5`) — the 5° × 5° tiles covering your region
+   from [brouter.de/brouter/segments4](https://brouter.de/brouter/segments4/).
+   Bavaria, for instance, needs `E5_N45`, `E10_N45`, `E5_N50` and `E10_N50`.
 
-Copy them onto the phone, open OpenCurv, tap the layers button and import them.
-Files are copied into the app's own storage, so they survive reboots and need no
-storage permission.
+Copy them onto the phone, then Layers → **Import from this device**. Files are
+copied into the app's own storage, so they survive reboots and need no storage
+permission.
 
-Rough sizes: a `.map` for a German federal state is 100–400 MB, an `.rd5` tile is
-50–150 MB. Budget 1–2 GB for a comfortable riding area.
+### What the app may talk to
+
+Only `download.mapsforge.org` and `brouter.de`, only over HTTPS, and only when
+you ask for a download. The host list is compiled in, mirrored in the network
+security config, and re-checked on every hop of a redirect chain — so neither a
+stale catalog entry nor a redirect can send the app somewhere else.
 
 ## Building
 
@@ -112,6 +147,7 @@ consider.
 app/src/main/java/com/motoroute/
 ├── data/
 │   ├── brouter/     BRouterEngine (offline routing), ProfileManager (.brf assets)
+│   ├── download/    Region catalog, tile arithmetic, resumable HTTPS downloader
 │   ├── location/    LocationProvider (platform GPS, no Play Services), KalmanFilter
 │   ├── map/         OfflineDataRepository (.map / .rd5 / .brf on disk)
 │   ├── model/       Route, NavigationInstruction, Maneuver, Curviness
@@ -123,7 +159,7 @@ app/src/main/java/com/motoroute/
 │   ├── ReroutingEngine    off-route detection, single-flight, backoff
 │   ├── CameraController   speed to zoom and tilt
 │   └── NavigationController  wires location -> state machine -> voice
-├── service/         NavigationService (foreground, location type)
+├── service/         NavigationService (location), DownloadService (data sync)
 ├── voice/           VoiceGuidance (platform TTS)
 └── ui/              Compose: map, navigation HUD, route planning, offline data
 brouter/             vendored BRouter core (MIT) + one bridge class

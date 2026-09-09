@@ -310,14 +310,16 @@ fun MissingDataNotice(
             )
             Text(
                 text = buildString {
-                    if (!hasMaps) appendLine("• a Mapsforge .map file to draw the map")
-                    if (!hasSegments) appendLine("• BRouter .rd5 tiles to calculate routes")
+                    if (!hasMaps) appendLine("• a map to draw from")
+                    if (!hasSegments) appendLine("• routing tiles to calculate routes")
+                    appendLine()
+                    append("Download them in the app, or import files you already have.")
                 },
                 color = colors.muted,
                 fontSize = 17.sp,
             )
             Spacer(Modifier.height(4.dp))
-            PrimaryAction(label = "Import files", onClick = onOpenData)
+            PrimaryAction(label = "Get maps", onClick = onOpenData)
         }
     }
 }

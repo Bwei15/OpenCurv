@@ -7,6 +7,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.motoroute.OpenCurvApp
+import com.motoroute.data.download.DownloadQueueState
+import com.motoroute.data.download.DownloadTarget
+import com.motoroute.data.download.MapRegion
 import com.motoroute.data.map.OfflineFileKind
 import com.motoroute.data.model.GeoPoint
 import com.motoroute.data.model.Route
@@ -139,6 +142,57 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     private val _dataVersion = MutableStateFlow(0)
     val dataVersion: StateFlow<Int> = _dataVersion.asStateFlow()
 
+    // ---- offline data downloads ------------------------------------------
+
+    val downloadQueue: StateFlow<DownloadQueueState> = container.downloads.state
+
+    private val _regions = MutableStateFlow<Map<String, List<MapRegion>>>(emptyMap())
+    val regions: StateFlow<Map<String, List<MapRegion>>> = _regions.asStateFlow()
+
+    fun loadRegions() {
+        if (_regions.value.isNotEmpty()) return
+        viewModelScope.launch { _regions.value = container.mapCatalog.grouped() }
+    }
+
+    /**
+     * Regions whose map file is already on disk. Only the map is checked: the
+     * routing tiles are shared between regions, so a missing tile is re-queued
+     * automatically rather than marking the whole region as absent.
+     */
+    fun installedRegions(): Set<String> {
+        val names = container.offlineData.list(OfflineFileKind.MAP).map { it.name }.toSet()
+        return _regions.value.values.flatten()
+            .filter { it.fileName in names }
+            .map { it.path }
+            .toSet()
+    }
+
+    /**
+     * Why downloading is not possible right now, or null when it is.
+     * Downloading mid-ride would fight the navigation for CPU and data, so it
+     * is refused rather than merely discouraged.
+     */
+    fun downloadBlockedReason(): String? = when {
+        navigationState.value.isNavigating ->
+            "Stop navigation before downloading."
+        else -> null
+    }
+
+    /** Queues a region's map and every routing tile that covers it. */
+    fun downloadRegion(region: MapRegion) {
+        if (downloadBlockedReason() != null) return
+        val targets = buildList {
+            add(DownloadTarget.map(region))
+            region.segmentTiles.forEach { add(DownloadTarget.segment(it)) }
+        }
+        container.downloads.enqueue(targets)
+        _dataVersion.value++
+    }
+
+    fun cancelDownloads() = container.downloads.cancelAll()
+
+    fun retryDownloads() = container.downloads.retryFailed()
+
     fun filesOf(kind: OfflineFileKind) = container.offlineData.list(kind)
 
     fun freeSpace(): Long = container.offlineData.freeSpaceBytes()
@@ -149,6 +203,12 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
             if (file.kind == OfflineFileKind.MAP) refreshMaps()
             _dataVersion.value++
         }
+    }
+
+    /** Called when a download finishes so the renderer picks up the new file. */
+    fun onDownloadedFilesChanged() {
+        refreshMaps()
+        _dataVersion.value++
     }
 
     fun refreshMaps() {

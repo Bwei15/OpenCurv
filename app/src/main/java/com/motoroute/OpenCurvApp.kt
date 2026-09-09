@@ -31,19 +31,32 @@ class OpenCurvApp : Application() {
 
     private fun createNotificationChannel() {
         val manager = getSystemService(NotificationManager::class.java) ?: return
-        val channel = NotificationChannel(
-            NAV_CHANNEL_ID,
-            getString(R.string.nav_channel_name),
-            NotificationManager.IMPORTANCE_LOW,
-        ).apply {
-            description = getString(R.string.nav_channel_desc)
-            setShowBadge(false)
-            enableVibration(false)
-        }
-        manager.createNotificationChannel(channel)
+        manager.createNotificationChannel(
+            NotificationChannel(
+                NAV_CHANNEL_ID,
+                getString(R.string.nav_channel_name),
+                NotificationManager.IMPORTANCE_LOW,
+            ).apply {
+                description = getString(R.string.nav_channel_desc)
+                setShowBadge(false)
+                enableVibration(false)
+            },
+        )
+        manager.createNotificationChannel(
+            NotificationChannel(
+                DOWNLOAD_CHANNEL_ID,
+                getString(R.string.download_channel_name),
+                NotificationManager.IMPORTANCE_LOW,
+            ).apply {
+                description = getString(R.string.download_channel_desc)
+                setShowBadge(false)
+                enableVibration(false)
+            },
+        )
     }
 
     companion object {
         const val NAV_CHANNEL_ID = "navigation"
+        const val DOWNLOAD_CHANNEL_ID = "downloads"
     }
 }

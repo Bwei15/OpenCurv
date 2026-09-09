@@ -3,15 +3,25 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!--
-      There is deliberately NO android.permission.INTERNET here.
-      OpenCurv is a fully offline navigator: maps, routing, rerouting and
-      voice guidance all run on data stored on the device. Without the
-      INTERNET permission the app is structurally incapable of phoning home.
+      Navigation is fully offline: maps, routing, rerouting and voice guidance
+      all run on data stored on the device, and none of it ever touches the
+      network.
+
+      INTERNET is here for exactly one job - downloading offline maps and
+      routing tiles inside the app, so a rider does not have to move files from
+      a PC. That traffic is confined by @xml/network_security_config to the two
+      servers those files come from (download.mapsforge.org and brouter.de),
+      enforced by the platform rather than by our own code, and no download can
+      run while navigation is active.
     -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
@@ -33,6 +43,8 @@
         android:supportsRtl="true"
         android:largeHeap="false"
         android:hardwareAccelerated="true"
+        android:usesCleartextTraffic="false"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:theme="@style/Theme.OpenCurv"
         tools:targetApi="34">
 
@@ -53,6 +65,11 @@
             android:name=".service.NavigationService"
             android:exported="false"
             android:foregroundServiceType="location" />
+
+        <service
+            android:name=".service.DownloadService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
     </application>
 
 </manifest>

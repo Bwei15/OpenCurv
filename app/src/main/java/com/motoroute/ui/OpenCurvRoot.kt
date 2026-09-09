@@ -30,7 +30,9 @@ import com.motoroute.data.map.OfflineFileKind
 import com.motoroute.data.settings.MapTheme
 import com.motoroute.domain.CameraController
 import com.motoroute.domain.PlanningState
+import com.motoroute.service.DownloadService
 import com.motoroute.service.NavigationService
+import com.motoroute.ui.data.MapDownloadScreen
 import com.motoroute.ui.data.OfflineDataScreen
 import com.motoroute.ui.map.MapScreen
 import com.motoroute.ui.map.MapViewModel
@@ -40,7 +42,7 @@ import com.motoroute.ui.plan.MissingDataNotice
 import com.motoroute.ui.plan.RoutePlanPanel
 import com.motoroute.ui.theme.LocalRideColors
 
-private enum class Screen { MAP, DATA }
+private enum class Screen { MAP, DATA, DOWNLOAD }
 
 /**
  * Top-level composition.
@@ -84,6 +86,16 @@ fun OpenCurvRoot(
         }
     }
 
+    // The download queue runs in a foreground service so a 400 MB map survives
+    // the screen locking; the service follows the queue rather than a button.
+    val downloadQueue by viewModel.downloadQueue.collectAsState()
+    LaunchedEffect(downloadQueue.isRunning) {
+        if (downloadQueue.isRunning) DownloadService.start(context)
+    }
+    LaunchedEffect(downloadQueue.allDone) {
+        if (downloadQueue.allDone) viewModel.onDownloadedFilesChanged()
+    }
+
     LaunchedEffect(planning) {
         if (planning is PlanningState.Ready) {
             viewModel.mapController.showWholeRoute((planning as PlanningState.Ready).route)
@@ -107,7 +119,14 @@ fun OpenCurvRoot(
             Screen.DATA -> OfflineDataRoot(
                 viewModel = viewModel,
                 onImport = onImportRequested,
+                onOpenDownloads = { screen = Screen.DOWNLOAD },
                 onBack = { screen = Screen.MAP },
+            )
+
+            Screen.DOWNLOAD -> DownloadRoot(
+                viewModel = viewModel,
+                queue = downloadQueue,
+                onBack = { screen = Screen.DATA },
             )
         }
 
@@ -237,9 +256,37 @@ private fun MapRoot(
 }
 
 @Composable
+private fun DownloadRoot(
+    viewModel: MapViewModel,
+    queue: com.motoroute.data.download.DownloadQueueState,
+    onBack: () -> Unit,
+) {
+    val regions by viewModel.regions.collectAsState()
+    val dataVersion by viewModel.dataVersion.collectAsState()
+
+    LaunchedEffect(Unit) { viewModel.loadRegions() }
+
+    val installed = remember(dataVersion, regions) { viewModel.installedRegions() }
+    val freeSpace = remember(dataVersion) { viewModel.freeSpace() }
+
+    MapDownloadScreen(
+        regions = regions,
+        queue = queue,
+        installedRegions = installed,
+        freeSpaceBytes = freeSpace,
+        blockedReason = viewModel.downloadBlockedReason(),
+        onDownload = viewModel::downloadRegion,
+        onCancel = viewModel::cancelDownloads,
+        onRetry = viewModel::retryDownloads,
+        onBack = onBack,
+    )
+}
+
+@Composable
 private fun OfflineDataRoot(
     viewModel: MapViewModel,
     onImport: () -> Unit,
+    onOpenDownloads: () -> Unit,
     onBack: () -> Unit,
 ) {
     val colors = LocalRideColors.current
@@ -259,6 +306,7 @@ private fun OfflineDataRoot(
             profiles = profiles,
             freeSpaceBytes = freeSpace,
             onImport = onImport,
+            onDownload = onOpenDownloads,
             onDelete = viewModel::deleteFile,
         )
 

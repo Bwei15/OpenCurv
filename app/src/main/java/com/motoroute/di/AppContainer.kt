@@ -3,6 +3,9 @@ package com.motoroute.di
 import android.content.Context
 import com.motoroute.data.brouter.BRouterEngine
 import com.motoroute.data.brouter.ProfileManager
+import com.motoroute.data.download.DownloadRepository
+import com.motoroute.data.download.FileDownloader
+import com.motoroute.data.download.MapCatalog
 import com.motoroute.data.location.LocationProvider
 import com.motoroute.data.map.OfflineDataRepository
 import com.motoroute.data.settings.SettingsRepository
@@ -31,6 +34,15 @@ class AppContainer(context: Context) {
     val locationProvider = LocationProvider(appContext)
     val routingEngine = BRouterEngine()
     val voice = VoiceGuidance(appContext)
+
+    val mapCatalog = MapCatalog(appContext)
+
+    val downloads = DownloadRepository(
+        scope = scope,
+        downloader = FileDownloader(),
+        directoryFor = offlineData::directoryFor,
+        freeSpaceBytes = offlineData::freeSpaceBytes,
+    )
 
     val navigation = NavigationController(
         locationProvider = locationProvider,

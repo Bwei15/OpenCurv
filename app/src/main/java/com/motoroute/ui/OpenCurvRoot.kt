@@ -26,6 +26,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,6 +43,7 @@ import com.motoroute.domain.PlanningState
 import com.motoroute.service.DownloadService
 import com.motoroute.service.NavigationService
 import com.motoroute.ui.data.MapDownloadScreen
+import com.motoroute.ui.diagnostics.DiagnosticsScreen
 import com.motoroute.ui.data.OfflineDataScreen
 import com.motoroute.ui.map.MapScreen
 import com.motoroute.ui.map.MapViewModel
@@ -49,12 +51,14 @@ import com.motoroute.ui.navigation.ActiveNavigationScreen
 import com.motoroute.ui.navigation.GloveButton
 import com.motoroute.ui.onboarding.OnboardingScreen
 import com.motoroute.ui.plan.MissingDataCard
+import com.motoroute.ui.components.rememberSheetState
 import com.motoroute.ui.plan.RoutePlanSheet
 import com.motoroute.ui.search.SearchScreen
 import com.motoroute.ui.settings.SettingsScreen
 import com.motoroute.ui.theme.LocalRideColors
+import kotlinx.coroutines.launch
 
-private enum class Screen { MAP, SEARCH, DATA, DOWNLOAD, SETTINGS }
+private enum class Screen { MAP, SEARCH, DATA, DOWNLOAD, SETTINGS, DIAGNOSTICS }
 
 /**
  * Top-level composition.
@@ -180,6 +184,12 @@ fun OpenCurvRoot(
                 onVoice = { viewModel.toggleVoice() },
                 onTestVoice = viewModel::testVoice,
                 onOpenData = { screen = Screen.DATA },
+                onOpenDiagnostics = { screen = Screen.DIAGNOSTICS },
+            )
+
+            Screen.DIAGNOSTICS -> DiagnosticsScreen(
+                onBack = { screen = Screen.SETTINGS },
+                onShare = { text -> shareText(context, text) },
             )
         }
 
@@ -228,8 +238,25 @@ private fun MapRoot(
     val colors = LocalRideColors.current
     val navigating = navigationState.isNavigating
     val position = navigationState.snappedPosition ?: navigationState.position
+    val sheet = rememberSheetState()
+    val scope = rememberCoroutineScope()
 
-    val map: @Composable () -> Unit = {
+    // Everything the rider looks at while planning sits over the bottom of the
+    // map, so that is how much of it the camera must treat as not there.
+    LaunchedEffect(navigating, sheet.visibleHeightPx) {
+        viewModel.mapController.setBottomInset(if (navigating) 0f else sheet.visibleHeightPx)
+    }
+
+    // A fresh result is worth reading; push the sheet back up for it.
+    LaunchedEffect(planning) {
+        if (planning is PlanningState.Ready || planning is PlanningState.Failed) sheet.expand()
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        // The map is hosted here and nowhere else. Handing the same Mapsforge
+        // view to a second AndroidView when navigation starts used to add a
+        // view that still had a parent, and then destroy it from under the one
+        // on screen - which is what took the app down on every demo ride.
         MapScreen(
             controller = viewModel.mapController,
             route = navigationState.route ?: (planning as? PlanningState.Ready)?.route,
@@ -248,29 +275,30 @@ private fun MapRoot(
             style = settings.mapStyle,
             destination = selection.destination,
             start = selection.start,
-            onUserGesture = viewModel::onUserGesture,
+            onUserGesture = {
+                viewModel.onUserGesture()
+                // Dragging the map means the map is what you want to see, so
+                // the panel gets out of the way instead of waiting to be
+                // dismissed by its own handle.
+                if (!navigating) scope.launch { sheet.collapse() }
+            },
             onMapTap = if (navigating) null else viewModel::onMapTap,
             onMapLongPress = if (navigating) null else viewModel::onMapLongPress,
         )
-    }
 
-    if (navigating) {
-        ActiveNavigationScreen(
-            state = navigationState,
-            onStop = if (demoRunning) viewModel::stopDemo else viewModel::stopNavigation,
-            onToggleVoice = viewModel::toggleVoice,
-            onRecenter = viewModel::recenter,
-            onForceReroute = viewModel::forceReroute,
-            voiceEnabled = settings.voiceEnabled,
-            following = follow,
-            isDemo = demoRunning,
-            map = map,
-        )
-        return
-    }
-
-    Box(modifier = Modifier.fillMaxSize()) {
-        map()
+        if (navigating) {
+            ActiveNavigationScreen(
+                state = navigationState,
+                onStop = if (demoRunning) viewModel::stopDemo else viewModel::stopNavigation,
+                onToggleVoice = viewModel::toggleVoice,
+                onRecenter = viewModel::recenter,
+                onForceReroute = viewModel::forceReroute,
+                voiceEnabled = settings.voiceEnabled,
+                following = follow,
+                isDemo = demoRunning,
+            )
+            return@Box
+        }
 
         Column(
             modifier = Modifier
@@ -354,7 +382,7 @@ private fun MapRoot(
             planning = planning,
             destinationName = selection.destinationName,
             hasDestination = selection.isComplete,
-            hasExplicitStart = selection.start != null,
+            sheetState = sheet,
             onProfileChange = viewModel::setProfile,
             onCurvinessChange = viewModel::setCurviness,
             onAlternativesChange = viewModel::setAlternatives,
@@ -363,6 +391,22 @@ private fun MapRoot(
             onDemo = viewModel::startDemo,
             onClear = viewModel::clearSelection,
             modifier = Modifier.align(Alignment.BottomCenter),
+        )
+    }
+}
+
+/**
+ * Hands the error log to whatever the rider wants to send it with. A share
+ * sheet rather than an upload: the log is theirs, and it goes where they say.
+ */
+private fun shareText(context: android.content.Context, text: String) {
+    val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(android.content.Intent.EXTRA_TEXT, text)
+    }
+    runCatching {
+        context.startActivity(
+            android.content.Intent.createChooser(intent, context.getString(R.string.diagnostics_share)),
         )
     }
 }

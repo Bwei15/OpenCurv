@@ -25,7 +25,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.motoroute.R
-import com.motoroute.data.model.Curviness
 import com.motoroute.domain.NavigationState
 import com.motoroute.ui.theme.LocalRideColors
 import java.util.Locale
@@ -33,6 +32,11 @@ import java.util.concurrent.TimeUnit
 
 /**
  * The riding HUD.
+ *
+ * An overlay, not a screen: the map is hosted once by the caller and stays put
+ * across the switch into and out of navigation. Re-parenting it here used to
+ * hand the same Mapsforge view to a second AndroidView while the first one was
+ * still tearing itself down, which took the whole app with it.
  *
  * Layout follows the cockpit spec exactly:
  *
@@ -55,13 +59,10 @@ fun ActiveNavigationScreen(
     following: Boolean,
     isDemo: Boolean,
     modifier: Modifier = Modifier,
-    map: @Composable () -> Unit,
 ) {
     val colors = LocalRideColors.current
 
     Box(modifier = modifier.fillMaxSize()) {
-        map()
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -195,7 +196,13 @@ private fun ManeuverBar(state: NavigationState) {
     }
 }
 
-/** Bottom bar: speed against the limit, distance left, arrival time. */
+/**
+ * Bottom bar: speed against the limit, distance left, arrival time.
+ *
+ * Three numbers, not four. The curviness rating was here too and crushed the
+ * others into each other at riding sizes - and it is a decision made before
+ * setting off, which is where it now lives.
+ */
 @Composable
 private fun BottomBar(state: NavigationState) {
     val colors = LocalRideColors.current
@@ -228,14 +235,6 @@ private fun BottomBar(state: NavigationState) {
                 value = formatEta(state.etaEpochMillis),
                 caption = stringResource(R.string.eta),
             )
-
-            state.route?.let { route ->
-                MetricReadout(
-                    value = Curviness.label(route.curvinessScore),
-                    caption = "${route.curvinessScore.toInt()} deg/km",
-                    valueColor = colors.route,
-                )
-            }
         }
     }
 }

@@ -2,13 +2,10 @@
     android:width="48dp" android:height="48dp"
     android:viewportWidth="48" android:viewportHeight="48"
     android:tint="#FFFFFFFF">
-    <path android:pathData="M24,15 a9,9 0 1,0 0.1,0" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
-    <path android:pathData="M24,3 L24,9" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
-    <path android:pathData="M24,39 L24,45" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
-    <path android:pathData="M3,24 L9,24" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
-    <path android:pathData="M39,24 L45,24" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
-    <path android:pathData="M9,9 L13,13" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
-    <path android:pathData="M35,35 L39,39" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
-    <path android:pathData="M39,9 L35,13" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
-    <path android:pathData="M13,35 L9,39" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <!-- A cog: eight teeth around a hub. The old icon was a sun, which is the
+         day/night toggle's job and read as a second theme button. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M38.1,18.87 L44.54,19.63 L44.54,28.37 L38.1,29.13 L37.59,30.34 L41.61,35.44 L35.44,41.61 L30.34,37.59 L29.13,38.1 L28.37,44.54 L19.63,44.54 L18.87,38.1 L17.66,37.59 L12.56,41.61 L6.39,35.44 L10.41,30.34 L9.9,29.13 L3.46,28.37 L3.46,19.63 L9.9,18.87 L10.41,17.66 L6.39,12.56 L12.56,6.39 L17.66,10.41 L18.87,9.9 L19.63,3.46 L28.37,3.46 L29.13,9.9 L30.34,10.41 L35.44,6.39 L41.61,12.56 L37.59,17.66 Z M16,24 a8,8 0 1,0 16,0 a8,8 0 1,0 -16,0 Z" />
 </vector>

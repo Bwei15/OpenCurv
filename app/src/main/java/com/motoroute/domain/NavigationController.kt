@@ -9,6 +9,8 @@ import com.motoroute.data.map.OfflineDataRepository
 import com.motoroute.data.model.GeoPoint
 import com.motoroute.data.model.Route
 import com.motoroute.data.settings.SettingsRepository
+import com.motoroute.diagnostics.CrashLog
+import com.motoroute.domain.geo.Geo
 import com.motoroute.voice.VoiceGuidance
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -88,7 +90,7 @@ class NavigationController(
     fun startLocationUpdates() {
         if (locationJob?.isActive == true) return
         locationJob = locationProvider.fixes()
-            .catch { /* provider disabled or permission revoked; UI shows the banner */ }
+            .catch { CrashLog.record("location", it) }
             .onEach(::onFix)
             .launchIn(scope)
     }
@@ -125,6 +127,7 @@ class NavigationController(
             runCatching { calculate(listOf(from) + via + to) }
                 .onSuccess { _planning.value = PlanningState.Ready(it) }
                 .onFailure {
+                    CrashLog.record("routing", it)
                     _planning.value = PlanningState.Failed(it.message ?: "routing failed")
                 }
         }
@@ -243,23 +246,76 @@ class NavigationController(
             segmentDir = offlineData.segmentDir,
             profileParams = mapOf("curviness" to current.curviness.toString()),
             memoryClassMb = MEMORY_CLASS_MB,
-        )
-        return if (current.searchAlternatives) {
+        ).withCorridorFor(waypoints)
+
+        val startedAt = System.currentTimeMillis()
+        val route = if (current.searchAlternatives) {
             routingEngine.routeCurviest(request)
         } else {
             routingEngine.route(request)
+        }
+        CrashLog.record(
+            "routing",
+            "%.1f km in %.1f s%s, curviness %.0f (raw %.0f, %d junctions)".format(
+                route.distanceMeters / 1000.0,
+                (System.currentTimeMillis() - startedAt) / 1000.0,
+                if (current.searchAlternatives) ", alternatives compared" else "",
+                route.curvinessScore,
+                com.motoroute.data.model.Curviness.score(route.points),
+                route.instructions.count { it.maneuver.isTurn },
+            ),
+        )
+        return route
+    }
+
+    /**
+     * Narrows the search to a corridor when the destination is far away.
+     *
+     * BRouter's search is an A* whose heuristic weight decides how much of the
+     * map it opens up. At the profile's own settings a 100 km route explores an
+     * enormous disc and takes minutes on a phone - long enough that the app is
+     * simply not usable for the rides it exists for. Weighting the heuristic
+     * harder as the distance grows turns that disc into a corridor towards the
+     * destination.
+     *
+     * The trade is real and deliberate: a corridor can miss a detour that is
+     * cheaper by a few percent. On a curvy-road profile that is a far smaller
+     * loss than a five-minute wait, and short routes - where a detour is most
+     * likely to matter and the search is cheap anyway - keep the exact settings.
+     */
+    private fun RouteRequest.withCorridorFor(waypoints: List<GeoPoint>): RouteRequest {
+        var crowFlies = 0.0
+        for (i in 1 until waypoints.size) {
+            crowFlies += Geo.distanceMeters(waypoints[i - 1], waypoints[i])
+        }
+        val km = crowFlies / 1000.0
+        return when {
+            km < SHORT_ROUTE_KM -> this
+            km < LONG_ROUTE_KM -> copy(pass1Coefficient = 2.0, pass2Coefficient = 0.8)
+            // Past this the refinement pass is the whole cost of the search,
+            // and a single well-guided pass is what makes the wait bearable.
+            else -> copy(pass1Coefficient = 2.5, pass2Coefficient = -1.0)
         }
     }
 
     private companion object {
         /**
-         * BRouter's node-cache budget. Tuned for a 4 GB phone (Galaxy A16 and
-         * the like): big enough for a full day's route across several tiles,
-         * small enough that the map renderer is never starved.
+         * BRouter's node-cache budget.
+         *
+         * This is a cache ceiling, not an allocation. The old 48 MB was small
+         * enough that a 100 km search kept throwing away routing tiles it was
+         * about to need again and decoding them a second time; the map renderer
+         * still has room at this size on a 4 GB phone.
          */
-        const val MEMORY_CLASS_MB = 48
+        const val MEMORY_CLASS_MB = 96
 
         /** Demo fixes arrive twice a second, like a good GPS on a fast bike. */
         const val DEMO_TICK_MILLIS = 500L
+
+        /** Below this, the exact search is fast enough to be worth having. */
+        const val SHORT_ROUTE_KM = 25.0
+
+        /** Past this, only a single guided pass finishes in a usable time. */
+        const val LONG_ROUTE_KM = 75.0
     }
 }

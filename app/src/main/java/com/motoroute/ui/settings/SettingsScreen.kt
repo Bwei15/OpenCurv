@@ -54,6 +54,7 @@ fun SettingsScreen(
     onVoice: (Boolean) -> Unit,
     onTestVoice: () -> Unit,
     onOpenData: () -> Unit,
+    onOpenDiagnostics: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalRideColors.current
@@ -167,6 +168,20 @@ fun SettingsScreen(
                 PrimaryButton(
                     label = stringResource(R.string.settings_open_data),
                     onClick = onOpenData,
+                    height = 52.dp,
+                )
+            }
+
+            PanelCard {
+                CardTitle(stringResource(R.string.settings_diagnostics))
+                Text(
+                    text = stringResource(R.string.settings_diagnostics_hint),
+                    color = colors.muted,
+                    fontSize = 13.sp,
+                )
+                PrimaryButton(
+                    label = stringResource(R.string.settings_diagnostics),
+                    onClick = onOpenDiagnostics,
                     height = 52.dp,
                 )
             }

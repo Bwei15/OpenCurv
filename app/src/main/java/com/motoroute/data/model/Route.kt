@@ -81,11 +81,12 @@ class Route(
     }
 
     /**
-     * How twisty this route is: total absolute heading change in degrees per
-     * kilometre. A dead straight motorway is around 5, an alpine pass is well
-     * past 300. This is what the "curviness" badge in the HUD shows.
+     * How twisty this route is: heading change in degrees per kilometre, with
+     * the corners at junctions taken out. A dead straight motorway is around 5,
+     * an alpine pass is well past 300. This is what the "curviness" badge in
+     * the HUD shows.
      */
-    val curvinessScore: Double by lazy { Curviness.score(points) }
+    val curvinessScore: Double by lazy { Curviness.score(this) }
 
     /** Posted speed limit at [index] in km/h, or null when OSM has none. */
     fun speedLimitAt(index: Int): Int? {

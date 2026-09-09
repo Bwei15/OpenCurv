@@ -37,17 +37,17 @@
     <!-- planning -->
     <string name="plan_no_destination">No destination</string>
     <string name="plan_destination_pin">Destination on the map</string>
-    <string name="plan_hint">Search above, tap the map for a destination, hold for a start.</string>
-    <string name="plan_start_set_hint">Start set by hand. Tap the map to move the destination.</string>
     <string name="plan_calculate">Calculate route</string>
     <string name="plan_calculating">Calculating offline…</string>
     <string name="plan_start">Start navigation</string>
     <string name="plan_demo">Demo ride</string>
-    <string name="plan_demo_hint">Rides the route on screen with the announcements, so you can try everything before getting on the bike.</string>
     <string name="plan_discard">Discard</string>
     <string name="plan_retry">Try again</string>
     <string name="plan_clear">Clear</string>
     <string name="plan_options">Route options</string>
+    <string name="plan_options_show">Route options</string>
+    <string name="plan_options_hide">Hide route options</string>
+    <string name="plan_alternatives_cost">Searches several routes and keeps the twistiest. Slower.</string>
     <string name="plan_curviness">Curve appetite: %1$s</string>
     <string name="plan_alternatives">Compare alternatives, keep the twistiest</string>
     <string name="plan_distance">distance</string>
@@ -66,7 +66,6 @@
     <string name="search_no_results">Nothing found in the downloaded maps.</string>
     <string name="search_no_maps">No map downloaded yet, so there is nothing to search.</string>
     <string name="search_indexing">Building the place index: %1$d %% (%2$d places)</string>
-    <string name="search_hint">Towns and villages come from the downloaded map; streets and fuel stations are searched around where you are looking.</string>
     <string name="place_city">City</string>
     <string name="place_town">Town</string>
     <string name="place_village">Village</string>
@@ -167,4 +166,18 @@
     <!-- permissions -->
     <string name="perm_location_rationale">OpenCurv needs your location to navigate. Your position never leaves the device: navigation runs entirely offline, and the only network access the app has is downloading maps from two fixed servers.</string>
     <string name="perm_grant">Grant location access</string>
+    <string name="diagnostics_title">Error log</string>
+    <string name="diagnostics_share">Share</string>
+    <string name="diagnostics_clear">Clear</string>
+    <string name="diagnostics_empty">Nothing recorded. Crashes and failed calculations show up here.</string>
+    <string name="diagnostics_crash">CRASH</string>
+    <string name="diagnostics_show_stack">Show details</string>
+    <string name="diagnostics_hide_stack">Hide details</string>
+    <string name="settings_diagnostics">Error log</string>
+    <string name="settings_diagnostics_hint">What the app recorded when something went wrong. Stays on this phone.</string>
+    <string name="curviness_rating_straight">straight</string>
+    <string name="curviness_rating_flowing">flowing</string>
+    <string name="curviness_rating_curvy">curvy</string>
+    <string name="curviness_rating_twisty">twisty</string>
+    <string name="curviness_rating_extreme">extreme</string>
 </resources>

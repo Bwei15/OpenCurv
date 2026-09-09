@@ -30,7 +30,13 @@ data class Settings(
     val headingUp: Boolean = true,
     val volumeKeyZoom: Boolean = true,
     val keepScreenOn: Boolean = true,
-    val searchAlternatives: Boolean = true,
+    /**
+     * Off by default: comparing alternatives means running the whole search
+     * four times, which is the difference between waiting seconds and waiting
+     * minutes for a long route. Worth turning on for a Sunday ride, not worth
+     * paying for on every route.
+     */
+    val searchAlternatives: Boolean = false,
     val mapStyle: MapStyle = MapStyle.COLOUR,
     /** False until the rider has been walked through getting their first map. */
     val onboardingDone: Boolean = false,
@@ -61,7 +67,7 @@ class SettingsRepository(context: Context) {
         headingUp = prefs.getBoolean(KEY_HEADING_UP, true),
         volumeKeyZoom = prefs.getBoolean(KEY_VOLUME_ZOOM, true),
         keepScreenOn = prefs.getBoolean(KEY_KEEP_SCREEN, true),
-        searchAlternatives = prefs.getBoolean(KEY_ALTERNATIVES, true),
+        searchAlternatives = prefs.getBoolean(KEY_ALTERNATIVES, false),
         mapStyle = runCatching { MapStyle.valueOf(prefs.getString(KEY_MAP_STYLE, null) ?: "COLOUR") }
             .getOrDefault(MapStyle.COLOUR),
         onboardingDone = prefs.getBoolean(KEY_ONBOARDING, false),

@@ -13,6 +13,9 @@ import com.motoroute.data.search.PlaceSearchRepository
 import com.motoroute.data.settings.SettingsRepository
 import com.motoroute.domain.NavigationController
 import com.motoroute.voice.VoiceGuidance
+import com.motoroute.diagnostics.CrashLog
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -28,7 +31,21 @@ class AppContainer(context: Context) {
 
     private val appContext = context.applicationContext
 
-    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    /**
+     * The process-wide scope.
+     *
+     * The handler is not decoration: without one, a single exception in any
+     * coroutine launched here reaches the default handler and the app is gone
+     * from under the rider. Logged and survived is the right trade for
+     * everything this scope runs - none of it is navigation's critical path.
+     */
+    val scope = CoroutineScope(
+        SupervisorJob() +
+            Dispatchers.Main.immediate +
+            CoroutineExceptionHandler { context, error ->
+                CrashLog.record(context[CoroutineName]?.name ?: "background", error)
+            },
+    )
 
     val settings = SettingsRepository(appContext)
     val offlineData = OfflineDataRepository(appContext)

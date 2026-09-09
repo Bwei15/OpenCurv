@@ -1,5 +1,6 @@
 package com.motoroute.ui.plan
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,12 +28,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.motoroute.R
 import com.motoroute.data.brouter.RoutingProfile
-import com.motoroute.data.model.Curviness
 import com.motoroute.data.model.Route
 import com.motoroute.data.settings.Settings
 import com.motoroute.domain.PlanningState
 import com.motoroute.ui.components.DraggableSheet
+import com.motoroute.ui.components.SheetState
+import com.motoroute.ui.components.rememberSheetState
 import com.motoroute.ui.components.PrimaryButton
+import com.motoroute.ui.components.curvinessRatingLabel
 import com.motoroute.ui.components.SecondaryButton
 import com.motoroute.ui.theme.LocalRideColors
 import java.util.Locale
@@ -54,7 +57,6 @@ fun RoutePlanSheet(
     planning: PlanningState,
     destinationName: String?,
     hasDestination: Boolean,
-    hasExplicitStart: Boolean,
     onProfileChange: (String) -> Unit,
     onCurvinessChange: (Float) -> Unit,
     onAlternativesChange: (Boolean) -> Unit,
@@ -63,11 +65,19 @@ fun RoutePlanSheet(
     onDemo: (Route) -> Unit,
     onClear: () -> Unit,
     modifier: Modifier = Modifier,
+    sheetState: SheetState = rememberSheetState(),
 ) {
     val colors = LocalRideColors.current
 
+    // Once there is a destination the panel is about that ride, not about how
+    // routes are searched, so the options fold away. They stay one tap out
+    // rather than disappearing for good - swapping curvy for fast should not
+    // cost the rider the destination they just picked.
+    var showOptions by remember { mutableStateOf(false) }
+
     DraggableSheet(
         peekHeight = PEEK_HEIGHT,
+        state = sheetState,
         background = colors.hudBackground.copy(alpha = 0.96f),
         handleColor = colors.hudForeground,
         modifier = modifier,
@@ -93,17 +103,6 @@ fun RoutePlanSheet(
 
             when (planning) {
                 PlanningState.Idle -> {
-                    Text(
-                        text = stringResource(
-                            if (hasExplicitStart) {
-                                R.string.plan_start_set_hint
-                            } else {
-                                R.string.plan_hint
-                            },
-                        ),
-                        color = colors.muted,
-                        fontSize = 13.sp,
-                    )
                     PrimaryButton(
                         label = stringResource(R.string.plan_calculate),
                         enabled = hasDestination,
@@ -139,11 +138,6 @@ fun RoutePlanSheet(
                         label = stringResource(R.string.plan_demo),
                         onClick = { onDemo(planning.route) },
                     )
-                    Text(
-                        text = stringResource(R.string.plan_demo_hint),
-                        color = colors.muted,
-                        fontSize = 12.sp,
-                    )
                     SecondaryButton(
                         label = stringResource(R.string.plan_discard),
                         onClick = onClear,
@@ -170,66 +164,112 @@ fun RoutePlanSheet(
 
             Spacer(Modifier.height(4.dp))
 
-            Text(
-                text = stringResource(R.string.plan_options),
-                color = colors.muted,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Black,
-            )
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                profiles.forEach { profile ->
-                    FilterChip(
-                        selected = profile.id == settings.profileId,
-                        onClick = { onProfileChange(profile.id) },
-                        label = {
-                            Text(
-                                profile.displayName,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp,
-                            )
-                        },
-                        modifier = Modifier.height(46.dp),
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = colors.route,
-                            selectedLabelColor = Color.Black,
-                            labelColor = colors.hudForeground,
-                        ),
-                    )
-                }
-            }
-
-            Column {
+            if (hasDestination) {
                 Text(
                     text = stringResource(
-                        R.string.plan_curviness,
-                        stringResource(curvinessLabel(settings.curviness)),
+                        if (showOptions) R.string.plan_options_hide else R.string.plan_options_show,
                     ),
-                    color = colors.hudForeground,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                )
-                Slider(
-                    value = settings.curviness,
-                    onValueChange = onCurvinessChange,
-                    valueRange = 0f..2f,
-                    steps = 3,
-                    modifier = Modifier.height(48.dp),
+                    color = colors.route,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Black,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showOptions = !showOptions }
+                        .padding(vertical = 10.dp),
                 )
             }
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                androidx.compose.material3.Switch(
-                    checked = settings.searchAlternatives,
-                    onCheckedChange = onAlternativesChange,
+            if (!hasDestination || showOptions) {
+                RouteOptions(
+                    settings = settings,
+                    profiles = profiles,
+                    onProfileChange = onProfileChange,
+                    onCurvinessChange = onCurvinessChange,
+                    onAlternativesChange = onAlternativesChange,
                 )
+            }
+        }
+    }
+}
+
+/** How routes are searched: which profile, how many curves, how hard to look. */
+@Composable
+private fun RouteOptions(
+    settings: Settings,
+    profiles: List<RoutingProfile>,
+    onProfileChange: (String) -> Unit,
+    onCurvinessChange: (Float) -> Unit,
+    onAlternativesChange: (Boolean) -> Unit,
+) {
+    val colors = LocalRideColors.current
+
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(
+            text = stringResource(R.string.plan_options),
+            color = colors.muted,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Black,
+        )
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            profiles.forEach { profile ->
+                FilterChip(
+                    selected = profile.id == settings.profileId,
+                    onClick = { onProfileChange(profile.id) },
+                    label = {
+                        Text(
+                            profile.displayName,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                        )
+                    },
+                    modifier = Modifier.height(46.dp),
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = colors.route,
+                        selectedLabelColor = Color.Black,
+                        labelColor = colors.hudForeground,
+                    ),
+                )
+            }
+        }
+
+        Column {
+            Text(
+                text = stringResource(
+                    R.string.plan_curviness,
+                    stringResource(curvinessLabel(settings.curviness)),
+                ),
+                color = colors.hudForeground,
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp,
+            )
+            Slider(
+                value = settings.curviness,
+                onValueChange = onCurvinessChange,
+                valueRange = 0f..2f,
+                steps = 3,
+                modifier = Modifier.height(48.dp),
+            )
+        }
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            androidx.compose.material3.Switch(
+                checked = settings.searchAlternatives,
+                onCheckedChange = onAlternativesChange,
+            )
+            Column {
                 Text(
                     text = stringResource(R.string.plan_alternatives),
                     color = colors.hudForeground,
                     fontSize = 14.sp,
+                )
+                Text(
+                    text = stringResource(R.string.plan_alternatives_cost),
+                    color = colors.muted,
+                    fontSize = 12.sp,
                 )
             }
         }
@@ -250,7 +290,7 @@ private fun RouteSummary(route: Route) {
         Metric(formatDuration(route.estimatedSeconds), stringResource(R.string.plan_time))
         Metric("${route.ascendMeters} m", stringResource(R.string.plan_climb))
         Metric(
-            Curviness.label(route.curvinessScore),
+            curvinessRatingLabel(route.curvinessScore),
             "${route.curvinessScore.roundToInt()} °/km",
             colors.route,
         )

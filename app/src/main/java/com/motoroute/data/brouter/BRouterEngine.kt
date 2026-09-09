@@ -28,6 +28,18 @@ data class RouteRequest(
     val alternativeIndex: Int = 0,
     val maxRunningTimeMillis: Long = 60_000L,
     /**
+     * How hard the search is pulled towards the destination, per pass.
+     *
+     * BRouter searches twice: a weighted A* that finds *a* route fast, then a
+     * refinement bounded by the first one's cost. The weight is what decides
+     * whether the search spreads as a disc around the start or as a corridor
+     * towards the target, and it is the single biggest lever on how long a
+     * long route takes. Null keeps whatever the .brf profile asks for; a
+     * negative second coefficient skips the refinement pass entirely.
+     */
+    val pass1Coefficient: Double? = null,
+    val pass2Coefficient: Double? = null,
+    /**
      * Search memory in MB. BRouter sizes its node cache from this; on a 4 GB
      * phone 48 MB is plenty for a day-long route and leaves the map renderer
      * enough room to avoid thrashing.
@@ -83,6 +95,11 @@ class BRouterEngine(
 
         val engine = RoutingEngine(null, null, request.segmentDir, nodes, rc, 0)
         engine.quite = true
+
+        // Set after the engine is built: constructing it parses the profile,
+        // which is where the profile's own coefficients land in the context.
+        request.pass1Coefficient?.let { rc.pass1coefficient = it }
+        request.pass2Coefficient?.let { rc.pass2coefficient = it }
 
         // BRouter's search is a plain blocking loop that polls a termination
         // flag. Wiring coroutine cancellation to it means a rider who changes

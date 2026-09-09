@@ -18,6 +18,7 @@ import org.mapsforge.core.graphics.Join
 import org.mapsforge.core.graphics.Style
 import org.mapsforge.core.model.LatLong
 import org.mapsforge.core.model.Rotation
+import org.mapsforge.core.util.MercatorProjection
 import org.mapsforge.map.android.graphics.AndroidBitmap
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
 import org.mapsforge.map.android.util.AndroidUtil
@@ -72,6 +73,20 @@ class MapController(private val offlineData: OfflineDataRepository) {
      */
     private var pendingCenter: GeoPoint? = null
     private var pendingZoom: Int? = null
+
+    /**
+     * Pixels of map hidden behind the route sheet.
+     *
+     * Centring on the middle of the glass is wrong whenever something is
+     * parked over the bottom of it: with the sheet open, "centre on me" used
+     * to put the rider behind the panel. Every camera move therefore aims at
+     * the middle of the *visible* map instead.
+     */
+    private var bottomInsetPx = 0f
+
+    fun setBottomInset(pixels: Float) {
+        bottomInsetPx = pixels.coerceAtLeast(0f)
+    }
 
     val hasMaps: Boolean get() = offlineData.hasAny(OfflineFileKind.MAP)
 
@@ -132,13 +147,16 @@ class MapController(private val offlineData: OfflineDataRepository) {
         positionMarker = null
         destinationMarker = null
         startMarker = null
-        tileLayer?.onDestroy()
+        // destroyAll() tears the layers and their caches down as well, so every
+        // step here can find the thing it is destroying already gone. None of
+        // that is worth taking the app down for.
+        runCatching { tileLayer?.onDestroy() }
         tileLayer = null
-        tileCache?.destroy()
+        runCatching { tileCache?.destroy() }
         tileCache = null
-        dataStore?.close()
+        runCatching { dataStore?.close() }
         dataStore = null
-        mapView?.destroyAll()
+        runCatching { mapView?.destroyAll() }
         mapView = null
         currentThemeIsNight = null
         cameraPlaced = false
@@ -364,7 +382,7 @@ class MapController(private val offlineData: OfflineDataRepository) {
             view.model.mapViewPosition.setZoomLevel(clampZoom(it), false)
             riderZoomApplied = true
         }
-        view.model.mapViewPosition.setCenter(LatLong(position.latitude, position.longitude))
+        view.model.mapViewPosition.setCenter(visualCenter(view, position))
         cameraPlaced = true
         view.rotate(
             if (headingUp) {
@@ -394,6 +412,28 @@ class MapController(private val offlineData: OfflineDataRepository) {
         cameraPlaced = true
     }
 
+    /**
+     * The camera centre that lands [point] in the middle of the map the rider
+     * can actually see. Must be called after the zoom is set: how many degrees
+     * of latitude a pixel is worth depends on it.
+     */
+    private fun visualCenter(view: MapView, point: GeoPoint): LatLong {
+        val plain = LatLong(point.latitude, point.longitude)
+        if (bottomInsetPx <= 0f) return plain
+        return runCatching {
+            val mapSize = MercatorProjection.getMapSize(
+                view.model.mapViewPosition.zoomLevel,
+                view.model.displayModel.tileSize,
+            )
+            val pixelY = MercatorProjection.latitudeToPixelY(point.latitude, mapSize)
+            // Down the screen is south: pushing the camera centre south lifts
+            // the point the rider cares about into the open half.
+            val shifted = (pixelY + bottomInsetPx / 2.0)
+                .coerceIn(0.0, (mapSize - 1).toDouble())
+            LatLong(MercatorProjection.pixelYToLatitude(shifted, mapSize), point.longitude)
+        }.getOrDefault(plain)
+    }
+
     /** Puts the map back north-up, e.g. when the rider leaves follow mode. */
     fun resetRotation() {
         mapView?.rotate(Rotation.NULL_ROTATION)
@@ -416,11 +456,13 @@ class MapController(private val offlineData: OfflineDataRepository) {
         val view = mapView ?: return
         if (route.isEmpty) return
         val bounds = route.bounds
-        view.model.mapViewPosition.setCenter(LatLong(bounds.centerLat, bounds.centerLon))
         view.rotate(Rotation.NULL_ROTATION)
         view.model.mapViewPosition.setZoomLevel(
             zoomForSpan(bounds.maxLat - bounds.minLat, bounds.maxLon - bounds.minLon),
             false,
+        )
+        view.model.mapViewPosition.setCenter(
+            visualCenter(view, GeoPoint(bounds.centerLat, bounds.centerLon)),
         )
         cameraPlaced = true
     }

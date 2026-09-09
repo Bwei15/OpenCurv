@@ -4,6 +4,7 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import com.motoroute.di.AppContainer
+import com.motoroute.diagnostics.CrashLog
 import kotlinx.coroutines.launch
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
 
@@ -14,6 +15,11 @@ class OpenCurvApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+
+        // First thing in the process: a crash during any of the setup below is
+        // exactly the kind that leaves a rider with a closed app and no idea
+        // why.
+        CrashLog.install(this)
 
         // Mapsforge needs its graphics factory before any MapView exists.
         AndroidGraphicFactory.createInstance(this)

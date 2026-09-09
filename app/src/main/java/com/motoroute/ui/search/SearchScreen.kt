@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -23,7 +25,10 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -67,8 +72,34 @@ fun SearchScreen(
 ) {
     val colors = LocalRideColors.current
     val focus = remember { FocusRequester() }
+    val listState = rememberLazyListState()
 
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+
+    // Every keystroke produces a new best match, and a list still scrolled to
+    // where the previous query ended hides it. Back to the top on every result.
+    LaunchedEffect(results) {
+        if (results.isNotEmpty()) listState.scrollToItem(0)
+    }
+
+    // The search key takes the top hit. Pressing it while the search is still
+    // running is a promise to be kept, not an accident: the pick is held until
+    // there is something to pick.
+    var awaitingResult by remember { mutableStateOf(false) }
+    LaunchedEffect(results, searching) {
+        if (!awaitingResult) return@LaunchedEffect
+        val first = results.firstOrNull()
+        if (first != null) {
+            awaitingResult = false
+            onPick(first)
+        } else if (!searching) {
+            awaitingResult = false
+        }
+    }
+    val submit = {
+        val first = results.firstOrNull()
+        if (first != null) onPick(first) else awaitingResult = true
+    }
 
     Column(
         modifier = modifier
@@ -92,6 +123,7 @@ fun SearchScreen(
                 singleLine = true,
                 placeholder = { Text(stringResource(R.string.search_placeholder)) },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { submit() }),
                 modifier = Modifier
                     .weight(1f)
                     .padding(start = 4.dp)
@@ -141,7 +173,7 @@ fun SearchScreen(
             )
         }
 
-        LazyColumn(modifier = Modifier.weight(1f)) {
+        LazyColumn(state = listState, modifier = Modifier.weight(1f)) {
             items(results, key = { it.dedupeKey }) { place ->
                 ResultRow(
                     place = place,
@@ -150,16 +182,7 @@ fun SearchScreen(
                 )
                 HorizontalDivider()
             }
-            item(key = "hint") {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = stringResource(R.string.search_hint),
-                        color = colors.muted,
-                        fontSize = 12.sp,
-                    )
-                    Spacer(Modifier.height(24.dp))
-                }
-            }
+            item(key = "tail") { Spacer(Modifier.height(24.dp)) }
         }
     }
 }

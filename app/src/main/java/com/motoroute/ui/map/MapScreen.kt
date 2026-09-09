@@ -84,11 +84,11 @@ fun MapScreen(
     }
 
     LaunchedEffect(position, headingDegrees, zoom, headingUp, follow) {
-        if (follow) {
-            controller.follow(position, headingDegrees, zoom, headingUp)
-        } else if (!headingUp) {
-            controller.resetRotation()
-        }
+        // North-up first, and unconditionally: a ride that ends leaves no
+        // position behind, and follow() has nothing to rotate around, so the
+        // map used to stay stuck at whatever heading the rider stopped on.
+        if (!headingUp) controller.resetRotation()
+        if (follow) controller.follow(position, headingDegrees, zoom, headingUp)
     }
 
     Box(modifier = modifier.fillMaxSize()) {

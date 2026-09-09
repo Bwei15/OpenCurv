@@ -135,10 +135,17 @@ class NavigationService : LifecycleService() {
             }
         }
 
+        /**
+         * Tears the service down without touching the ride.
+         *
+         * This used to send [ACTION_STOP] - the same intent the notification's
+         * stop button sends - so the app asking "I do not need a location
+         * service right now" was heard as "the rider pressed stop". A demo
+         * ride, which deliberately runs without the service, stopped itself
+         * within a frame of starting.
+         */
         fun stop(context: Context) {
-            context.startService(
-                Intent(context, NavigationService::class.java).setAction(ACTION_STOP),
-            )
+            context.stopService(Intent(context, NavigationService::class.java))
         }
     }
 }

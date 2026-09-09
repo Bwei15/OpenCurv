@@ -36,17 +36,17 @@
     <!-- Planung -->
     <string name="plan_no_destination">Kein Ziel</string>
     <string name="plan_destination_pin">Ziel auf der Karte</string>
-    <string name="plan_hint">Oben suchen, auf die Karte tippen für ein Ziel, lange drücken für den Start.</string>
-    <string name="plan_start_set_hint">Start von Hand gesetzt. Zum Verschieben des Ziels auf die Karte tippen.</string>
     <string name="plan_calculate">Route berechnen</string>
     <string name="plan_calculating">Wird offline berechnet…</string>
     <string name="plan_start">Navigation starten</string>
     <string name="plan_demo">Demofahrt</string>
-    <string name="plan_demo_hint">Fährt die Route auf dem Bildschirm ab, mit allen Ansagen — so lässt sich alles testen, bevor es aufs Motorrad geht.</string>
     <string name="plan_discard">Verwerfen</string>
     <string name="plan_retry">Nochmal versuchen</string>
     <string name="plan_clear">Zurücksetzen</string>
     <string name="plan_options">Routenoptionen</string>
+    <string name="plan_options_show">Routenoptionen</string>
+    <string name="plan_options_hide">Routenoptionen ausblenden</string>
+    <string name="plan_alternatives_cost">Sucht mehrere Routen und behält die kurvigste. Dauert länger.</string>
     <string name="plan_curviness">Kurvenhunger: %1$s</string>
     <string name="plan_alternatives">Alternativen vergleichen, kurvigste behalten</string>
     <string name="plan_distance">Strecke</string>
@@ -65,7 +65,6 @@
     <string name="search_no_results">In den geladenen Karten nichts gefunden.</string>
     <string name="search_no_maps">Noch keine Karte geladen — es gibt nichts zu durchsuchen.</string>
     <string name="search_indexing">Ortsverzeichnis wird erstellt: %1$d %% (%2$d Orte)</string>
-    <string name="search_hint">Städte und Dörfer kommen aus der geladenen Karte; Straßen und Tankstellen werden rund um den Kartenausschnitt gesucht.</string>
     <string name="place_city">Stadt</string>
     <string name="place_town">Stadt</string>
     <string name="place_village">Dorf</string>
@@ -166,4 +165,18 @@
     <!-- Berechtigungen -->
     <string name="perm_location_rationale">OpenCurv braucht deine Position zum Navigieren. Sie verlässt das Gerät nie: die Navigation läuft komplett offline, und das einzige, wofür die App ins Netz geht, ist das Herunterladen der Karten von zwei festen Servern.</string>
     <string name="perm_grant">Standortzugriff erlauben</string>
+    <string name="diagnostics_title">Fehlerprotokoll</string>
+    <string name="diagnostics_share">Teilen</string>
+    <string name="diagnostics_clear">Leeren</string>
+    <string name="diagnostics_empty">Nichts aufgezeichnet. Abstürze und fehlgeschlagene Berechnungen stehen hier.</string>
+    <string name="diagnostics_crash">ABSTURZ</string>
+    <string name="diagnostics_show_stack">Details zeigen</string>
+    <string name="diagnostics_hide_stack">Details ausblenden</string>
+    <string name="settings_diagnostics">Fehlerprotokoll</string>
+    <string name="settings_diagnostics_hint">Was die App aufgezeichnet hat, als etwas schiefging. Bleibt auf diesem Handy.</string>
+    <string name="curviness_rating_straight">gerade</string>
+    <string name="curviness_rating_flowing">fließend</string>
+    <string name="curviness_rating_curvy">kurvig</string>
+    <string name="curviness_rating_twisty">sehr kurvig</string>
+    <string name="curviness_rating_extreme">extrem</string>
 </resources>

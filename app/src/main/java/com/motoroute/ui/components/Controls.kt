@@ -27,9 +27,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import com.motoroute.R
+import com.motoroute.data.model.Curviness
+import com.motoroute.data.model.CurvinessRating
 import com.motoroute.ui.theme.LocalRideColors
 import com.motoroute.ui.theme.TapTargetSize
 import java.util.Locale
@@ -151,6 +155,7 @@ fun SecondaryButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    height: Dp = 52.dp,
 ) {
     val colors = LocalRideColors.current
     Button(
@@ -163,7 +168,7 @@ fun SecondaryButton(
         ),
         modifier = modifier
             .fillMaxWidth()
-            .height(52.dp),
+            .height(height),
     ) {
         Text(label, fontSize = 16.sp, fontWeight = FontWeight.Bold)
     }
@@ -223,3 +228,15 @@ fun formatSize(bytes: Long): String = when {
     bytes >= 1_000 -> String.format(Locale.getDefault(), "%.0f kB", bytes / 1_000.0)
     else -> "$bytes B"
 }
+
+/** The rider-facing name of a curviness score, in their language. */
+@Composable
+fun curvinessRatingLabel(score: Double): String = stringResource(
+    when (Curviness.rating(score)) {
+        CurvinessRating.STRAIGHT -> R.string.curviness_rating_straight
+        CurvinessRating.FLOWING -> R.string.curviness_rating_flowing
+        CurvinessRating.CURVY -> R.string.curviness_rating_curvy
+        CurvinessRating.TWISTY -> R.string.curviness_rating_twisty
+        CurvinessRating.EXTREME -> R.string.curviness_rating_extreme
+    },
+)

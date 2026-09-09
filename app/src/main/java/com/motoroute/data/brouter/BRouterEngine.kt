@@ -97,10 +97,27 @@ class BRouterEngine(
         }
         ensureActive()
 
-        engine.errorMessage?.let { throw RoutingException(it) }
+        engine.errorMessage?.let { throw RoutingException(riderMessage(it)) }
         val track = engine.foundTrack ?: throw RoutingException("no route found")
         toRoute(track, request.profile.nameWithoutExtension)
     }
+
+    /**
+     * Turns BRouter's internal complaints into something a rider can act on.
+     *
+     * The one worth translating is the lookup version. Every .rd5 tile carries
+     * the version of the tag table it was built against, and when that table
+     * changes upstream a tile downloaded before the change can no longer be
+     * read. Nothing is broken about the install - the tiles just have to be
+     * fetched again, and "lookup version mismatch (old rd5?)" does not say so.
+     */
+    private fun riderMessage(message: String): String =
+        if (message.contains("lookup version mismatch")) {
+            "these routing tiles were built for an older map format - " +
+                "delete the affected regions and download them again ($message)"
+        } else {
+            message
+        }
 
     /**
      * Calculates the plain route plus BRouter's alternatives and returns the

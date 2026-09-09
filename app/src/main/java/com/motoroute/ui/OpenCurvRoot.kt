@@ -307,11 +307,7 @@ private fun MapRoot(
                     onClick = onOpenData,
                 )
                 GloveButton(
-                    iconRes = if (settings.mapTheme == MapTheme.NIGHT) {
-                        R.drawable.ic_action_sound_off
-                    } else {
-                        R.drawable.ic_action_layers
-                    },
+                    iconRes = R.drawable.ic_action_daynight,
                     contentDescription = stringResource(R.string.settings_theme),
                     onClick = {
                         viewModel.setMapTheme(

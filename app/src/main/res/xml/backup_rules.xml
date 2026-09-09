@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Maps and routing tiles are large and re-downloadable; never back them up. -->
+    <exclude domain="file" path="maps/" />
+    <exclude domain="file" path="segments/" />
+</full-backup-content>

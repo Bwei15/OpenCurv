@@ -1,0 +1,227 @@
+#
+# OpenCurv - motorcycle_fast
+#
+# Curve-hungry motorcycle routing for BRouter.
+#
+# Design idea: twisty roads are almost always the *low* road classes
+# (tertiary / unclassified / narrow secondary) in hilly terrain. So instead of
+# guessing curvature we make the fast, straight, high-capacity classes
+# expensive, keep the turn penalty near zero so a winding road is not punished
+# for winding, and charge a fixed price for every change of road so the router
+# prefers to stay on one long country road instead of stitching a grid.
+#
+# The `curviness` parameter scales how aggressively the fast classes are
+# punished. OpenCurv drives it from the "Kurven" slider in the UI.
+#
+
+---context:global
+
+assign validForCars           = 1
+assign validForBikes          = 0
+
+# Motorcycles obey turn restrictions.
+assign considerTurnRestrictions = true
+
+# Elevation is irrelevant for a motorcycle - never let it distort the cost.
+assign downhillcost   = 0
+assign downhillcutoff = 0
+assign uphillcost     = 0
+assign uphillcutoff   = 0
+
+assign turnInstructionMode  = 2   # locus-style: gives the richest hint set
+assign turnInstructionRoundabouts = true
+assign turnInstructionCatchingRange = 40
+
+# ---- rider-tunable parameters -------------------------------------------
+assign curviness        = 0.0    # %curviness% | 0 = direct, 1 = balanced, 2 = maximum curves | number
+assign avoid_unpaved    = true   # %avoid_unpaved% | Avoid gravel and dirt | boolean
+assign avoid_motorways  = false   # %avoid_motorways% | Avoid motorways | boolean
+assign avoid_toll       = false  # %avoid_toll% | Avoid toll roads | boolean
+assign avoid_ferries    = false  # %avoid_ferries% | Avoid ferries | boolean
+assign allow_tracks     = false  # %allow_tracks% | Allow tracks (enduro) | boolean
+
+# Search harder than the default: curvy detours only appear if the router is
+# willing to look past the obvious straight line.
+assign pass1coefficient = 1.5
+assign pass2coefficient = 0
+
+---context:way
+
+assign is_residential_or_living = or highway=residential|living_street living_street=yes
+assign is_link  = highway=motorway_link|trunk_link|primary_link|secondary_link|tertiary_link
+assign is_motorway = highway=motorway|motorway_link
+assign is_trunk    = highway=trunk|trunk_link
+assign is_primary  = highway=primary|primary_link
+assign is_secondary = highway=secondary|secondary_link
+assign is_tertiary  = highway=tertiary|tertiary_link
+assign is_track     = highway=track|road|path
+
+# ---- surface ------------------------------------------------------------
+assign is_paved   = or surface= or surface=asphalt|paved|concrete|paving_stones surface=sett|compacted
+assign is_unpaved = surface=gravel|dirt|unpaved|ground|earth|mud|sand|grass|pebblestone|clay|grass_paver
+assign is_bad_smoothness = smoothness=bad|very_bad|horrible|very_horrible|impassable|robust_wheels|high_clearance|off_road_wheels|rough
+
+# ---- legal access -------------------------------------------------------
+assign motorvehicleaccess
+       switch motor_vehicle=
+              switch vehicle=
+                     switch access=
+                            switch is_motorway                        1
+                            switch is_trunk                           1
+                            switch is_primary                         1
+                            switch is_secondary                       1
+                            switch is_tertiary                        1
+                            switch highway=unclassified               1
+                            switch route=ferry                        1
+                            switch is_residential_or_living           1
+                            switch highway=service                    1
+                            switch is_track                           1
+                            0
+                            access=yes|permissive|designated|destination
+                     vehicle=yes|permissive|designated|destination
+              motor_vehicle=yes|permissive|designated|destination
+
+assign caraccess
+       switch motorcar=
+              motorvehicleaccess
+              motorcar=yes|permissive|designated|destination
+
+assign motorcycleaccess
+       switch motorcycle=
+              caraccess
+              motorcycle=yes|permissive|designated|destination
+
+assign accesspenalty = switch motorcycleaccess 0 10000
+
+assign is_bad_oneway = if reversedirection=yes
+                       then ( if oneway= then junction=roundabout else oneway=yes|true|1 )
+                       else oneway=-1
+assign onewaypenalty = switch is_bad_oneway 10000 0
+
+assign tollpenalty  = switch and avoid_toll toll=yes 10000 0
+assign ferrypenalty = switch and avoid_ferries route=ferry 10000 0
+
+# ---- surface penalty ----------------------------------------------------
+# Unpaved is blocked outright unless the rider allows tracks (enduro mode).
+assign surfacecost =
+  if allow_tracks then ( if is_unpaved then 2.5 else 1.0 )
+  else if ( and avoid_unpaved is_unpaved ) then 99.0
+  else if ( and avoid_unpaved is_bad_smoothness ) then 20.0
+  else if is_unpaved then 6.0
+  else 1.0
+
+# ---- the curve engine ---------------------------------------------------
+# `boring` is how much a class is punished for being fast and straight.
+# curviness = 0 -> everything close to 1.0 (shortest sane route)
+# curviness = 2 -> motorways and trunks become practically impassable.
+assign boring = multiply curviness 1.0
+
+assign classcost =
+  if is_motorway  then ( if avoid_motorways then 50.0 else add 3.0 ( multiply boring 20.0 ) )
+  else if is_trunk     then add 2.5 ( multiply boring 12.0 )
+  else if is_primary   then add 1.3 ( multiply boring 2.6 )
+  else if is_secondary then add 1.05 ( multiply boring 0.30 )
+  else if is_tertiary  then 1.0
+  else if highway=unclassified then 1.0
+  else if is_residential_or_living then add 1.4 ( multiply boring 0.6 )
+  else if highway=service then add 3.0 ( multiply boring 2.0 )
+  else if route=ferry then 5.0
+  else if is_track then ( if allow_tracks then 2.0 else 40.0 )
+  else if highway= then 10000
+  else 6.0
+
+# A narrow lane is usually a good motorcycle road; a 4-lane arterial is not.
+assign widthbonus = if lanes=1 then 0.92 else 1.0
+
+# Referencing `maxspeed` marks the tag as used, which makes BRouter carry it
+# into the per-section way description. OpenCurv reads it back out of the track
+# to drive the speed-limit field in the HUD - fully offline, no speed database.
+# It also gently prefers the slow, narrow lanes that tend to be the fun ones.
+assign is_slow_road = maxspeed=30|20|10
+assign speedbonus = if is_slow_road then 0.97 else 1.0
+
+assign costfactor =
+  max onewaypenalty
+  max accesspenalty
+  max tollpenalty
+  max ferrypenalty
+  multiply classcost multiply surfacecost multiply widthbonus speedbonus
+
+# Every change of road costs this much. It stops the router from shredding a
+# route into a patchwork of short links just to save a few metres.
+# BRouter charges `initialcost` whenever `initialclassifier` changes, so we key
+# the classifier on the road class: every hop between road classes costs, which
+# keeps the router on one consistent country road instead of dipping onto a
+# main road for 200 m and back.
+assign initialclassifier =
+  if route=ferry then 1
+  else if is_motorway then 2
+  else if is_trunk then 3
+  else if is_primary then 4
+  else if is_secondary then 5
+  else if is_tertiary then 6
+  else if highway=unclassified then 7
+  else if is_residential_or_living then 8
+  else 9
+
+assign initialcost =
+  if route=ferry then 20000
+  else multiply 40 ( add 1 curviness )
+
+# Turning is what we are here for: it must be almost free on normal roads,
+# so a hairpin costs no more than the straight line it replaces.
+# (BRouter charges (1 - cos angle) * turncost per node.)
+assign turncost =
+  if junction=roundabout then 0
+  else if is_motorway then 250
+  else if is_trunk then 120
+  else multiply 25 ( sub 2.0 curviness )
+
+# ---- voice hint support (BRouter needs these verbatim) -------------------
+assign priorityclassifier =
+  if      ( highway=motorway       ) then 30
+  else if ( highway=motorway_link  ) then 29
+  else if ( highway=trunk          ) then 28
+  else if ( highway=trunk_link     ) then 27
+  else if ( highway=primary        ) then 26
+  else if ( highway=primary_link   ) then 25
+  else if ( highway=secondary      ) then 24
+  else if ( highway=secondary_link ) then 23
+  else if ( highway=tertiary       ) then 22
+  else if ( highway=tertiary_link  ) then 21
+  else if ( highway=unclassified   ) then 20
+  else if ( is_residential_or_living ) then 6
+  else if ( highway=service        ) then 6
+  else if ( highway=track          ) then if tracktype=grade1 then 4 else 2
+  else if ( highway=bridleway|road ) then 2
+  else 0
+
+assign is_good_oneway = if reversedirection=yes then oneway=-1
+                        else if oneway= then junction=roundabout else oneway=yes|true|1
+assign isroundabout = junction=roundabout
+assign isgoodforcars = if greater priorityclassifier 6 then true
+                  else if or is_residential_or_living highway=service then true
+                  else if ( and highway=track tracktype=grade1 ) then true
+                  else false
+
+assign classifiermask add          is_bad_oneway
+                      add multiply is_good_oneway 2
+                      add multiply isroundabout   4
+                      add multiply is_link        8
+                      add multiply isgoodforcars 16
+                          multiply is_residential_or_living 32
+
+---context:node
+
+assign motorvehicleaccess
+       switch motor_vehicle=
+              switch vehicle=
+                     switch access=
+                            not barrier=gate|bollard|lift_gate|cycle_barrier|block|stile|kissing_gate|motorcycle_barrier|chain|swing_gate|turnstile
+                            access=yes|permissive|designated|destination
+                     vehicle=yes|permissive|designated|destination
+              motor_vehicle=yes|permissive|designated|destination
+
+assign initialcost =
+       switch and avoid_toll barrier=toll_booth 1000000
+       switch motorvehicleaccess 0 1000000

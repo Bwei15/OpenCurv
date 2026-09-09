@@ -1,0 +1,42 @@
+<resources>
+    <string name="app_name">OpenCurv</string>
+
+    <string name="nav_channel_name">Navigation</string>
+    <string name="nav_channel_desc">Keeps guidance running while riding</string>
+    <string name="nav_notification_title">OpenCurv is guiding you</string>
+    <string name="nav_notification_stop">Stop</string>
+
+    <string name="tab_map">Map</string>
+    <string name="tab_plan">Route</string>
+    <string name="tab_data">Data</string>
+
+    <string name="action_center">Center</string>
+    <string name="action_mute">Mute</string>
+    <string name="action_unmute">Sound</string>
+    <string name="action_reroute">Reroute</string>
+    <string name="action_zoom_in">Zoom in</string>
+    <string name="action_zoom_out">Zoom out</string>
+    <string name="action_stop">Stop</string>
+    <string name="action_start">Start</string>
+
+    <string name="perm_location_rationale">OpenCurv needs your location to navigate. Nothing ever leaves the device — the app has no internet permission.</string>
+    <string name="perm_grant">Grant location access</string>
+
+    <string name="data_maps">Offline maps (.map)</string>
+    <string name="data_segments">Routing tiles (.rd5)</string>
+    <string name="data_profiles">Routing profiles (.brf)</string>
+    <string name="data_import">Import file</string>
+    <string name="data_empty">Nothing imported yet</string>
+
+    <string name="no_map_hint">Import a Mapsforge .map file to see the map.</string>
+    <string name="no_segments_hint">Import BRouter .rd5 tiles to calculate routes.</string>
+
+    <string name="eta">ETA</string>
+    <string name="remaining">Left</string>
+    <string name="speed_unit">km/h</string>
+
+    <string name="rerouting">Rerouting…</string>
+    <string name="off_route">Off route</string>
+    <string name="arrived">You have arrived</string>
+    <string name="calculating">Calculating route…</string>
+</resources>

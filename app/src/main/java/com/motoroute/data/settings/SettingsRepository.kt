@@ -8,6 +8,17 @@ import kotlinx.coroutines.flow.asStateFlow
 
 enum class MapTheme { AUTO, DAY, NIGHT }
 
+/**
+ * Which cartography the map is drawn with.
+ *
+ * [COLOUR] is the everyday style: coloured road classes, green woodland, blue
+ * water - close enough to what every rider already reads on a phone that no
+ * learning is needed. [CONTRAST] throws the colour away for maximum legibility
+ * in direct sun, which is worth having when the sun is low and the visor is
+ * scratched.
+ */
+enum class MapStyle { COLOUR, CONTRAST }
+
 data class Settings(
     val profileId: String = "motorcycle_curvy",
     /** 0.0 = direct, 2.0 = maximum curves. Feeds the .brf `curviness` parameter. */
@@ -20,6 +31,9 @@ data class Settings(
     val volumeKeyZoom: Boolean = true,
     val keepScreenOn: Boolean = true,
     val searchAlternatives: Boolean = true,
+    val mapStyle: MapStyle = MapStyle.COLOUR,
+    /** False until the rider has been walked through getting their first map. */
+    val onboardingDone: Boolean = false,
 )
 
 /**
@@ -48,6 +62,9 @@ class SettingsRepository(context: Context) {
         volumeKeyZoom = prefs.getBoolean(KEY_VOLUME_ZOOM, true),
         keepScreenOn = prefs.getBoolean(KEY_KEEP_SCREEN, true),
         searchAlternatives = prefs.getBoolean(KEY_ALTERNATIVES, true),
+        mapStyle = runCatching { MapStyle.valueOf(prefs.getString(KEY_MAP_STYLE, null) ?: "COLOUR") }
+            .getOrDefault(MapStyle.COLOUR),
+        onboardingDone = prefs.getBoolean(KEY_ONBOARDING, false),
     )
 
     fun update(transform: (Settings) -> Settings) {
@@ -62,6 +79,8 @@ class SettingsRepository(context: Context) {
             .putBoolean(KEY_VOLUME_ZOOM, updated.volumeKeyZoom)
             .putBoolean(KEY_KEEP_SCREEN, updated.keepScreenOn)
             .putBoolean(KEY_ALTERNATIVES, updated.searchAlternatives)
+            .putString(KEY_MAP_STYLE, updated.mapStyle.name)
+            .putBoolean(KEY_ONBOARDING, updated.onboardingDone)
             .apply()
         _settings.value = updated
     }
@@ -76,5 +95,7 @@ class SettingsRepository(context: Context) {
         const val KEY_VOLUME_ZOOM = "volume_zoom"
         const val KEY_KEEP_SCREEN = "keep_screen"
         const val KEY_ALTERNATIVES = "alternatives"
+        const val KEY_MAP_STYLE = "map_style"
+        const val KEY_ONBOARDING = "onboarding_done"
     }
 }

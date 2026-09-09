@@ -5,10 +5,9 @@ import android.media.AudioAttributes
 import android.speech.tts.TextToSpeech
 import android.speech.tts.TextToSpeech.QUEUE_ADD
 import android.speech.tts.TextToSpeech.QUEUE_FLUSH
-import com.motoroute.data.model.Maneuver
 import com.motoroute.domain.VoiceAnnouncement
+import com.motoroute.domain.guidance.Phrasebook
 import java.util.Locale
-import kotlin.math.roundToInt
 
 /**
  * Turn-by-turn speech using the platform TTS engine.
@@ -17,12 +16,24 @@ import kotlin.math.roundToInt
  * ASSISTANCE_NAVIGATION_GUIDANCE is what makes a Bluetooth intercom duck the
  * music instead of talking over it, and what stops the announcement from being
  * routed to the phone speaker inside a helmet.
+ *
+ * The wording lives in [Phrasebook], picked from the language the engine
+ * actually ended up speaking - so a German phone gets German announcements, and
+ * a phone whose TTS has no German voice gets English rather than German words
+ * read out by an English voice.
  */
 class VoiceGuidance(context: Context) {
 
     private var tts: TextToSpeech? = null
     private var ready = false
     var enabled: Boolean = true
+
+    /** Set once the engine has told us which language it will speak. */
+    var phrasebook: Phrasebook = Phrasebook.forLanguage(Locale.getDefault().language)
+        private set
+
+    /** True when the engine is initialised and can actually say something. */
+    val isReady: Boolean get() = ready
 
     init {
         tts = TextToSpeech(context.applicationContext) { status ->
@@ -36,11 +47,16 @@ class VoiceGuidance(context: Context) {
                 )
                 val locale = Locale.getDefault()
                 val result = tts?.setLanguage(locale)
-                if (result == TextToSpeech.LANG_MISSING_DATA ||
+                val spoken = if (
+                    result == TextToSpeech.LANG_MISSING_DATA ||
                     result == TextToSpeech.LANG_NOT_SUPPORTED
                 ) {
                     tts?.setLanguage(Locale.ENGLISH)
+                    Locale.ENGLISH
+                } else {
+                    locale
                 }
+                phrasebook = Phrasebook.forLanguage(spoken.language)
             }
         }
     }
@@ -54,6 +70,19 @@ class VoiceGuidance(context: Context) {
         tts?.speak(text, mode, null, "opencurv-${announcement.hashCode()}")
     }
 
+    /**
+     * Says a sample announcement, so the rider can check volume, intercom
+     * pairing and language without leaving the driveway.
+     *
+     * @return false when the engine is not up yet, so the UI can say so instead
+     *   of leaving the rider wondering whether the phone is mute.
+     */
+    fun speakTest(): Boolean {
+        if (!ready) return false
+        tts?.speak(phrasebook.testAnnouncement, QUEUE_FLUSH, null, "opencurv-test")
+        return true
+    }
+
     fun stop() {
         tts?.stop()
     }
@@ -65,43 +94,6 @@ class VoiceGuidance(context: Context) {
         ready = false
     }
 
-    /** Builds the spoken sentence. Kept separate so it can be unit tested. */
-    fun phrase(announcement: VoiceAnnouncement): String {
-        if (announcement.maneuver == Maneuver.DESTINATION) return "You have arrived"
-        if (announcement.maneuver == Maneuver.OFF_ROUTE) return "Off route, recalculating"
-
-        val turn = when (announcement.maneuver) {
-            Maneuver.TURN_LEFT -> "turn left"
-            Maneuver.TURN_RIGHT -> "turn right"
-            Maneuver.SLIGHT_LEFT -> "keep slightly left"
-            Maneuver.SLIGHT_RIGHT -> "keep slightly right"
-            Maneuver.SHARP_LEFT -> "turn sharply left"
-            Maneuver.SHARP_RIGHT -> "turn sharply right"
-            Maneuver.HAIRPIN_LEFT -> "hairpin left"
-            Maneuver.HAIRPIN_RIGHT -> "hairpin right"
-            Maneuver.KEEP_LEFT -> "keep left"
-            Maneuver.KEEP_RIGHT -> "keep right"
-            Maneuver.UTURN_LEFT, Maneuver.UTURN_RIGHT -> "make a U-turn"
-            Maneuver.ROUNDABOUT, Maneuver.ROUNDABOUT_LEFT ->
-                if (announcement.roundaboutExit > 0) {
-                    "at the roundabout take exit ${announcement.roundaboutExit}"
-                } else {
-                    "at the roundabout"
-                }
-            else -> "continue"
-        }
-
-        val distance = formatDistance(announcement.distanceMeters)
-        val tail = if (announcement.isImmediate) ", then immediately again" else ""
-        return if (distance == null) "$turn now$tail" else "In $distance, $turn$tail"
-    }
-
-    /** Rounds to something a human would actually say. */
-    private fun formatDistance(meters: Int): String? = when {
-        meters < 60 -> null
-        meters < 400 -> "${(meters / 50.0).roundToInt() * 50} metres"
-        meters < 900 -> "${(meters / 100.0).roundToInt() * 100} metres"
-        meters < 1500 -> "one kilometre"
-        else -> "${(meters / 1000.0).roundToInt()} kilometres"
-    }
+    /** The sentence that would be spoken. Kept public so it can be inspected in tests. */
+    fun phrase(announcement: VoiceAnnouncement): String = phrasebook.announce(announcement)
 }

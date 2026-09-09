@@ -12,6 +12,8 @@ import com.motoroute.data.settings.SettingsRepository
 import com.motoroute.voice.VoiceGuidance
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -61,9 +63,15 @@ class NavigationController(
     private val _zoom = MutableStateFlow(16)
     val recommendedZoom: StateFlow<Int> = _zoom.asStateFlow()
 
+    private val _demoRunning = MutableStateFlow(false)
+
+    /** True while a demo ride is driving the navigation instead of the GPS. */
+    val demoRunning: StateFlow<Boolean> = _demoRunning.asStateFlow()
+
     private var destination: GeoPoint? = null
     private var viaPoints: List<GeoPoint> = emptyList()
     private var locationJob: Job? = null
+    private var demoJob: Job? = null
 
     private val rerouting = ReroutingEngine(
         scope = scope,
@@ -90,12 +98,12 @@ class NavigationController(
         locationJob = null
     }
 
-    private fun onFix(fix: FilteredFix) {
+    private fun onFix(fix: FilteredFix, allowReroute: Boolean = true) {
         _lastFix.value = fix
         _zoom.value = camera.zoomFor(fix.speedMps * 3.6)
 
         val needsReroute = manager.onLocation(fix)
-        if (!needsReroute) return
+        if (!needsReroute || !allowReroute) return
 
         val target = destination ?: return
         manager.setRerouting(true)
@@ -129,6 +137,7 @@ class NavigationController(
     }
 
     fun startNavigation(route: Route) {
+        stopDemo(resumeLocation = false)
         voice.enabled = settings.current.voiceEnabled
         camera.reset()
         rerouting.reset()
@@ -137,10 +146,69 @@ class NavigationController(
     }
 
     fun stopNavigation() {
+        stopDemo(resumeLocation = false)
         manager.stop()
         rerouting.cancel()
         voice.stop()
         _planning.value = PlanningState.Idle
+    }
+
+    /**
+     * Rides the calculated route without a motorcycle.
+     *
+     * The demo feeds the ordinary pipeline - state machine, map matcher, voice -
+     * with positions walked along the route, so a rider can check the
+     * announcements, the HUD and the map behaviour at the kitchen table before
+     * trusting them at 100 km/h. Rerouting is the one thing switched off: there
+     * is nothing to reroute from when the fixes are on the route by
+     * construction.
+     */
+    fun startDemo(route: Route) {
+        val simulator = RouteSimulator(route)
+        if (!simulator.isRunnable) return
+
+        stopLocationUpdates()
+        demoJob?.cancel()
+        voice.enabled = settings.current.voiceEnabled
+        camera.reset()
+        rerouting.cancel()
+        // Flagged before the state machine starts, so nothing ever sees a
+        // navigating state that is not yet marked as a demo.
+        _demoRunning.value = true
+        manager.start(route)
+
+        demoJob = scope.launch {
+            val startedAt = System.currentTimeMillis()
+            var elapsed = 0L
+            while (isActive) {
+                val fix = simulator.fixAt(elapsed, startedAt + elapsed) ?: break
+                onFix(fix, allowReroute = false)
+                delay(DEMO_TICK_MILLIS)
+                elapsed += DEMO_TICK_MILLIS
+            }
+            // Nudge the state machine onto the very last point so the arrival
+            // announcement fires exactly as it would at the end of a real ride.
+            if (isActive) {
+                onFix(
+                    simulator.fixAtDistance(
+                        simulator.totalMeters,
+                        System.currentTimeMillis(),
+                    ),
+                    allowReroute = false,
+                )
+            }
+            _demoRunning.value = false
+        }
+    }
+
+    fun stopDemo(resumeLocation: Boolean = true) {
+        if (demoJob == null && !_demoRunning.value) return
+        demoJob?.cancel()
+        demoJob = null
+        _demoRunning.value = false
+        manager.stop()
+        voice.stop()
+        if (resumeLocation) startLocationUpdates()
     }
 
     /** Forces a recalculation from the current position, e.g. the panic button. */
@@ -190,5 +258,8 @@ class NavigationController(
          * small enough that the map renderer is never starved.
          */
         const val MEMORY_CLASS_MB = 48
+
+        /** Demo fixes arrive twice a second, like a good GPS on a fast bike. */
+        const val DEMO_TICK_MILLIS = 500L
     }
 }

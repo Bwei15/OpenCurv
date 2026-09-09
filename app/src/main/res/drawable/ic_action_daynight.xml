@@ -1,0 +1,17 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp" android:height="48dp"
+    android:viewportWidth="48" android:viewportHeight="48"
+    android:tint="#FFFFFFFF">
+    <!-- A sun whose right half is bitten out by a moon: one icon for the
+         day/night toggle, readable at a glance in either state. -->
+    <path android:pathData="M24,14 a10,10 0 1,0 0.1,0 Z" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.0" />
+    <path android:pathData="M24,14 a10,10 0 0,1 0,20 Z" android:fillColor="#FFFFFFFF" />
+    <path android:pathData="M24,4 L24,8" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.0" android:strokeLineCap="round" />
+    <path android:pathData="M24,40 L24,44" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.0" android:strokeLineCap="round" />
+    <path android:pathData="M4,24 L8,24" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.0" android:strokeLineCap="round" />
+    <path android:pathData="M40,24 L44,24" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.0" android:strokeLineCap="round" />
+    <path android:pathData="M10,10 L13,13" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.0" android:strokeLineCap="round" />
+    <path android:pathData="M35,35 L38,38" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.0" android:strokeLineCap="round" />
+    <path android:pathData="M38,10 L35,13" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.0" android:strokeLineCap="round" />
+    <path android:pathData="M13,35 L10,38" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.0" android:strokeLineCap="round" />
+</vector>

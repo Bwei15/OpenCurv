@@ -1,0 +1,169 @@
+<resources>
+
+    <!-- Dienste -->
+    <string name="nav_channel_name">Navigation</string>
+    <string name="nav_channel_desc">Hält die Führung während der Fahrt am Laufen</string>
+    <string name="nav_notification_title">OpenCurv navigiert</string>
+    <string name="nav_notification_stop">Stopp</string>
+    <string name="download_channel_name">Downloads</string>
+    <string name="download_channel_desc">Fortschritt der Kartendownloads</string>
+    <string name="download_notification_title">Offline-Daten werden geladen</string>
+    <string name="download_preparing">Wird vorbereitet…</string>
+
+    <!-- Aktionen -->
+    <string name="action_back">Zurück</string>
+    <string name="action_cancel">Abbrechen</string>
+    <string name="action_center">Auf meine Position</string>
+    <string name="action_delete">Löschen</string>
+    <string name="action_download">Laden</string>
+    <string name="action_retry">Erneut versuchen</string>
+    <string name="action_mute">Ansagen aus</string>
+    <string name="action_unmute">Ansagen an</string>
+    <string name="action_reroute">Route neu berechnen</string>
+    <string name="action_stop">Navigation beenden</string>
+
+    <!-- Fahren -->
+    <string name="eta">Ankunft</string>
+    <string name="remaining">übrig</string>
+    <string name="rerouting">Neue Route</string>
+    <string name="off_route">Abseits der Route</string>
+    <string name="arrived">Ziel erreicht</string>
+    <string name="calculating">Route wird berechnet…</string>
+    <string name="nav_waiting_gps">Warte auf GPS</string>
+    <string name="nav_exit">%1$d. Ausfahrt</string>
+    <string name="nav_demo_running">Demofahrt — kein echtes GPS</string>
+
+    <!-- Planung -->
+    <string name="plan_no_destination">Kein Ziel</string>
+    <string name="plan_destination_pin">Ziel auf der Karte</string>
+    <string name="plan_hint">Oben suchen, auf die Karte tippen für ein Ziel, lange drücken für den Start.</string>
+    <string name="plan_start_set_hint">Start von Hand gesetzt. Zum Verschieben des Ziels auf die Karte tippen.</string>
+    <string name="plan_calculate">Route berechnen</string>
+    <string name="plan_calculating">Wird offline berechnet…</string>
+    <string name="plan_start">Navigation starten</string>
+    <string name="plan_demo">Demofahrt</string>
+    <string name="plan_demo_hint">Fährt die Route auf dem Bildschirm ab, mit allen Ansagen — so lässt sich alles testen, bevor es aufs Motorrad geht.</string>
+    <string name="plan_discard">Verwerfen</string>
+    <string name="plan_retry">Nochmal versuchen</string>
+    <string name="plan_clear">Zurücksetzen</string>
+    <string name="plan_options">Routenoptionen</string>
+    <string name="plan_curviness">Kurvenhunger: %1$s</string>
+    <string name="plan_alternatives">Alternativen vergleichen, kurvigste behalten</string>
+    <string name="plan_distance">Strecke</string>
+    <string name="plan_time">Fahrzeit</string>
+    <string name="plan_climb">Anstieg</string>
+
+    <string name="curviness_direct">direkt</string>
+    <string name="curviness_mild">mild</string>
+    <string name="curviness_balanced">ausgewogen</string>
+    <string name="curviness_hungry">hungrig</string>
+    <string name="curviness_max">maximal</string>
+
+    <!-- Suche -->
+    <string name="search_placeholder">Ziel suchen</string>
+    <string name="search_searching">Wird gesucht…</string>
+    <string name="search_no_results">In den geladenen Karten nichts gefunden.</string>
+    <string name="search_no_maps">Noch keine Karte geladen — es gibt nichts zu durchsuchen.</string>
+    <string name="search_indexing">Ortsverzeichnis wird erstellt: %1$d %% (%2$d Orte)</string>
+    <string name="search_hint">Städte und Dörfer kommen aus der geladenen Karte; Straßen und Tankstellen werden rund um den Kartenausschnitt gesucht.</string>
+    <string name="place_city">Stadt</string>
+    <string name="place_town">Stadt</string>
+    <string name="place_village">Dorf</string>
+    <string name="place_suburb">Ortsteil</string>
+    <string name="place_hamlet">Weiler</string>
+    <string name="place_street">Straße</string>
+    <string name="place_fuel">Tankstelle</string>
+    <string name="place_poi">Ort</string>
+
+    <!-- Offline-Daten -->
+    <string name="data_title">Offline-Daten</string>
+    <string name="data_free_space">%1$s frei auf diesem Gerät</string>
+    <string name="data_download_maps">Karten herunterladen</string>
+    <string name="data_import">Von diesem Gerät importieren</string>
+    <string name="data_regions">Geladene Regionen</string>
+    <string name="data_regions_empty">Noch keine Region. Lade eine herunter — Karte und Routing-Kacheln kommen in einem Paket.</string>
+    <string name="data_other_files">Weitere Dateien</string>
+    <string name="data_profiles">Routing-Profile</string>
+    <string name="data_region_complete">%1$d Dateien · %2$s</string>
+    <string name="data_region_partial">Unvollständig: %1$d von %2$d Dateien · %3$s</string>
+    <string name="data_delete_region_title">%1$s löschen?</string>
+    <string name="data_delete_region_text">Entfernt %1$d Dateien und gibt %2$s frei. Routing-Kacheln, die eine andere Region noch braucht, bleiben erhalten.</string>
+    <string name="data_delete_file_title">Diese Datei löschen?</string>
+    <string name="kind_map">Karte</string>
+    <string name="kind_segment">Routing-Kachel</string>
+    <string name="kind_profile">Profil</string>
+
+    <!-- Downloads -->
+    <string name="download_title">Karten herunterladen</string>
+    <string name="download_subtitle_free">Einmal über WLAN geladen. Beim Fahren wird nie ein Netz gebraucht. %1$s frei.</string>
+    <string name="download_filter">Region filtern</string>
+    <string name="download_region_summary">~%1$d MB Karte · %2$d Dateien im Paket</string>
+    <string name="download_installed">geladen</string>
+    <string name="download_file_of">Datei %1$d von %2$d · %3$s geladen</string>
+    <string name="download_waiting">%1$d von %2$d Dateien fertig</string>
+    <string name="download_done">Fertig</string>
+    <string name="download_blocked_navigating">Bitte erst die Navigation beenden.</string>
+    <string name="download_sources">Karten kommen von download.mapsforge.org, Routing-Kacheln von brouter.de. Beides sind öffentliche Datenbanken auf OpenStreetMap-Basis; mit etwas anderem spricht die App nicht.</string>
+
+    <!-- Einstieg -->
+    <string name="onboarding_skip">Überspringen</string>
+    <string name="onboarding_next">Weiter</string>
+    <string name="onboarding_welcome_title">Kurven statt Ankunftszeit</string>
+    <string name="onboarding_welcome_body">OpenCurv sucht die kurvige Straße, nicht die schnelle. Alles läuft offline: Karte, Routing und Ansagen laufen auf dem Handy, deine Position verlässt es nie.</string>
+    <string name="onboarding_data_title">Einmal laden, dann ohne Netz</string>
+    <string name="onboarding_data_body">Du brauchst eine Region: eine Karte zum Zeichnen und die Routing-Kacheln zum Rechnen. OpenCurv holt beides in einem Paket aus einer öffentlichen Datenbank — rechne mit 300 MB bis 1,5 GB, also besser im WLAN.</string>
+    <string name="onboarding_region_title">Region auswählen</string>
+    <string name="onboarding_region_body">Wähle das Gebiet, in dem du fährst. Es wird als ein Paket geladen und als ein Paket wieder gelöscht — weitere kannst du jederzeit dazunehmen.</string>
+    <string name="onboarding_choose_region">Region auswählen</string>
+    <string name="onboarding_import_instead">Ich habe die Dateien schon</string>
+
+    <!-- Leerzustand -->
+    <string name="empty_no_map">Keine Karte installiert</string>
+    <string name="empty_no_segments">Keine Routing-Kacheln installiert</string>
+    <string name="empty_body">Ohne sie bleibt die Karte leer und es lässt sich keine Route berechnen.</string>
+    <string name="empty_action">Karten holen</string>
+    <string name="empty_later">Später</string>
+
+    <!-- Einstellungen -->
+    <string name="settings_title">Einstellungen</string>
+    <string name="settings_map_section">Karte</string>
+    <string name="settings_style">Stil</string>
+    <string name="settings_style_colour">Farbig</string>
+    <string name="settings_style_contrast">Hoher Kontrast</string>
+    <string name="settings_style_hint">Farbig liest sich wie eine gewohnte Straßenkarte. Hoher Kontrast verzichtet auf Farbe — für pralle Sonne.</string>
+    <string name="settings_theme">Tag und Nacht</string>
+    <string name="settings_theme_auto">Automatisch</string>
+    <string name="settings_theme_day">Tag</string>
+    <string name="settings_theme_night">Nacht</string>
+    <string name="settings_riding_section">Fahren</string>
+    <string name="settings_heading_up">In Fahrtrichtung</string>
+    <string name="settings_heading_up_hint">Dreht die Karte so, dass die Fahrtrichtung nach oben zeigt.</string>
+    <string name="settings_perspective">Perspektive</string>
+    <string name="settings_perspective_hint">Neigt die Karte während der Fahrt. Beschriftungen kippen mit.</string>
+    <string name="settings_volume_zoom">Lautstärketasten zoomen</string>
+    <string name="settings_volume_zoom_hint">Zoomen, ohne die Hand vom Lenker zu nehmen.</string>
+    <string name="settings_voice_section">Ansagen</string>
+    <string name="settings_voice">Sprachansagen</string>
+    <string name="settings_voice_hint">Nutzt die Sprachausgabe des Handys, in dessen Sprache.</string>
+    <string name="settings_test_voice">Ansage testen</string>
+    <string name="settings_data_section">Offline-Daten</string>
+    <string name="settings_data_hint">Karten und Routing-Kacheln, Region für Region.</string>
+    <string name="settings_open_data">Offline-Daten verwalten</string>
+    <string name="settings_about">OpenCurv · Offline-Motorradnavigation · Kartendaten © OpenStreetMap-Mitwirkende</string>
+
+    <!-- Meldungen -->
+    <string name="start_set">Startpunkt gesetzt</string>
+    <string name="msg_pick_destination">Ziel suchen oder auf die Karte tippen</string>
+    <string name="msg_no_segments">Noch keine Routing-Kacheln — lade zuerst eine Region</string>
+    <string name="msg_waiting_for_gps">Warte auf GPS-Position</string>
+    <string name="msg_start_is_map_centre">Kein GPS: Start ist die Kartenmitte</string>
+    <string name="msg_voice_test">Testansage wird gesprochen</string>
+    <string name="msg_voice_unavailable">Die Sprachausgabe ist noch nicht bereit</string>
+    <string name="msg_region_deleted">%1$s gelöscht, %2$s frei geworden</string>
+    <string name="msg_imported">%1$s importiert</string>
+    <string name="msg_import_wrong_type">Keine .map-, .rd5- oder .brf-Datei</string>
+
+    <!-- Berechtigungen -->
+    <string name="perm_location_rationale">OpenCurv braucht deine Position zum Navigieren. Sie verlässt das Gerät nie: die Navigation läuft komplett offline, und das einzige, wofür die App ins Netz geht, ist das Herunterladen der Karten von zwei festen Servern.</string>
+    <string name="perm_grant">Standortzugriff erlauben</string>
+</resources>

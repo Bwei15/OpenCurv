@@ -7,7 +7,9 @@ import com.motoroute.data.download.DownloadRepository
 import com.motoroute.data.download.FileDownloader
 import com.motoroute.data.download.MapCatalog
 import com.motoroute.data.location.LocationProvider
+import com.motoroute.data.download.RegionStore
 import com.motoroute.data.map.OfflineDataRepository
+import com.motoroute.data.search.PlaceSearchRepository
 import com.motoroute.data.settings.SettingsRepository
 import com.motoroute.domain.NavigationController
 import com.motoroute.voice.VoiceGuidance
@@ -36,6 +38,20 @@ class AppContainer(context: Context) {
     val voice = VoiceGuidance(appContext)
 
     val mapCatalog = MapCatalog(appContext)
+
+    /** Which files belong to which downloaded region. */
+    val regions = RegionStore(
+        indexFile = offlineData.regionIndexFile,
+        mapDir = offlineData.mapDir,
+        segmentDir = offlineData.segmentDir,
+    )
+
+    /** Offline destination search, built from the maps already on the phone. */
+    val placeSearch = PlaceSearchRepository(
+        mapFiles = offlineData::mapFiles,
+        cacheDir = offlineData.indexDir,
+        scope = scope,
+    )
 
     val downloads = DownloadRepository(
         scope = scope,

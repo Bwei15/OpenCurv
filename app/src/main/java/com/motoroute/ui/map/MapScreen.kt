@@ -6,14 +6,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.motoroute.data.model.GeoPoint
 import com.motoroute.data.model.Route
+import com.motoroute.data.settings.MapStyle
 import com.motoroute.domain.CameraController
 import com.motoroute.ui.theme.LocalRideColors
 import org.mapsforge.core.model.LatLong
@@ -27,6 +29,11 @@ import org.mapsforge.map.android.view.MapView
  * as a projective transform on the view itself ([perspectiveTilt]). That is an
  * honest trade: the road layout gets the depth cue a rider expects, at the cost
  * of labels leaning with it. It can be switched off in settings.
+ *
+ * Camera control is one-directional: the map is only moved when [follow] is on.
+ * The moment the rider drags or pinches, the host turns [follow] off and the
+ * map stays exactly where they left it - the behaviour every phone map has, and
+ * the one this app was missing.
  */
 @Composable
 fun MapScreen(
@@ -34,31 +41,54 @@ fun MapScreen(
     route: Route?,
     position: GeoPoint?,
     headingDegrees: Double,
-    zoom: Int,
+    zoom: Int?,
     headingUp: Boolean,
+    follow: Boolean,
     perspectiveTilt: Float,
+    style: MapStyle,
+    destination: GeoPoint?,
+    start: GeoPoint?,
     modifier: Modifier = Modifier,
+    onUserGesture: () -> Unit = {},
     onMapTap: ((GeoPoint) -> Unit)? = null,
+    onMapLongPress: ((GeoPoint) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val rideColors = LocalRideColors.current
+    val gesture = rememberUpdatedState(onUserGesture)
 
-    val mapView = remember(context) { controller.attach(context) }
+    val mapView = remember(context) { controller.attach(context) { gesture.value() } }
 
     DisposableEffect(mapView) {
         onDispose { controller.detach() }
     }
 
-    LaunchedEffect(rideColors.isNight) {
-        controller.applyTheme(rideColors.isNight)
+    LaunchedEffect(rideColors.isNight, style) {
+        controller.applyTheme(rideColors.isNight, style)
     }
 
     LaunchedEffect(route) {
         controller.showRoute(route, rideColors.route.toArgb())
     }
 
-    LaunchedEffect(position, headingDegrees, zoom, headingUp) {
-        controller.follow(position, headingDegrees, zoom, headingUp)
+    LaunchedEffect(destination) {
+        controller.showDestination(destination, rideColors.destination.toArgb())
+    }
+
+    LaunchedEffect(start) {
+        controller.showStart(start, rideColors.ok.toArgb())
+    }
+
+    LaunchedEffect(position, headingDegrees) {
+        controller.showPosition(position, headingDegrees, rideColors.rider.toArgb())
+    }
+
+    LaunchedEffect(position, headingDegrees, zoom, headingUp, follow) {
+        if (follow) {
+            controller.follow(position, headingDegrees, zoom, headingUp)
+        } else if (!headingUp) {
+            controller.resetRotation()
+        }
     }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -74,8 +104,14 @@ fun MapScreen(
                     transformOrigin = TransformOrigin(0.5f, 0.72f)
                 },
             update = { view ->
-                onMapTap?.let { tap ->
-                    view.setOnTouchListener(controller.tapListener(view, tap))
+                if (onMapTap != null || onMapLongPress != null) {
+                    view.setOnTouchListener(
+                        controller.tapListener(
+                            view = view,
+                            onTap = { onMapTap?.invoke(it) },
+                            onLongPress = { onMapLongPress?.invoke(it) },
+                        ),
+                    )
                 }
             },
         )

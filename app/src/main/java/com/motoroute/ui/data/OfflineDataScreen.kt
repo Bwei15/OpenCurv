@@ -3,172 +3,273 @@ package com.motoroute.ui.data
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.motoroute.R
+import com.motoroute.data.download.RegionStatus
 import com.motoroute.data.map.OfflineFile
 import com.motoroute.data.map.OfflineFileKind
-import com.motoroute.ui.navigation.GloveButton
-import com.motoroute.ui.theme.GloveTargetSize
+import com.motoroute.ui.components.ConfirmDialog
+import com.motoroute.ui.components.IconTapButton
+import com.motoroute.ui.components.PanelCard
+import com.motoroute.ui.components.PrimaryButton
+import com.motoroute.ui.components.ScreenHeader
+import com.motoroute.ui.components.SecondaryButton
+import com.motoroute.ui.components.formatSize
 import com.motoroute.ui.theme.LocalRideColors
-import java.util.Locale
 
 /**
- * Offline data management: import, review, delete.
+ * Offline data, in the rider's units.
  *
- * This screen is the whole reason the app can promise no network at runtime.
- * Everything the router and the renderer need is a file the rider put here.
+ * The screen used to list every file: one map, five routing tiles, three
+ * profiles, each with its own delete button. Nobody downloaded "E5_N50.rd5" -
+ * they downloaded Niedersachsen. So a region is now one row that installs and
+ * deletes as one thing, and the file list only exists for what does not belong
+ * to a region: hand-imported maps and routing profiles.
  */
 @Composable
 fun OfflineDataScreen(
-    maps: List<OfflineFile>,
-    segments: List<OfflineFile>,
+    regions: List<RegionStatus>,
+    looseFiles: List<OfflineFile>,
     profiles: List<OfflineFile>,
     freeSpaceBytes: Long,
     onImport: () -> Unit,
     onDownload: () -> Unit,
-    onDelete: (OfflineFile) -> Unit,
+    onDeleteRegion: (RegionStatus) -> Unit,
+    onDeleteFile: (OfflineFile) -> Unit,
+    onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalRideColors.current
+    var pendingRegion by remember { mutableStateOf<RegionStatus?>(null) }
+    var pendingFile by remember { mutableStateOf<OfflineFile?>(null) }
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.safeDrawing)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .windowInsetsPadding(WindowInsets.safeDrawing),
     ) {
-        Text(
-            text = "Offline data",
-            color = colors.hudForeground,
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Black,
+        ScreenHeader(
+            title = stringResource(R.string.data_title),
+            subtitle = stringResource(R.string.data_free_space, formatSize(freeSpaceBytes)),
+            onBack = onBack,
         )
-        Text(
-            text = "${formatSize(freeSpaceBytes)} free on this device",
-            color = colors.muted,
-            fontSize = 14.sp,
-        )
-
-        // Downloading is the path almost everyone wants, so it leads; importing
-        // from a PC stays for riders who already have the files or who want a
-        // region the catalog does not list.
-        Button(
-            onClick = onDownload,
-            shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = colors.route,
-                contentColor = Color.Black,
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(GloveTargetSize),
-        ) {
-            Text("Download maps", fontSize = 20.sp, fontWeight = FontWeight.Black)
-        }
-
-        Button(
-            onClick = onImport,
-            shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = colors.hudBackground,
-                contentColor = colors.hudForeground,
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(GloveTargetSize),
-        ) {
-            Text("Import from this device", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-        }
 
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            section("Maps (.map)", maps, onDelete)
-            section("Routing tiles (.rd5)", segments, onDelete)
-            section("Profiles (.brf)", profiles, onDelete)
-        }
-    }
-}
-
-private fun androidx.compose.foundation.lazy.LazyListScope.section(
-    title: String,
-    files: List<OfflineFile>,
-    onDelete: (OfflineFile) -> Unit,
-) {
-    item {
-        Column {
-            HorizontalDivider()
-            Text(
-                text = title,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Black,
-                modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
-            )
-            if (files.isEmpty()) {
-                Text("nothing imported yet", fontSize = 14.sp)
+            item(key = "actions") {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PrimaryButton(
+                        label = stringResource(R.string.data_download_maps),
+                        onClick = onDownload,
+                    )
+                    SecondaryButton(
+                        label = stringResource(R.string.data_import),
+                        onClick = onImport,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                }
             }
+
+            item(key = "regions-header") {
+                SectionTitle(stringResource(R.string.data_regions))
+            }
+
+            if (regions.isEmpty()) {
+                item(key = "regions-empty") {
+                    Text(
+                        text = stringResource(R.string.data_regions_empty),
+                        color = colors.muted,
+                        fontSize = 14.sp,
+                    )
+                }
+            }
+
+            items(regions, key = { it.path }) { region ->
+                RegionCard(region = region, onDelete = { pendingRegion = region })
+            }
+
+            if (looseFiles.isNotEmpty()) {
+                item(key = "loose-header") {
+                    SectionTitle(stringResource(R.string.data_other_files))
+                }
+                items(looseFiles, key = { it.file.absolutePath }) { file ->
+                    FileRow(file) { pendingFile = file }
+                }
+            }
+
+            item(key = "profiles-header") {
+                SectionTitle(stringResource(R.string.data_profiles))
+            }
+            items(profiles, key = { it.file.absolutePath }) { file ->
+                FileRow(file) { pendingFile = file }
+            }
+
+            item(key = "footer") { Spacer(Modifier.height(24.dp)) }
         }
     }
-    items(files, key = { it.file.absolutePath }) { file ->
-        FileRow(file, onDelete)
+
+    pendingRegion?.let { region ->
+        ConfirmDialog(
+            title = stringResource(R.string.data_delete_region_title, region.name),
+            text = stringResource(
+                R.string.data_delete_region_text,
+                region.filesPresent,
+                formatSize(region.sizeBytes),
+            ),
+            confirmLabel = stringResource(R.string.action_delete),
+            onConfirm = {
+                onDeleteRegion(region)
+                pendingRegion = null
+            },
+            onDismiss = { pendingRegion = null },
+        )
+    }
+
+    pendingFile?.let { file ->
+        ConfirmDialog(
+            title = stringResource(R.string.data_delete_file_title),
+            text = file.name,
+            confirmLabel = stringResource(R.string.action_delete),
+            onConfirm = {
+                onDeleteFile(file)
+                pendingFile = null
+            },
+            onDismiss = { pendingFile = null },
+        )
     }
 }
 
 @Composable
-private fun FileRow(file: OfflineFile, onDelete: (OfflineFile) -> Unit) {
+private fun SectionTitle(text: String) {
+    val colors = LocalRideColors.current
+    Text(
+        text = text,
+        color = colors.muted,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.Black,
+        modifier = Modifier.padding(top = 10.dp),
+    )
+}
+
+/**
+ * One region: what it is, how much of it is here, and one button to remove it.
+ *
+ * An incomplete region is shown as incomplete rather than hidden - a download
+ * that stopped halfway is exactly the case where the rider needs to know why
+ * routing is refusing to work.
+ */
+@Composable
+private fun RegionCard(region: RegionStatus, onDelete: () -> Unit) {
+    val colors = LocalRideColors.current
+    PanelCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = region.name,
+                    color = colors.onPanel,
+                    fontSize = 19.sp,
+                    fontWeight = FontWeight.Black,
+                    maxLines = 1,
+                )
+                Text(
+                    text = if (region.isComplete) {
+                        stringResource(
+                            R.string.data_region_complete,
+                            region.filesTotal,
+                            formatSize(region.sizeBytes),
+                        )
+                    } else {
+                        stringResource(
+                            R.string.data_region_partial,
+                            region.filesPresent,
+                            region.filesTotal,
+                            formatSize(region.sizeBytes),
+                        )
+                    },
+                    color = if (region.isComplete) colors.muted else colors.warning,
+                    fontSize = 13.sp,
+                )
+            }
+            IconTapButton(
+                iconRes = R.drawable.ic_action_delete,
+                contentDescription = stringResource(R.string.action_delete),
+                onClick = onDelete,
+                tint = colors.danger,
+            )
+        }
+        if (!region.isComplete) {
+            LinearProgressIndicator(
+                progress = { region.filesPresent.toFloat() / region.filesTotal },
+                color = colors.warning,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun FileRow(file: OfflineFile, onDelete: () -> Unit) {
     val colors = LocalRideColors.current
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = file.name,
-                fontSize = 17.sp,
+                color = colors.onPanel,
+                fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
             )
             Text(
-                text = "${formatSize(file.sizeBytes)}  ·  ${file.kind.name.lowercase()}",
+                text = "${formatSize(file.sizeBytes)}  ·  ${kindLabel(file.kind)}",
                 color = colors.muted,
-                fontSize = 13.sp,
+                fontSize = 12.sp,
             )
         }
-        GloveButton(
+        IconTapButton(
             iconRes = R.drawable.ic_action_delete,
-            contentDescription = "Delete ${file.name}",
-            onClick = { onDelete(file) },
-            background = colors.hudBackground,
+            contentDescription = stringResource(R.string.action_delete),
+            onClick = onDelete,
+            tint = colors.danger,
         )
     }
 }
 
-private fun formatSize(bytes: Long): String = when {
-    bytes >= 1_000_000_000 -> String.format(Locale.US, "%.1f GB", bytes / 1_000_000_000.0)
-    bytes >= 1_000_000 -> String.format(Locale.US, "%.0f MB", bytes / 1_000_000.0)
-    bytes >= 1_000 -> String.format(Locale.US, "%.0f kB", bytes / 1_000.0)
-    else -> "$bytes B"
-}
+@Composable
+private fun kindLabel(kind: OfflineFileKind): String = stringResource(
+    when (kind) {
+        OfflineFileKind.MAP -> R.string.kind_map
+        OfflineFileKind.SEGMENT -> R.string.kind_segment
+        OfflineFileKind.PROFILE -> R.string.kind_profile
+    },
+)

@@ -1,52 +1,170 @@
 <resources>
     <string name="app_name">OpenCurv</string>
 
+    <!-- services -->
     <string name="nav_channel_name">Navigation</string>
     <string name="nav_channel_desc">Keeps guidance running while riding</string>
     <string name="nav_notification_title">OpenCurv is guiding you</string>
     <string name="nav_notification_stop">Stop</string>
-
-    <string name="tab_map">Map</string>
-    <string name="tab_plan">Route</string>
-    <string name="tab_data">Data</string>
-
-    <string name="action_center">Center</string>
-    <string name="action_mute">Mute</string>
-    <string name="action_unmute">Sound</string>
-    <string name="action_reroute">Reroute</string>
-    <string name="action_zoom_in">Zoom in</string>
-    <string name="action_zoom_out">Zoom out</string>
-    <string name="action_stop">Stop</string>
-    <string name="action_start">Start</string>
-
-    <string name="perm_location_rationale">OpenCurv needs your location to navigate. Your position never leaves the device: navigation runs entirely offline, and the only network access the app has is downloading maps from two fixed servers.</string>
-    <string name="perm_grant">Grant location access</string>
-
-    <string name="data_maps">Offline maps (.map)</string>
-    <string name="data_segments">Routing tiles (.rd5)</string>
-    <string name="data_profiles">Routing profiles (.brf)</string>
-    <string name="data_import">Import file</string>
-    <string name="data_empty">Nothing imported yet</string>
-
-    <string name="no_map_hint">Import a Mapsforge .map file to see the map.</string>
-    <string name="no_segments_hint">Import BRouter .rd5 tiles to calculate routes.</string>
-
-    <string name="eta">ETA</string>
-    <string name="remaining">Left</string>
-    <string name="speed_unit">km/h</string>
-
-    <string name="rerouting">Rerouting…</string>
-    <string name="off_route">Off route</string>
-    <string name="arrived">You have arrived</string>
-    <string name="calculating">Calculating route…</string>
-
     <string name="download_channel_name">Downloads</string>
     <string name="download_channel_desc">Progress of offline map downloads</string>
     <string name="download_notification_title">Downloading offline data</string>
     <string name="download_preparing">Preparing…</string>
+
+    <!-- actions -->
+    <string name="action_back">Back</string>
     <string name="action_cancel">Cancel</string>
+    <string name="action_center">Centre on me</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_download">Download</string>
+    <string name="action_retry">Retry</string>
+    <string name="action_mute">Mute voice</string>
+    <string name="action_unmute">Unmute voice</string>
+    <string name="action_reroute">Recalculate route</string>
+    <string name="action_stop">Stop navigation</string>
+
+    <!-- riding -->
+    <string name="eta">arrival</string>
+    <string name="remaining">left</string>
+    <string name="rerouting">Recalculating</string>
+    <string name="off_route">Off route</string>
+    <string name="arrived">You have arrived</string>
+    <string name="calculating">Calculating route…</string>
+    <string name="nav_waiting_gps">Waiting for GPS</string>
+    <string name="nav_exit">exit %1$d</string>
+    <string name="nav_demo_running">Demo ride — no real GPS</string>
+
+    <!-- planning -->
+    <string name="plan_no_destination">No destination</string>
+    <string name="plan_destination_pin">Destination on the map</string>
+    <string name="plan_hint">Search above, tap the map for a destination, hold for a start.</string>
+    <string name="plan_start_set_hint">Start set by hand. Tap the map to move the destination.</string>
+    <string name="plan_calculate">Calculate route</string>
+    <string name="plan_calculating">Calculating offline…</string>
+    <string name="plan_start">Start navigation</string>
+    <string name="plan_demo">Demo ride</string>
+    <string name="plan_demo_hint">Rides the route on screen with the announcements, so you can try everything before getting on the bike.</string>
+    <string name="plan_discard">Discard</string>
+    <string name="plan_retry">Try again</string>
+    <string name="plan_clear">Clear</string>
+    <string name="plan_options">Route options</string>
+    <string name="plan_curviness">Curve appetite: %1$s</string>
+    <string name="plan_alternatives">Compare alternatives, keep the twistiest</string>
+    <string name="plan_distance">distance</string>
+    <string name="plan_time">riding time</string>
+    <string name="plan_climb">climb</string>
+
+    <string name="curviness_direct">direct</string>
+    <string name="curviness_mild">mild</string>
+    <string name="curviness_balanced">balanced</string>
+    <string name="curviness_hungry">hungry</string>
+    <string name="curviness_max">maximum</string>
+
+    <!-- search -->
+    <string name="search_placeholder">Search for a destination</string>
+    <string name="search_searching">Searching…</string>
+    <string name="search_no_results">Nothing found in the downloaded maps.</string>
+    <string name="search_no_maps">No map downloaded yet, so there is nothing to search.</string>
+    <string name="search_indexing">Building the place index: %1$d %% (%2$d places)</string>
+    <string name="search_hint">Towns and villages come from the downloaded map; streets and fuel stations are searched around where you are looking.</string>
+    <string name="place_city">City</string>
+    <string name="place_town">Town</string>
+    <string name="place_village">Village</string>
+    <string name="place_suburb">District</string>
+    <string name="place_hamlet">Hamlet</string>
+    <string name="place_street">Street</string>
+    <string name="place_fuel">Fuel</string>
+    <string name="place_poi">Place</string>
+
+    <!-- offline data -->
+    <string name="data_title">Offline data</string>
+    <string name="data_free_space">%1$s free on this device</string>
+    <string name="data_download_maps">Download maps</string>
+    <string name="data_import">Import from this device</string>
+    <string name="data_regions">Downloaded regions</string>
+    <string name="data_regions_empty">No region yet. Download one — you get the map and its routing tiles in one go.</string>
+    <string name="data_other_files">Other files</string>
+    <string name="data_profiles">Routing profiles</string>
+    <string name="data_region_complete">%1$d files · %2$s</string>
+    <string name="data_region_partial">Incomplete: %1$d of %2$d files · %3$s</string>
+    <string name="data_delete_region_title">Delete %1$s?</string>
+    <string name="data_delete_region_text">Removes %1$d files and frees %2$s. Routing tiles another region still needs are kept.</string>
+    <string name="data_delete_file_title">Delete this file?</string>
+    <string name="kind_map">Map</string>
+    <string name="kind_segment">Routing tile</string>
+    <string name="kind_profile">Profile</string>
+
+    <!-- downloads -->
     <string name="download_title">Download maps</string>
-    <string name="download_subtitle">Maps and routing tiles are fetched once, then everything works offline.</string>
+    <string name="download_subtitle_free">Fetched once over Wi-Fi. Riding never uses the network. %1$s free.</string>
+    <string name="download_filter">Filter regions</string>
+    <string name="download_region_summary">~%1$d MB map · %2$d files in the package</string>
+    <string name="download_installed">installed</string>
+    <string name="download_file_of">File %1$d of %2$d · %3$s loaded</string>
+    <string name="download_waiting">%1$d of %2$d files done</string>
+    <string name="download_done">Complete</string>
     <string name="download_blocked_navigating">Stop navigation before downloading.</string>
-    <string name="download_offline">No network. Connect to Wi-Fi to download.</string>
+    <string name="download_sources">Maps come from download.mapsforge.org, routing tiles from brouter.de. Both are public OpenStreetMap-based databases; the app talks to nothing else.</string>
+
+    <!-- onboarding -->
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_welcome_title">Curves, not arrival times</string>
+    <string name="onboarding_welcome_body">OpenCurv looks for the winding road, not the quick one. It works completely offline: maps, routing and voice all run on the phone, and your position never leaves it.</string>
+    <string name="onboarding_data_title">One download, then no network</string>
+    <string name="onboarding_data_body">You need one region: a map to draw and the routing tiles to calculate with. OpenCurv fetches both from a public database in one package — figure on 300 MB to 1.5 GB, so do it on Wi-Fi.</string>
+    <string name="onboarding_region_title">Pick your region</string>
+    <string name="onboarding_region_body">Choose the area you ride in. It is downloaded as one package and deleted as one package, and you can add more later.</string>
+    <string name="onboarding_choose_region">Choose a region</string>
+    <string name="onboarding_import_instead">I already have the files</string>
+
+    <!-- empty state -->
+    <string name="empty_no_map">No map installed</string>
+    <string name="empty_no_segments">No routing tiles installed</string>
+    <string name="empty_body">Without them the map stays empty and no route can be calculated.</string>
+    <string name="empty_action">Get maps</string>
+    <string name="empty_later">Later</string>
+
+    <!-- settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_map_section">Map</string>
+    <string name="settings_style">Style</string>
+    <string name="settings_style_colour">Colour</string>
+    <string name="settings_style_contrast">High contrast</string>
+    <string name="settings_style_hint">Colour reads like a normal road map. High contrast throws the colour away for direct sunlight.</string>
+    <string name="settings_theme">Day and night</string>
+    <string name="settings_theme_auto">Automatic</string>
+    <string name="settings_theme_day">Day</string>
+    <string name="settings_theme_night">Night</string>
+    <string name="settings_riding_section">Riding</string>
+    <string name="settings_heading_up">Heading up</string>
+    <string name="settings_heading_up_hint">Turns the map so the direction of travel points up.</string>
+    <string name="settings_perspective">Perspective view</string>
+    <string name="settings_perspective_hint">Tilts the map while riding. Labels lean with it.</string>
+    <string name="settings_volume_zoom">Volume keys zoom</string>
+    <string name="settings_volume_zoom_hint">Zoom without taking a hand off the bar.</string>
+    <string name="settings_voice_section">Voice</string>
+    <string name="settings_voice">Spoken guidance</string>
+    <string name="settings_voice_hint">Uses the phone\'s own speech engine, in its language.</string>
+    <string name="settings_test_voice">Test the announcement</string>
+    <string name="settings_data_section">Offline data</string>
+    <string name="settings_data_hint">Maps and routing tiles, region by region.</string>
+    <string name="settings_open_data">Manage offline data</string>
+    <string name="settings_about">OpenCurv · offline motorcycle navigation · map data © OpenStreetMap contributors</string>
+
+    <!-- messages -->
+    <string name="start_set">Start point set</string>
+    <string name="msg_pick_destination">Search for a destination or tap the map</string>
+    <string name="msg_no_segments">No routing tiles yet — download a region first</string>
+    <string name="msg_waiting_for_gps">Waiting for a GPS fix</string>
+    <string name="msg_start_is_map_centre">No GPS: starting from the centre of the map</string>
+    <string name="msg_voice_test">Speaking a test announcement</string>
+    <string name="msg_voice_unavailable">The speech engine is not ready yet</string>
+    <string name="msg_region_deleted">%1$s deleted, %2$s freed</string>
+    <string name="msg_imported">Imported %1$s</string>
+    <string name="msg_import_wrong_type">Not a .map, .rd5 or .brf file</string>
+
+    <!-- permissions -->
+    <string name="perm_location_rationale">OpenCurv needs your location to navigate. Your position never leaves the device: navigation runs entirely offline, and the only network access the app has is downloading maps from two fixed servers.</string>
+    <string name="perm_grant">Grant location access</string>
 </resources>

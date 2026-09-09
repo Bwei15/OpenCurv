@@ -51,6 +51,13 @@ sourceSets {
 
 dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
+
+    // The offline place search reads Mapsforge maps directly, and the reader is
+    // plain Java - so that code compiles and can be tested here too, rather
+    // than only inside an Android build.
+    implementation("org.mapsforge:mapsforge-map-reader:0.25.0")
+    implementation("org.mapsforge:mapsforge-map:0.25.0")
+    implementation("org.mapsforge:mapsforge-core:0.25.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
 }

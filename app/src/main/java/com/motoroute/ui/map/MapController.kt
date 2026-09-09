@@ -2,27 +2,35 @@ package com.motoroute.ui.map
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Canvas as AndroidCanvas
+import android.graphics.Paint as NativePaint
+import android.graphics.Path as NativePath
 import android.view.MotionEvent
 import android.view.View
 import com.motoroute.data.map.OfflineDataRepository
 import com.motoroute.data.map.OfflineFileKind
 import com.motoroute.data.model.GeoPoint
 import com.motoroute.data.model.Route
+import com.motoroute.data.settings.MapStyle
 import com.motoroute.domain.CameraController
 import org.mapsforge.core.graphics.Cap
 import org.mapsforge.core.graphics.Join
 import org.mapsforge.core.graphics.Style
 import org.mapsforge.core.model.LatLong
 import org.mapsforge.core.model.Rotation
+import org.mapsforge.map.android.graphics.AndroidBitmap
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
 import org.mapsforge.map.android.util.AndroidUtil
 import org.mapsforge.map.android.view.MapView
 import org.mapsforge.map.datastore.MultiMapDataStore
 import org.mapsforge.map.layer.cache.TileCache
+import org.mapsforge.map.layer.overlay.Marker
 import org.mapsforge.map.layer.overlay.Polyline
 import org.mapsforge.map.layer.renderer.TileRendererLayer
 import org.mapsforge.map.reader.MapFile
 import org.mapsforge.map.rendertheme.StreamRenderTheme
+import org.mapsforge.map.view.InputListener
+import kotlin.math.abs
 
 /**
  * Owns the Mapsforge object graph.
@@ -41,11 +49,43 @@ class MapController(private val offlineData: OfflineDataRepository) {
     private var routeLayer: Polyline? = null
     private var dataStore: MultiMapDataStore? = null
     private var currentThemeIsNight: Boolean? = null
+    private var currentStyle: MapStyle = MapStyle.COLOUR
+
+    private var positionMarker: Marker? = null
+    private var destinationMarker: Marker? = null
+    private var startMarker: Marker? = null
+    private var lastPuckHeading = Float.NaN
+
+    /** True once the camera has been put somewhere deliberate. */
+    private var cameraPlaced = false
+
+    /** False until the first fix has pulled the camera down to riding zoom. */
+    private var riderZoomApplied = false
+
+    /**
+     * A camera move asked for while no view was attached.
+     *
+     * Leaving the map screen destroys the Mapsforge view - it holds an activity
+     * context and must not outlive it - so a destination picked in the search
+     * screen arrives while there is nothing to move. Remembering it here is
+     * what makes "search, tap, and the map is there" work.
+     */
+    private var pendingCenter: GeoPoint? = null
+    private var pendingZoom: Int? = null
 
     val hasMaps: Boolean get() = offlineData.hasAny(OfflineFileKind.MAP)
 
+    /**
+     * Attaches the view.
+     *
+     * [onUserGesture] fires the moment the rider drags or pinches. Mapsforge
+     * reports manual gestures separately from programmatic camera moves, which
+     * is exactly what "stop snapping the map back while I am looking at
+     * something" needs: the app can stop following without having to guess
+     * whether a camera change came from the rider or from itself.
+     */
     @SuppressLint("ClickableViewAccessibility")
-    fun attach(context: Context): MapView {
+    fun attach(context: Context, onUserGesture: () -> Unit): MapView {
         mapView?.let { return it }
 
         val view = MapView(context).apply {
@@ -57,6 +97,11 @@ class MapController(private val offlineData: OfflineDataRepository) {
             model.mapViewPosition.setZoomLevelMax(CameraController.MAX_ZOOM.toByte())
         }
 
+        view.addInputListener(object : InputListener {
+            override fun onMoveEvent() = onUserGesture()
+            override fun onZoomEvent() = onUserGesture()
+        })
+
         tileCache = AndroidUtil.createTileCache(
             context,
             "opencurv-tiles",
@@ -67,11 +112,26 @@ class MapController(private val offlineData: OfflineDataRepository) {
 
         mapView = view
         rebuildMapLayer(context)
+        pendingCenter?.let { point ->
+            centerOn(point, pendingZoom)
+            pendingCenter = null
+            pendingZoom = null
+        }
         return view
     }
 
     fun detach() {
+        // Remember where the rider was looking: leaving the map for the search
+        // or the settings and coming back to a different part of the country
+        // would be its own kind of snapping back.
+        mapView?.let { view ->
+            pendingCenter = center()
+            pendingZoom = view.model.mapViewPosition.zoomLevel.toInt()
+        }
         routeLayer = null
+        positionMarker = null
+        destinationMarker = null
+        startMarker = null
         tileLayer?.onDestroy()
         tileLayer = null
         tileCache?.destroy()
@@ -81,6 +141,9 @@ class MapController(private val offlineData: OfflineDataRepository) {
         mapView?.destroyAll()
         mapView = null
         currentThemeIsNight = null
+        cameraPlaced = false
+        riderZoomApplied = false
+        lastPuckHeading = Float.NaN
     }
 
     /**
@@ -120,7 +183,7 @@ class MapController(private val offlineData: OfflineDataRepository) {
             true,
             AndroidGraphicFactory.INSTANCE,
         )
-        layer.setXmlRenderTheme(themeFor(context, currentThemeIsNight ?: false))
+        layer.setXmlRenderTheme(themeFor(context, currentThemeIsNight ?: false, currentStyle))
         // Slightly larger labels than the mapsforge default: they have to be
         // readable at arm's length through a visor.
         layer.setTextScale(1.15f)
@@ -128,24 +191,44 @@ class MapController(private val offlineData: OfflineDataRepository) {
         view.layerManager.layers.add(0, layer)
         tileLayer = layer
 
-        // The route overlay must sit on top of a freshly built tile layer.
-        routeLayer?.let {
-            view.layerManager.layers.remove(it)
-            view.layerManager.layers.add(it)
+        // Overlays must sit on top of a freshly built tile layer.
+        listOfNotNull(routeLayer, startMarker, destinationMarker, positionMarker)
+            .forEach { overlay ->
+                view.layerManager.layers.remove(overlay)
+                view.layerManager.layers.add(overlay)
+            }
+
+        // With no GPS yet, open on the data the rider actually downloaded
+        // rather than on the Atlantic. This is the first thing they see after
+        // a download finishes, so it has to be their region.
+        if (!cameraPlaced) {
+            val start = runCatching { store.startPosition() }.getOrNull()
+                ?: runCatching { store.boundingBox()?.getCenterPoint() }.getOrNull()
+            start?.let {
+                view.model.mapViewPosition.setCenter(it)
+                view.model.mapViewPosition.setZoomLevel(clampZoom(DEFAULT_OVERVIEW_ZOOM), false)
+                cameraPlaced = true
+            }
         }
     }
 
-    fun applyTheme(night: Boolean) {
-        if (currentThemeIsNight == night) return
+    fun applyTheme(night: Boolean, style: MapStyle) {
+        if (currentThemeIsNight == night && currentStyle == style) return
         currentThemeIsNight = night
+        currentStyle = style
         val view = mapView ?: return
-        tileLayer?.setXmlRenderTheme(themeFor(view.context, night))
+        tileLayer?.setXmlRenderTheme(themeFor(view.context, night, style))
         tileCache?.purge()
         view.layerManager.redrawLayers()
     }
 
-    private fun themeFor(context: Context, night: Boolean): StreamRenderTheme {
-        val asset = if (night) "themes/opencurv_night.xml" else "themes/opencurv_day.xml"
+    private fun themeFor(context: Context, night: Boolean, style: MapStyle): StreamRenderTheme {
+        val asset = when {
+            style == MapStyle.CONTRAST && night -> "themes/opencurv_contrast_night.xml"
+            style == MapStyle.CONTRAST -> "themes/opencurv_contrast_day.xml"
+            night -> "themes/opencurv_colour_night.xml"
+            else -> "themes/opencurv_colour_day.xml"
+        }
         return StreamRenderTheme("/assets/", context.assets.open(asset))
     }
 
@@ -172,7 +255,89 @@ class MapController(private val offlineData: OfflineDataRepository) {
         }
         view.layerManager.layers.add(polyline)
         routeLayer = polyline
+        // Markers belong above the line.
+        listOfNotNull(startMarker, destinationMarker, positionMarker).forEach {
+            view.layerManager.layers.remove(it)
+            view.layerManager.layers.add(it)
+        }
         view.layerManager.redrawLayers()
+    }
+
+    /**
+     * Draws the rider.
+     *
+     * The arrow is rendered in map coordinates rather than screen coordinates,
+     * so it points where the motorcycle points in both north-up and heading-up
+     * mode without any extra bookkeeping. The bitmap is only redrawn when the
+     * heading has actually moved, because at 1 Hz a new bitmap per fix is pure
+     * garbage collection.
+     */
+    fun showPosition(point: GeoPoint?, headingDegrees: Double, argbColor: Int) {
+        val view = mapView ?: return
+        if (point == null) return
+        val heading = headingDegrees.toFloat()
+
+        val existing = positionMarker
+        if (existing == null) {
+            val marker = Marker(
+                LatLong(point.latitude, point.longitude),
+                puckBitmap(view.context, heading, argbColor),
+                0,
+                0,
+            ).apply { isBillboard = false }
+            view.layerManager.layers.add(marker)
+            positionMarker = marker
+            lastPuckHeading = heading
+        } else {
+            existing.latLong = LatLong(point.latitude, point.longitude)
+            if (lastPuckHeading.isNaN() || abs(heading - lastPuckHeading) > PUCK_HEADING_STEP) {
+                val old = existing.bitmap
+                existing.bitmap = puckBitmap(view.context, heading, argbColor)
+                lastPuckHeading = heading
+                runCatching { old?.decrementRefCount() }
+            }
+        }
+        view.layerManager.redrawLayers()
+    }
+
+    /** Marks the destination the rider tapped, or clears it. */
+    fun showDestination(point: GeoPoint?, argbColor: Int) {
+        destinationMarker = pin(destinationMarker, point, argbColor, filled = true)
+    }
+
+    /** Marks an explicitly chosen start, or clears it. */
+    fun showStart(point: GeoPoint?, argbColor: Int) {
+        startMarker = pin(startMarker, point, argbColor, filled = false)
+    }
+
+    private fun pin(
+        current: Marker?,
+        point: GeoPoint?,
+        argbColor: Int,
+        filled: Boolean,
+    ): Marker? {
+        val view = mapView ?: return current
+        if (point == null) {
+            current?.let { view.layerManager.layers.remove(it); it.onDestroy() }
+            view.layerManager.redrawLayers()
+            return null
+        }
+        val position = LatLong(point.latitude, point.longitude)
+        if (current != null) {
+            current.latLong = position
+            view.layerManager.redrawLayers()
+            return current
+        }
+        val bitmap = pinBitmap(view.context, argbColor, filled)
+        val marker = Marker(position, bitmap, 0, -bitmap.height / 2)
+        view.layerManager.layers.add(marker)
+        // The rider is always on top of a pin.
+        positionMarker?.let {
+            view.layerManager.layers.remove(it)
+            view.layerManager.layers.add(it)
+        }
+        view.layerManager.redrawLayers()
+        return marker
     }
 
     /**
@@ -185,14 +350,22 @@ class MapController(private val offlineData: OfflineDataRepository) {
     fun follow(
         position: GeoPoint?,
         headingDegrees: Double,
-        zoom: Int,
+        zoom: Int?,
         headingUp: Boolean,
     ) {
         val view = mapView ?: return
         if (position == null) return
 
-        view.model.mapViewPosition.setZoomLevel(clampZoom(zoom), false)
+        // The map opens on the whole downloaded region; the first fix is what
+        // turns that overview into a riding view. After that the zoom belongs
+        // to the camera controller, or to the rider.
+        val level = zoom ?: DEFAULT_FOLLOW_ZOOM.takeIf { !riderZoomApplied }
+        level?.let {
+            view.model.mapViewPosition.setZoomLevel(clampZoom(it), false)
+            riderZoomApplied = true
+        }
         view.model.mapViewPosition.setCenter(LatLong(position.latitude, position.longitude))
+        cameraPlaced = true
         view.rotate(
             if (headingUp) {
                 Rotation(
@@ -207,10 +380,28 @@ class MapController(private val offlineData: OfflineDataRepository) {
     }
 
     fun centerOn(point: GeoPoint, zoom: Int? = null) {
-        val view = mapView ?: return
-        zoom?.let { view.model.mapViewPosition.setZoomLevel(clampZoom(it), false) }
+        val view = mapView
+        if (view == null) {
+            pendingCenter = point
+            pendingZoom = zoom
+            return
+        }
+        zoom?.let {
+            view.model.mapViewPosition.setZoomLevel(clampZoom(it), false)
+            riderZoomApplied = true
+        }
         view.model.mapViewPosition.setCenter(LatLong(point.latitude, point.longitude))
+        cameraPlaced = true
     }
+
+    /** Puts the map back north-up, e.g. when the rider leaves follow mode. */
+    fun resetRotation() {
+        mapView?.rotate(Rotation.NULL_ROTATION)
+    }
+
+    /** Where the map is looking right now; the fallback start for a route without GPS. */
+    fun center(): GeoPoint? = mapView?.model?.mapViewPosition?.center
+        ?.let { GeoPoint(it.latitude, it.longitude) }
 
     fun zoomIn() {
         mapView?.model?.mapViewPosition?.zoomIn()
@@ -231,6 +422,7 @@ class MapController(private val offlineData: OfflineDataRepository) {
             zoomForSpan(bounds.maxLat - bounds.minLat, bounds.maxLon - bounds.minLon),
             false,
         )
+        cameraPlaced = true
     }
 
     /**
@@ -255,11 +447,17 @@ class MapController(private val offlineData: OfflineDataRepository) {
     }
 
     /**
-     * Long-press-free tap handling: a tap that does not move is a map tap.
+     * A tap that does not move sets the destination; a press held in place sets
+     * the start, which is how a rider plans a route for tomorrow from the
+     * kitchen table instead of from wherever the GPS says they are.
      * Mapsforge's own gesture handler keeps pan and pinch working underneath.
      */
     @SuppressLint("ClickableViewAccessibility")
-    fun tapListener(view: MapView, onTap: (GeoPoint) -> Unit): View.OnTouchListener {
+    fun tapListener(
+        view: MapView,
+        onTap: (GeoPoint) -> Unit,
+        onLongPress: (GeoPoint) -> Unit,
+    ): View.OnTouchListener {
         var downX = 0f
         var downY = 0f
         var downTime = 0L
@@ -272,20 +470,108 @@ class MapController(private val offlineData: OfflineDataRepository) {
                 }
                 MotionEvent.ACTION_UP -> {
                     val moved = kotlin.math.hypot(event.x - downX, event.y - downY)
-                    val quick = event.eventTime - downTime < TAP_MILLIS
-                    if (moved < TAP_SLOP_PX && quick) {
-                        runCatching {
+                    val held = event.eventTime - downTime
+                    if (moved < TAP_SLOP_PX) {
+                        val point = runCatching {
                             view.mapViewProjection.fromPixels(
                                 event.x.toDouble(),
                                 event.y.toDouble(),
                             )
-                        }.getOrNull()?.let { onTap(GeoPoint(it.latitude, it.longitude)) }
+                        }.getOrNull()
+                        if (point != null) {
+                            val geo = GeoPoint(point.latitude, point.longitude)
+                            if (held >= LONG_PRESS_MILLIS) onLongPress(geo) else onTap(geo)
+                        }
                     }
                 }
             }
             // Always let Mapsforge handle the gesture too.
             v.onTouchEvent(event)
         }
+    }
+
+    // ---- marker bitmaps ---------------------------------------------------
+
+    /**
+     * The rider: a heading cone under a white-ringed dot. Drawn here rather
+     * than shipped as a drawable because it has to be re-rendered at the
+     * current heading anyway.
+     */
+    private fun puckBitmap(
+        context: Context,
+        headingDegrees: Float,
+        argbColor: Int,
+    ): org.mapsforge.core.graphics.Bitmap {
+        val density = context.resources.displayMetrics.density
+        val size = (PUCK_DP * density).toInt().coerceAtLeast(24)
+        val bitmap = android.graphics.Bitmap.createBitmap(
+            size,
+            size,
+            android.graphics.Bitmap.Config.ARGB_8888,
+        )
+        val canvas = AndroidCanvas(bitmap)
+        val centre = size / 2f
+        val paint = NativePaint(NativePaint.ANTI_ALIAS_FLAG)
+
+        canvas.save()
+        canvas.rotate(headingDegrees, centre, centre)
+        val cone = NativePath().apply {
+            moveTo(centre, centre - size * 0.46f)
+            lineTo(centre - size * 0.22f, centre + size * 0.06f)
+            lineTo(centre + size * 0.22f, centre + size * 0.06f)
+            close()
+        }
+        paint.style = NativePaint.Style.FILL
+        paint.color = argbColor
+        paint.alpha = 210
+        canvas.drawPath(cone, paint)
+        canvas.restore()
+
+        paint.alpha = 255
+        paint.color = android.graphics.Color.WHITE
+        canvas.drawCircle(centre, centre, size * 0.19f, paint)
+        paint.color = argbColor
+        canvas.drawCircle(centre, centre, size * 0.13f, paint)
+
+        return AndroidBitmap(bitmap)
+    }
+
+    /** A destination pin whose tip sits on the point. */
+    private fun pinBitmap(
+        context: Context,
+        argbColor: Int,
+        filled: Boolean,
+    ): org.mapsforge.core.graphics.Bitmap {
+        val density = context.resources.displayMetrics.density
+        val width = (PIN_DP * density).toInt().coerceAtLeast(20)
+        val height = (PIN_DP * 1.4f * density).toInt().coerceAtLeast(28)
+        val bitmap = android.graphics.Bitmap.createBitmap(
+            width,
+            height,
+            android.graphics.Bitmap.Config.ARGB_8888,
+        )
+        val canvas = AndroidCanvas(bitmap)
+        val paint = NativePaint(NativePaint.ANTI_ALIAS_FLAG)
+        val centreX = width / 2f
+        val headRadius = width * 0.36f
+        val headY = headRadius + width * 0.08f
+
+        val body = NativePath().apply {
+            moveTo(centreX, height.toFloat())
+            lineTo(centreX - headRadius * 0.75f, headY + headRadius * 0.72f)
+            lineTo(centreX + headRadius * 0.75f, headY + headRadius * 0.72f)
+            close()
+        }
+
+        paint.style = NativePaint.Style.FILL
+        paint.color = argbColor
+        canvas.drawPath(body, paint)
+        canvas.drawCircle(centreX, headY, headRadius, paint)
+
+        paint.color = android.graphics.Color.WHITE
+        canvas.drawCircle(centreX, headY, headRadius * (if (filled) 0.34f else 0.52f), paint)
+
+        return AndroidBitmap(bitmap)
     }
 
     private companion object {
@@ -305,6 +591,18 @@ class MapController(private val offlineData: OfflineDataRepository) {
         const val FOLLOW_PIVOT_Y = 0.72f
 
         const val TAP_SLOP_PX = 24f
-        const val TAP_MILLIS = 400L
+        const val LONG_PRESS_MILLIS = 450L
+
+        const val PUCK_DP = 46f
+        const val PIN_DP = 30f
+
+        /** Redraw the arrow only past this much turn, in degrees. */
+        const val PUCK_HEADING_STEP = 6f
+
+        /** Wide enough to see a whole federal state before the first fix. */
+        const val DEFAULT_OVERVIEW_ZOOM = 9
+
+        /** Where the camera lands once it knows where the rider is. */
+        const val DEFAULT_FOLLOW_ZOOM = 14
     }
 }

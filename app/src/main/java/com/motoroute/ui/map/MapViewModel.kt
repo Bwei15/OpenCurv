@@ -76,6 +76,17 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     private val _followMode = MutableStateFlow(true)
     val followMode: StateFlow<Boolean> = _followMode.asStateFlow()
 
+    /**
+     * True once the rider has picked a zoom by hand.
+     *
+     * The speed-driven camera is helpful right up to the moment you zoom out to
+     * see what is after the next village and it zooms straight back in. So a
+     * manual zoom - volume keys included - hands the zoom over until the next
+     * recentre, while the map keeps following.
+     */
+    private val _manualZoom = MutableStateFlow(false)
+    val manualZoom: StateFlow<Boolean> = _manualZoom.asStateFlow()
+
     val hasMaps: Boolean get() = container.offlineData.hasAny(OfflineFileKind.MAP)
     val hasSegments: Boolean get() = container.offlineData.hasAny(OfflineFileKind.SEGMENT)
 
@@ -111,13 +122,20 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
 
     fun recenter() {
         _followMode.value = true
+        _manualZoom.value = false
         val point = container.navigation.lastFix.value?.point ?: return
         mapController.centerOn(point)
     }
 
-    fun zoomIn() = mapController.zoomIn()
+    fun zoomIn() {
+        _manualZoom.value = true
+        mapController.zoomIn()
+    }
 
-    fun zoomOut() = mapController.zoomOut()
+    fun zoomOut() {
+        _manualZoom.value = true
+        mapController.zoomOut()
+    }
 
     // ---- planning ---------------------------------------------------------
 
@@ -152,6 +170,7 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
 
     fun startNavigation(route: Route) {
         _followMode.value = true
+        _manualZoom.value = false
         container.navigation.startNavigation(route)
     }
 
@@ -163,6 +182,7 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     /** Rides the planned route without a motorcycle, for testing everything at home. */
     fun startDemo(route: Route) {
         _followMode.value = true
+        _manualZoom.value = false
         container.navigation.startDemo(route)
     }
 

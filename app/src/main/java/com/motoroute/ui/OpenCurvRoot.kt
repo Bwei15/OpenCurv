@@ -77,6 +77,7 @@ fun OpenCurvRoot(
     val zoom by viewModel.recommendedZoom.collectAsState()
     val message by viewModel.message.collectAsState()
     val follow by viewModel.followMode.collectAsState()
+    val manualZoom by viewModel.manualZoom.collectAsState()
     val demoRunning by viewModel.demoRunning.collectAsState()
 
     var screen by remember { mutableStateOf(Screen.MAP) }
@@ -135,6 +136,7 @@ fun OpenCurvRoot(
                 planning = planning,
                 selection = selection,
                 follow = follow,
+                manualZoom = manualZoom,
                 demoRunning = demoRunning,
                 zoom = zoom,
                 onOpenData = { screen = Screen.DATA },
@@ -212,6 +214,7 @@ private fun MapRoot(
     planning: PlanningState,
     selection: com.motoroute.ui.map.PlanSelection,
     follow: Boolean,
+    manualZoom: Boolean,
     demoRunning: Boolean,
     zoom: Int,
     onOpenData: () -> Unit,
@@ -229,9 +232,9 @@ private fun MapRoot(
             route = navigationState.route ?: (planning as? PlanningState.Ready)?.route,
             position = position,
             headingDegrees = navigationState.headingDegrees,
-            // Only the riding camera picks the zoom; when planning, the zoom is
-            // the rider's business and nothing takes it away from them.
-            zoom = if (navigating) zoom else null,
+            // Only the riding camera picks the zoom, and only until the rider
+            // picks one themselves; when planning, the zoom is always theirs.
+            zoom = if (navigating && !manualZoom) zoom else null,
             headingUp = navigating && settings.headingUp,
             follow = follow,
             perspectiveTilt = if (navigating && settings.perspectiveEnabled) {

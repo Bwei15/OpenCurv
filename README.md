@@ -121,6 +121,11 @@ If you already have the files, or want a region the catalog does not list:
 2. **BRouter routing tiles** (`.rd5`) — the 5° × 5° tiles covering your region
    from [brouter.de/brouter/segments4](https://brouter.de/brouter/segments4/).
    Bavaria, for instance, needs `E5_N45`, `E10_N45`, `E5_N50` and `E10_N50`.
+   Fetch them fresh: every tile carries the version of the tag table it was
+   built against (currently 11, see the head of
+   [`assets/profiles/lookups.dat`](app/src/main/assets/profiles/lookups.dat)),
+   and a tile kept from an older build cannot be read — routing then fails with
+   a lookup version mismatch until the tile is downloaded again.
 
 Copy them onto the phone, then Layers → **Import from this device**. Files are
 copied into the app's own storage, so they survive reboots and need no storage

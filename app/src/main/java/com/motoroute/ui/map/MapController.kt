@@ -59,6 +59,9 @@ class MapController(private val offlineData: OfflineDataRepository) {
     /** True once the camera has been put somewhere deliberate. */
     private var cameraPlaced = false
 
+    /** False until the first fix has pulled the camera down to riding zoom. */
+    private var riderZoomApplied = false
+
     val hasMaps: Boolean get() = offlineData.hasAny(OfflineFileKind.MAP)
 
     /**
@@ -116,6 +119,7 @@ class MapController(private val offlineData: OfflineDataRepository) {
         mapView = null
         currentThemeIsNight = null
         cameraPlaced = false
+        riderZoomApplied = false
         lastPuckHeading = Float.NaN
     }
 
@@ -329,7 +333,14 @@ class MapController(private val offlineData: OfflineDataRepository) {
         val view = mapView ?: return
         if (position == null) return
 
-        zoom?.let { view.model.mapViewPosition.setZoomLevel(clampZoom(it), false) }
+        // The map opens on the whole downloaded region; the first fix is what
+        // turns that overview into a riding view. After that the zoom belongs
+        // to the camera controller, or to the rider.
+        val level = zoom ?: DEFAULT_FOLLOW_ZOOM.takeIf { !riderZoomApplied }
+        level?.let {
+            view.model.mapViewPosition.setZoomLevel(clampZoom(it), false)
+            riderZoomApplied = true
+        }
         view.model.mapViewPosition.setCenter(LatLong(position.latitude, position.longitude))
         cameraPlaced = true
         view.rotate(
@@ -559,5 +570,8 @@ class MapController(private val offlineData: OfflineDataRepository) {
 
         /** Wide enough to see a whole federal state before the first fix. */
         const val DEFAULT_OVERVIEW_ZOOM = 9
+
+        /** Where the camera lands once it knows where the rider is. */
+        const val DEFAULT_FOLLOW_ZOOM = 14
     }
 }

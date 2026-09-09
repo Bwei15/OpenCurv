@@ -286,10 +286,18 @@ private fun MapRoot(
                     onClick = onOpenSearch,
                     modifier = Modifier.weight(1f),
                 )
+                // The way back to your own position belongs where you look
+                // first, and it lights up exactly while the map is not
+                // following you.
                 GloveButton(
-                    iconRes = R.drawable.ic_action_settings,
-                    contentDescription = stringResource(R.string.settings_title),
-                    onClick = onOpenSettings,
+                    iconRes = R.drawable.ic_action_center,
+                    contentDescription = stringResource(R.string.action_center),
+                    onClick = {
+                        onRequestPermission()
+                        viewModel.recenter()
+                    },
+                    background = if (follow) colors.hudBackground else colors.route,
+                    tint = if (follow) colors.hudForeground else androidx.compose.ui.graphics.Color.Black,
                 )
             }
 
@@ -301,6 +309,11 @@ private fun MapRoot(
                     .padding(horizontal = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
+                GloveButton(
+                    iconRes = R.drawable.ic_action_settings,
+                    contentDescription = stringResource(R.string.settings_title),
+                    onClick = onOpenSettings,
+                )
                 GloveButton(
                     iconRes = R.drawable.ic_action_layers,
                     contentDescription = stringResource(R.string.data_title),
@@ -318,18 +331,6 @@ private fun MapRoot(
                             },
                         )
                     },
-                )
-                // Highlighted while the map is *not* following, because that is
-                // when the button has something to do.
-                GloveButton(
-                    iconRes = R.drawable.ic_action_center,
-                    contentDescription = stringResource(R.string.action_center),
-                    onClick = {
-                        onRequestPermission()
-                        viewModel.recenter()
-                    },
-                    background = if (follow) colors.hudBackground else colors.route,
-                    tint = if (follow) colors.hudForeground else androidx.compose.ui.graphics.Color.Black,
                 )
             }
 

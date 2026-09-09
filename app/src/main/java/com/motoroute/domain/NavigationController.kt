@@ -172,8 +172,10 @@ class NavigationController(
         voice.enabled = settings.current.voiceEnabled
         camera.reset()
         rerouting.cancel()
-        manager.start(route)
+        // Flagged before the state machine starts, so nothing ever sees a
+        // navigating state that is not yet marked as a demo.
         _demoRunning.value = true
+        manager.start(route)
 
         demoJob = scope.launch {
             val startedAt = System.currentTimeMillis()

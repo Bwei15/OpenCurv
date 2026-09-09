@@ -64,16 +64,23 @@ class NavigationService : LifecycleService() {
     }
 
     private fun startForegroundWithNotification(state: NavigationState?) {
-        ServiceCompat.startForeground(
-            this,
-            NOTIFICATION_ID,
-            buildNotification(state),
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
-            } else {
-                0
-            },
-        )
+        // A location foreground service needs the location permission, and the
+        // platform throws rather than degrading if it is missing. Guidance
+        // itself does not depend on this service - it keeps the GPS coming with
+        // the screen off - so a refused permission should leave the rider with
+        // a working app and no notification, not a crash.
+        runCatching {
+            ServiceCompat.startForeground(
+                this,
+                NOTIFICATION_ID,
+                buildNotification(state),
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+                } else {
+                    0
+                },
+            )
+        }.onFailure { stopSelf() }
     }
 
     private fun notify(state: NavigationState) {

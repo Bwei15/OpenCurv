@@ -94,8 +94,11 @@ fun OpenCurvRoot(
     // Starting and stopping the foreground service follows the state machine
     // rather than the button press, so a ride resumed from the notification
     // behaves identically to one started from the map.
-    LaunchedEffect(navigationState.isNavigating) {
-        if (navigationState.isNavigating) {
+    // A demo ride is deliberately left out: it produces its own positions, so
+    // there is no GPS to keep alive with the screen off, and no reason to ask
+    // the platform for a location foreground service to try one out indoors.
+    LaunchedEffect(navigationState.isNavigating, demoRunning) {
+        if (navigationState.isNavigating && !demoRunning) {
             NavigationService.start(context)
         } else {
             NavigationService.stop(context)

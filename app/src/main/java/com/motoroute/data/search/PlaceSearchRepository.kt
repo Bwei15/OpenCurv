@@ -169,18 +169,29 @@ class PlaceSearchRepository(
 
         _state.value = IndexState.Building(0f, size)
 
+        // Each map's own places are kept apart from the rest, so the file
+        // written next to a map is that map's index and nothing else - a
+        // deleted region must not leave its towns behind in a neighbour's
+        // cache.
+        val perFile = HashMap<String, MutableList<Place>>()
+
         // Coarse pass: cities and towns, over in seconds, so the search box
         // starts answering while the thorough pass is still running.
         files.forEach { file ->
+            val found = perFile.getOrPut(file.name) { mutableListOf() }
             MapPlaceReader(file).use { reader ->
-                reader.scanPlaces(COARSE_ZOOM) { add(it) }
+                reader.scanPlaces(COARSE_ZOOM) {
+                    found += it
+                    add(it)
+                }
             }
-            _state.value = IndexState.Building(0.05f, size)
+            _state.value = IndexState.Building(COARSE_SHARE, size)
         }
 
         // Thorough pass: villages, hamlets, suburbs.
         files.forEachIndexed { index, file ->
             val share = 1f / files.size
+            val found = perFile.getOrPut(file.name) { mutableListOf() }
             MapPlaceReader(file).use { reader ->
                 reader.scanPlaces(
                     zoom = FINE_ZOOM,
@@ -189,9 +200,12 @@ class PlaceSearchRepository(
                             (1f - COARSE_SHARE) * share * (index + done.toFloat() / total)
                         _state.value = IndexState.Building(fraction.coerceIn(0f, 1f), size)
                     },
-                ) { add(it) }
+                ) {
+                    found += it
+                    add(it)
+                }
             }
-            writeCache(file)
+            writeCache(file, found)
         }
 
         _state.value = IndexState.Ready(size)
@@ -237,7 +251,7 @@ class PlaceSearchRepository(
         }
     }.getOrNull()
 
-    private fun writeCache(file: File) {
+    private fun writeCache(file: File, places: List<Place>) {
         runCatching {
             cacheDir.mkdirs()
             // One index per map file version; drop the previous one so a
@@ -248,7 +262,7 @@ class PlaceSearchRepository(
                 .filterNot { it.name == cacheFileOf(file).name }
                 .forEach { it.delete() }
 
-            val text = synchronized(places) { places.toList() }.joinToString("\n") {
+            val text = places.joinToString("\n") {
                 "${it.name.replace('\t', ' ')}\t${it.kind.name}\t${it.latitude}\t${it.longitude}"
             }
             cacheFileOf(file).writeText(text)

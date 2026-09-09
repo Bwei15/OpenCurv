@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -51,6 +52,8 @@ fun ActiveNavigationScreen(
     onRecenter: () -> Unit,
     onForceReroute: () -> Unit,
     voiceEnabled: Boolean,
+    following: Boolean,
+    isDemo: Boolean,
     modifier: Modifier = Modifier,
     map: @Composable () -> Unit,
 ) {
@@ -66,12 +69,15 @@ fun ActiveNavigationScreen(
         ) {
             ManeuverBar(state)
 
+            if (isDemo) {
+                StatusBanner(stringResource(R.string.nav_demo_running), colors.route)
+            }
             if (state.isRerouting) {
-                StatusBanner("Rerouting", colors.warning)
+                StatusBanner(stringResource(R.string.rerouting), colors.warning)
             } else if (state.isOffRoute) {
-                StatusBanner("Off route", colors.danger)
+                StatusBanner(stringResource(R.string.off_route), colors.danger)
             } else if (state.hasArrived) {
-                StatusBanner("You have arrived", colors.ok)
+                StatusBanner(stringResource(R.string.arrived), colors.ok)
             }
 
             Spacer(Modifier.weight(1f))
@@ -92,22 +98,28 @@ fun ActiveNavigationScreen(
                         } else {
                             R.drawable.ic_action_sound_off
                         },
-                        contentDescription = if (voiceEnabled) "Mute voice" else "Unmute voice",
+                        contentDescription = stringResource(
+                            if (voiceEnabled) R.string.action_mute else R.string.action_unmute,
+                        ),
                         onClick = onToggleVoice,
                     )
+                    // Lit up while the map is not following, so the way back to
+                    // the rider is obvious after a look ahead down the route.
                     GloveButton(
                         iconRes = R.drawable.ic_action_center,
-                        contentDescription = "Recenter map",
+                        contentDescription = stringResource(R.string.action_center),
                         onClick = onRecenter,
+                        background = if (following) colors.hudBackground else colors.route,
+                        tint = if (following) colors.hudForeground else Color.Black,
                     )
                     GloveButton(
                         iconRes = R.drawable.ic_action_reroute,
-                        contentDescription = "Recalculate route",
+                        contentDescription = stringResource(R.string.action_reroute),
                         onClick = onForceReroute,
                     )
                     GloveButton(
                         iconRes = R.drawable.ic_action_stop,
-                        contentDescription = "Stop navigation",
+                        contentDescription = stringResource(R.string.action_stop),
                         onClick = onStop,
                         background = colors.danger,
                         tint = Color.Black,
@@ -149,7 +161,7 @@ private fun ManeuverBar(state: NavigationState) {
                     DistanceReadout(state.distanceToManeuverMeters)
                     if (current.roundaboutExit > 0) {
                         Text(
-                            text = "exit ${current.roundaboutExit}",
+                            text = stringResource(R.string.nav_exit, current.roundaboutExit),
                             color = colors.muted,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
@@ -158,7 +170,7 @@ private fun ManeuverBar(state: NavigationState) {
                 }
             } else {
                 Text(
-                    text = "Waiting for GPS",
+                    text = stringResource(R.string.nav_waiting_gps),
                     color = colors.hudForeground,
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold,
@@ -209,12 +221,12 @@ private fun BottomBar(state: NavigationState) {
 
             MetricReadout(
                 value = formatRemaining(state.remainingDistanceMeters),
-                caption = "left",
+                caption = stringResource(R.string.remaining),
             )
 
             MetricReadout(
                 value = formatEta(state.etaEpochMillis),
-                caption = "arrival",
+                caption = stringResource(R.string.eta),
             )
 
             state.route?.let { route ->

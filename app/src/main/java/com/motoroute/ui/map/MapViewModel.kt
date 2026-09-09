@@ -10,13 +10,21 @@ import com.motoroute.OpenCurvApp
 import com.motoroute.data.download.DownloadQueueState
 import com.motoroute.data.download.DownloadTarget
 import com.motoroute.data.download.MapRegion
+import com.motoroute.data.download.RegionStatus
+import com.motoroute.data.download.RegionStore
+import com.motoroute.data.map.OfflineFile
 import com.motoroute.data.map.OfflineFileKind
 import com.motoroute.data.model.GeoPoint
 import com.motoroute.data.model.Route
+import com.motoroute.data.search.IndexState
+import com.motoroute.data.search.Place
+import com.motoroute.data.settings.MapStyle
 import com.motoroute.data.settings.MapTheme
 import com.motoroute.data.settings.Settings
 import com.motoroute.domain.NavigationState
 import com.motoroute.domain.PlanningState
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,6 +34,7 @@ import kotlinx.coroutines.launch
 data class PlanSelection(
     val start: GeoPoint? = null,
     val destination: GeoPoint? = null,
+    val destinationName: String? = null,
     val via: List<GeoPoint> = emptyList(),
 ) {
     val isComplete: Boolean get() = destination != null
@@ -48,12 +57,24 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     val planningState: StateFlow<PlanningState> = container.navigation.planning
     val settings: StateFlow<Settings> = container.settings.settings
     val recommendedZoom: StateFlow<Int> = container.navigation.recommendedZoom
+    val demoRunning: StateFlow<Boolean> = container.navigation.demoRunning
 
     private val _selection = MutableStateFlow(PlanSelection())
     val selection: StateFlow<PlanSelection> = _selection.asStateFlow()
 
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
+
+    /**
+     * Whether the map follows the rider.
+     *
+     * The single most annoying thing a navigator can do is drag the map back
+     * under your thumb a second after you moved it, so following is a mode the
+     * rider owns: any pan or pinch turns it off, and only the recentre button
+     * turns it back on.
+     */
+    private val _followMode = MutableStateFlow(true)
+    val followMode: StateFlow<Boolean> = _followMode.asStateFlow()
 
     val hasMaps: Boolean get() = container.offlineData.hasAny(OfflineFileKind.MAP)
     val hasSegments: Boolean get() = container.offlineData.hasAny(OfflineFileKind.SEGMENT)
@@ -62,8 +83,20 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         container.navigation.startLocationUpdates()
     }
 
+    // ---- map interaction --------------------------------------------------
+
     fun onMapTap(point: GeoPoint) {
-        _selection.value = _selection.value.copy(destination = point)
+        _selection.value = _selection.value.copy(destination = point, destinationName = null)
+    }
+
+    /** A press held in place sets where the route starts, GPS or no GPS. */
+    fun onMapLongPress(point: GeoPoint) {
+        _selection.value = _selection.value.copy(start = point)
+        _message.value = getApplication<Application>().getString(com.motoroute.R.string.start_set)
+    }
+
+    fun onUserGesture() {
+        if (_followMode.value) _followMode.value = false
     }
 
     fun addVia(point: GeoPoint) {
@@ -76,31 +109,65 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         mapController.showRoute(null, 0)
     }
 
-    /** Calculates a route from the current position to the picked destination. */
+    fun recenter() {
+        _followMode.value = true
+        val point = container.navigation.lastFix.value?.point ?: return
+        mapController.centerOn(point)
+    }
+
+    fun zoomIn() = mapController.zoomIn()
+
+    fun zoomOut() = mapController.zoomOut()
+
+    // ---- planning ---------------------------------------------------------
+
+    /**
+     * Calculates a route to the picked destination.
+     *
+     * With no GPS fix the map centre stands in for the rider - which is what
+     * makes planning tomorrow's ride at the kitchen table possible, and is the
+     * only way to try the app indoors at all.
+     */
     fun calculateRoute() {
+        val app = getApplication<Application>()
         val destination = _selection.value.destination ?: run {
-            _message.value = "Tap the map to set a destination"
+            _message.value = app.getString(com.motoroute.R.string.msg_pick_destination)
+            return
+        }
+        if (!hasSegments) {
+            _message.value = app.getString(com.motoroute.R.string.msg_no_segments)
             return
         }
         val start = _selection.value.start
             ?: container.navigation.lastFix.value?.point
+            ?: mapController.center()?.also {
+                _message.value = app.getString(com.motoroute.R.string.msg_start_is_map_centre)
+            }
             ?: run {
-                _message.value = "Waiting for a GPS fix"
+                _message.value = app.getString(com.motoroute.R.string.msg_waiting_for_gps)
                 return
             }
-        if (!hasSegments) {
-            _message.value = "Import BRouter .rd5 tiles first"
-            return
-        }
         container.navigation.plan(start, destination, _selection.value.via)
     }
 
     fun startNavigation(route: Route) {
+        _followMode.value = true
         container.navigation.startNavigation(route)
     }
 
     fun stopNavigation() {
         container.navigation.stopNavigation()
+        clearSelection()
+    }
+
+    /** Rides the planned route without a motorcycle, for testing everything at home. */
+    fun startDemo(route: Route) {
+        _followMode.value = true
+        container.navigation.startDemo(route)
+    }
+
+    fun stopDemo() {
+        container.navigation.stopDemo()
         clearSelection()
     }
 
@@ -110,30 +177,96 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         container.navigation.setVoiceEnabled(!settings.value.voiceEnabled)
     }
 
+    /** Speaks a sample announcement so the rider can check volume and intercom. */
+    fun testVoice() {
+        val app = getApplication<Application>()
+        val spoke = container.voice.speakTest()
+        _message.value = app.getString(
+            if (spoke) com.motoroute.R.string.msg_voice_test else com.motoroute.R.string.msg_voice_unavailable,
+        )
+    }
+
+    fun profiles() = container.profileManager.profiles()
+
+    // ---- settings ---------------------------------------------------------
+
     fun setProfile(id: String) = container.settings.update { it.copy(profileId = id) }
 
     fun setCurviness(value: Float) = container.settings.update { it.copy(curviness = value) }
 
     fun setMapTheme(theme: MapTheme) = container.settings.update { it.copy(mapTheme = theme) }
 
+    fun setMapStyle(style: MapStyle) = container.settings.update { it.copy(mapStyle = style) }
+
     fun setPerspective(enabled: Boolean) =
         container.settings.update { it.copy(perspectiveEnabled = enabled) }
 
     fun setHeadingUp(enabled: Boolean) = container.settings.update { it.copy(headingUp = enabled) }
 
+    fun setVolumeKeyZoom(enabled: Boolean) =
+        container.settings.update { it.copy(volumeKeyZoom = enabled) }
+
     fun setAlternatives(enabled: Boolean) =
         container.settings.update { it.copy(searchAlternatives = enabled) }
 
-    fun profiles() = container.profileManager.profiles()
+    fun completeOnboarding() = container.settings.update { it.copy(onboardingDone = true) }
 
-    fun recenter() {
-        val point = container.navigation.lastFix.value?.point ?: return
-        mapController.centerOn(point)
+    // ---- offline destination search ---------------------------------------
+
+    val indexState: StateFlow<IndexState> = container.placeSearch.state
+
+    private val _query = MutableStateFlow("")
+    val query: StateFlow<String> = _query.asStateFlow()
+
+    private val _results = MutableStateFlow<List<Place>>(emptyList())
+    val results: StateFlow<List<Place>> = _results.asStateFlow()
+
+    private val _searching = MutableStateFlow(false)
+    val searching: StateFlow<Boolean> = _searching.asStateFlow()
+
+    private var searchJob: Job? = null
+
+    fun prepareSearch() = container.placeSearch.ensureIndex()
+
+    /** Debounced: a rider types on a phone, not a keyboard. */
+    fun onQueryChange(text: String) {
+        _query.value = text
+        searchJob?.cancel()
+        if (text.isBlank()) {
+            _results.value = emptyList()
+            _searching.value = false
+            return
+        }
+        searchJob = viewModelScope.launch {
+            delay(SEARCH_DEBOUNCE_MILLIS)
+            _searching.value = true
+            val near = container.navigation.lastFix.value?.point ?: mapController.center()
+            _results.value = runCatching { container.placeSearch.search(text, near) }
+                .getOrDefault(emptyList())
+            _searching.value = false
+        }
     }
 
-    fun zoomIn() = mapController.zoomIn()
+    fun chooseSearchResult(place: Place) {
+        _selection.value = _selection.value.copy(
+            destination = place.point,
+            destinationName = place.name,
+        )
+        _followMode.value = false
+        mapController.centerOn(place.point, DESTINATION_ZOOM)
+        _query.value = ""
+        _results.value = emptyList()
+    }
 
-    fun zoomOut() = mapController.zoomOut()
+    /** Puts the camera on the downloaded data when there is no fix to follow. */
+    fun centerOnDataIfIdle() {
+        if (container.navigation.lastFix.value != null) return
+        viewModelScope.launch {
+            container.placeSearch.mapStartPosition()?.let { mapController.centerOn(it) }
+        }
+    }
+
+    // ---- offline data -----------------------------------------------------
 
     /**
      * Bumped whenever the set of files on disk changes, so the data screen
@@ -142,8 +275,6 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     private val _dataVersion = MutableStateFlow(0)
     val dataVersion: StateFlow<Int> = _dataVersion.asStateFlow()
 
-    // ---- offline data downloads ------------------------------------------
-
     val downloadQueue: StateFlow<DownloadQueueState> = container.downloads.state
 
     private val _regions = MutableStateFlow<Map<String, List<MapRegion>>>(emptyMap())
@@ -151,21 +282,21 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
 
     fun loadRegions() {
         if (_regions.value.isNotEmpty()) return
-        viewModelScope.launch { _regions.value = container.mapCatalog.grouped() }
+        viewModelScope.launch {
+            val catalog = container.mapCatalog.regions()
+            // Files from an older install, or a map imported by hand, become
+            // the region they actually are instead of a bare file name.
+            container.regions.adopt(catalog)
+            _regions.value = catalog.groupBy { it.country }
+            _dataVersion.value++
+        }
     }
 
-    /**
-     * Regions whose map file is already on disk. Only the map is checked: the
-     * routing tiles are shared between regions, so a missing tile is re-queued
-     * automatically rather than marking the whole region as absent.
-     */
-    fun installedRegions(): Set<String> {
-        val names = container.offlineData.list(OfflineFileKind.MAP).map { it.name }.toSet()
-        return _regions.value.values.flatten()
-            .filter { it.fileName in names }
-            .map { it.path }
-            .toSet()
-    }
+    /** Regions the rider has installed, complete or not. */
+    fun installedRegions(): List<RegionStatus> = container.regions.statuses()
+
+    fun installedRegionPaths(): Set<String> =
+        container.regions.statuses().filter { it.isComplete }.map { it.path }.toSet()
 
     /**
      * Why downloading is not possible right now, or null when it is.
@@ -174,19 +305,40 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun downloadBlockedReason(): String? = when {
         navigationState.value.isNavigating ->
-            "Stop navigation before downloading."
+            getApplication<Application>().getString(com.motoroute.R.string.download_blocked_navigating)
         else -> null
     }
 
-    /** Queues a region's map and every routing tile that covers it. */
+    /** Queues a region as one package: its map and every routing tile it needs. */
     fun downloadRegion(region: MapRegion) {
         if (downloadBlockedReason() != null) return
+        container.regions.install(RegionStore.of(region))
         val targets = buildList {
             add(DownloadTarget.map(region))
-            region.segmentTiles.forEach { add(DownloadTarget.segment(it)) }
+            region.segmentTiles.forEach { add(DownloadTarget.segment(it, region)) }
         }
         container.downloads.enqueue(targets)
         _dataVersion.value++
+    }
+
+    /**
+     * Deletes a region in one go.
+     *
+     * Routing tiles shared with another installed region stay: the rider asked
+     * to remove Niedersachsen, not to break Schleswig-Holstein.
+     */
+    fun deleteRegion(status: RegionStatus) {
+        viewModelScope.launch {
+            val freed = container.regions.delete(status.path)
+            refreshMaps()
+            container.placeSearch.invalidate()
+            _dataVersion.value++
+            _message.value = getApplication<Application>().getString(
+                com.motoroute.R.string.msg_region_deleted,
+                status.name,
+                formatMegabytes(freed),
+            )
+        }
     }
 
     fun cancelDownloads() = container.downloads.cancelAll()
@@ -195,12 +347,20 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
 
     fun filesOf(kind: OfflineFileKind) = container.offlineData.list(kind)
 
+    /** Map and tile files that no installed region claims. */
+    fun looseFiles(): List<OfflineFile> = container.regions.looseFiles().map { file ->
+        OfflineFile(file, file.length(), OfflineFileKind.of(file.name) ?: OfflineFileKind.MAP)
+    }
+
     fun freeSpace(): Long = container.offlineData.freeSpaceBytes()
 
-    fun deleteFile(file: com.motoroute.data.map.OfflineFile) {
+    fun deleteFile(file: OfflineFile) {
         viewModelScope.launch {
             container.offlineData.delete(file)
-            if (file.kind == OfflineFileKind.MAP) refreshMaps()
+            if (file.kind == OfflineFileKind.MAP) {
+                refreshMaps()
+                container.placeSearch.invalidate()
+            }
             _dataVersion.value++
         }
     }
@@ -208,6 +368,7 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     /** Called when a download finishes so the renderer picks up the new file. */
     fun onDownloadedFilesChanged() {
         refreshMaps()
+        container.placeSearch.invalidate()
         _dataVersion.value++
     }
 
@@ -225,14 +386,18 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
 
     fun importFile(uri: android.net.Uri, onDone: (String) -> Unit) {
         viewModelScope.launch {
+            val app = getApplication<Application>()
             val imported = runCatching { container.offlineData.import(uri) }.getOrNull()
             if (imported == null) {
-                onDone("Not a .map, .rd5 or .brf file")
+                onDone(app.getString(com.motoroute.R.string.msg_import_wrong_type))
                 return@launch
             }
-            if (imported.kind == OfflineFileKind.MAP) refreshMaps()
+            if (imported.kind == OfflineFileKind.MAP) {
+                refreshMaps()
+                container.placeSearch.invalidate()
+            }
             _dataVersion.value++
-            onDone("Imported ${imported.name}")
+            onDone(app.getString(com.motoroute.R.string.msg_imported, imported.name))
         }
     }
 
@@ -241,7 +406,14 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         mapController.detach()
     }
 
+    private fun formatMegabytes(bytes: Long): String = "${bytes / 1_000_000} MB"
+
     companion object {
+        private const val SEARCH_DEBOUNCE_MILLIS = 220L
+
+        /** Close enough to see the streets around a chosen destination. */
+        private const val DESTINATION_ZOOM = 14
+
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 MapViewModel(this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]!!)

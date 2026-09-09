@@ -24,12 +24,19 @@ data class MapRegion(
     val segmentTiles: List<String> get() = SegmentTiles.covering(bounds)
 }
 
-/** One file to fetch. */
+/**
+ * One file to fetch.
+ *
+ * [regionPath] and [regionName] are what let the queue talk about "Niedersachsen,
+ * file 3 of 5" instead of listing five file names the rider never asked for.
+ */
 data class DownloadTarget(
     val url: String,
     val fileName: String,
     val kind: OfflineFileKind,
     val label: String,
+    val regionPath: String? = null,
+    val regionName: String? = null,
 ) {
     companion object {
         /**
@@ -49,14 +56,18 @@ data class DownloadTarget(
             url = MAP_BASE + region.path + ".map",
             fileName = region.fileName,
             kind = OfflineFileKind.MAP,
-            label = "${region.name} (map)",
+            label = region.name,
+            regionPath = region.path,
+            regionName = region.name,
         )
 
-        fun segment(tile: String): DownloadTarget = DownloadTarget(
+        fun segment(tile: String, region: MapRegion? = null): DownloadTarget = DownloadTarget(
             url = SEGMENT_BASE + tile,
             fileName = tile,
             kind = OfflineFileKind.SEGMENT,
-            label = "$tile (routing)",
+            label = tile,
+            regionPath = region?.path,
+            regionName = region?.name,
         )
     }
 }

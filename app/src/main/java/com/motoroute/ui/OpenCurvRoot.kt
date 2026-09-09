@@ -1,18 +1,24 @@
 package com.motoroute.ui
 
-import android.content.Context
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -24,9 +30,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.motoroute.R
-import com.motoroute.data.map.OfflineFileKind
 import com.motoroute.data.settings.MapTheme
 import com.motoroute.domain.CameraController
 import com.motoroute.domain.PlanningState
@@ -38,18 +47,21 @@ import com.motoroute.ui.map.MapScreen
 import com.motoroute.ui.map.MapViewModel
 import com.motoroute.ui.navigation.ActiveNavigationScreen
 import com.motoroute.ui.navigation.GloveButton
-import com.motoroute.ui.plan.MissingDataNotice
-import com.motoroute.ui.plan.RoutePlanPanel
+import com.motoroute.ui.onboarding.OnboardingScreen
+import com.motoroute.ui.plan.MissingDataCard
+import com.motoroute.ui.plan.RoutePlanSheet
+import com.motoroute.ui.search.SearchScreen
+import com.motoroute.ui.settings.SettingsScreen
 import com.motoroute.ui.theme.LocalRideColors
 
-private enum class Screen { MAP, DATA, DOWNLOAD }
+private enum class Screen { MAP, SEARCH, DATA, DOWNLOAD, SETTINGS }
 
 /**
  * Top-level composition.
  *
- * There is no bottom navigation bar and no drawer: while riding, the map plus
- * the HUD is the entire interface. Data management is a separate screen reached
- * by one oversized button, and it disappears the moment navigation starts.
+ * While riding, the map plus the HUD is the entire interface. Everything else -
+ * search, data, settings - is a full screen reached from the map and gone again
+ * the moment navigation starts.
  */
 @Composable
 fun OpenCurvRoot(
@@ -64,8 +76,11 @@ fun OpenCurvRoot(
     val selection by viewModel.selection.collectAsState()
     val zoom by viewModel.recommendedZoom.collectAsState()
     val message by viewModel.message.collectAsState()
+    val follow by viewModel.followMode.collectAsState()
+    val demoRunning by viewModel.demoRunning.collectAsState()
 
     var screen by remember { mutableStateOf(Screen.MAP) }
+    var onboarding by remember { mutableStateOf(!settings.onboardingDone) }
     val snackbar = remember { SnackbarHostState() }
 
     LaunchedEffect(message) {
@@ -93,7 +108,11 @@ fun OpenCurvRoot(
         if (downloadQueue.isRunning) DownloadService.start(context)
     }
     LaunchedEffect(downloadQueue.allDone) {
-        if (downloadQueue.allDone) viewModel.onDownloadedFilesChanged()
+        if (downloadQueue.allDone) {
+            viewModel.onDownloadedFilesChanged()
+            // Getting the first region is the whole point of onboarding.
+            if (viewModel.hasMaps) viewModel.completeOnboarding()
+        }
     }
 
     LaunchedEffect(planning) {
@@ -102,18 +121,34 @@ fun OpenCurvRoot(
         }
     }
 
+    LaunchedEffect(Unit) {
+        viewModel.loadRegions()
+        viewModel.centerOnDataIfIdle()
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         when (screen) {
             Screen.MAP -> MapRoot(
                 viewModel = viewModel,
-                context = context,
                 settings = settings,
                 navigationState = navigationState,
                 planning = planning,
-                hasDestination = selection.isComplete,
+                selection = selection,
+                follow = follow,
+                demoRunning = demoRunning,
                 zoom = zoom,
                 onOpenData = { screen = Screen.DATA },
+                onOpenSettings = { screen = Screen.SETTINGS },
+                onOpenSearch = {
+                    viewModel.prepareSearch()
+                    screen = Screen.SEARCH
+                },
                 onRequestPermission = onRequestPermission,
+            )
+
+            Screen.SEARCH -> SearchRoot(
+                viewModel = viewModel,
+                onBack = { screen = Screen.MAP },
             )
 
             Screen.DATA -> OfflineDataRoot(
@@ -127,6 +162,36 @@ fun OpenCurvRoot(
                 viewModel = viewModel,
                 queue = downloadQueue,
                 onBack = { screen = Screen.DATA },
+            )
+
+            Screen.SETTINGS -> SettingsScreen(
+                settings = settings,
+                onBack = { screen = Screen.MAP },
+                onMapStyle = viewModel::setMapStyle,
+                onMapTheme = viewModel::setMapTheme,
+                onPerspective = viewModel::setPerspective,
+                onHeadingUp = viewModel::setHeadingUp,
+                onVolumeZoom = viewModel::setVolumeKeyZoom,
+                onVoice = { viewModel.toggleVoice() },
+                onTestVoice = viewModel::testVoice,
+                onOpenData = { screen = Screen.DATA },
+            )
+        }
+
+        if (onboarding && !navigationState.isNavigating) {
+            OnboardingScreen(
+                onOpenDownloads = {
+                    onboarding = false
+                    screen = Screen.DOWNLOAD
+                },
+                onImport = {
+                    onboarding = false
+                    onImportRequested()
+                },
+                onSkip = {
+                    onboarding = false
+                    viewModel.completeOnboarding()
+                },
             )
         }
 
@@ -142,44 +207,57 @@ fun OpenCurvRoot(
 @Composable
 private fun MapRoot(
     viewModel: MapViewModel,
-    context: Context,
     settings: com.motoroute.data.settings.Settings,
     navigationState: com.motoroute.domain.NavigationState,
     planning: PlanningState,
-    hasDestination: Boolean,
+    selection: com.motoroute.ui.map.PlanSelection,
+    follow: Boolean,
+    demoRunning: Boolean,
     zoom: Int,
     onOpenData: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onOpenSearch: () -> Unit,
     onRequestPermission: () -> Unit,
 ) {
+    val colors = LocalRideColors.current
     val navigating = navigationState.isNavigating
     val position = navigationState.snappedPosition ?: navigationState.position
 
     val map: @Composable () -> Unit = {
         MapScreen(
             controller = viewModel.mapController,
-            route = navigationState.route
-                ?: (planning as? PlanningState.Ready)?.route,
+            route = navigationState.route ?: (planning as? PlanningState.Ready)?.route,
             position = position,
             headingDegrees = navigationState.headingDegrees,
-            zoom = if (navigating) zoom else 14,
+            // Only the riding camera picks the zoom; when planning, the zoom is
+            // the rider's business and nothing takes it away from them.
+            zoom = if (navigating) zoom else null,
             headingUp = navigating && settings.headingUp,
+            follow = follow,
             perspectiveTilt = if (navigating && settings.perspectiveEnabled) {
                 CameraController.tiltFor(navigationState.speedKmh.toDouble())
             } else {
                 0f
             },
+            style = settings.mapStyle,
+            destination = selection.destination,
+            start = selection.start,
+            onUserGesture = viewModel::onUserGesture,
             onMapTap = if (navigating) null else viewModel::onMapTap,
+            onMapLongPress = if (navigating) null else viewModel::onMapLongPress,
         )
     }
 
     if (navigating) {
         ActiveNavigationScreen(
             state = navigationState,
-            onStop = viewModel::stopNavigation,
+            onStop = if (demoRunning) viewModel::stopDemo else viewModel::stopNavigation,
             onToggleVoice = viewModel::toggleVoice,
             onRecenter = viewModel::recenter,
             onForceReroute = viewModel::forceReroute,
             voiceEnabled = settings.voiceEnabled,
+            following = follow,
+            isDemo = demoRunning,
             map = map,
         )
         return
@@ -196,29 +274,42 @@ private fun MapRoot(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(12.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SearchBar(
+                    text = selection.destinationName,
+                    onClick = onOpenSearch,
+                    modifier = Modifier.weight(1f),
+                )
+                GloveButton(
+                    iconRes = R.drawable.ic_action_settings,
+                    contentDescription = stringResource(R.string.settings_title),
+                    onClick = onOpenSettings,
+                )
+            }
+
+            Spacer(Modifier.weight(1f))
+
+            Column(
+                modifier = Modifier
+                    .align(Alignment.End)
+                    .padding(horizontal = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 GloveButton(
                     iconRes = R.drawable.ic_action_layers,
-                    contentDescription = "Offline data",
+                    contentDescription = stringResource(R.string.data_title),
                     onClick = onOpenData,
-                )
-                GloveButton(
-                    iconRes = R.drawable.ic_action_center,
-                    contentDescription = "Center on me",
-                    onClick = {
-                        onRequestPermission()
-                        viewModel.recenter()
-                    },
                 )
                 GloveButton(
                     iconRes = if (settings.mapTheme == MapTheme.NIGHT) {
                         R.drawable.ic_action_sound_off
                     } else {
-                        R.drawable.ic_action_settings
+                        R.drawable.ic_action_layers
                     },
-                    contentDescription = "Toggle day and night",
+                    contentDescription = stringResource(R.string.settings_theme),
                     onClick = {
                         viewModel.setMapTheme(
                             when (settings.mapTheme) {
@@ -229,30 +320,104 @@ private fun MapRoot(
                         )
                     },
                 )
+                // Highlighted while the map is *not* following, because that is
+                // when the button has something to do.
+                GloveButton(
+                    iconRes = R.drawable.ic_action_center,
+                    contentDescription = stringResource(R.string.action_center),
+                    onClick = {
+                        onRequestPermission()
+                        viewModel.recenter()
+                    },
+                    background = if (follow) colors.hudBackground else colors.route,
+                    tint = if (follow) colors.hudForeground else androidx.compose.ui.graphics.Color.Black,
+                )
             }
 
-            Box(modifier = Modifier.weight(1f))
-
-            RoutePlanPanel(
-                settings = settings,
-                profiles = viewModel.profiles(),
-                planning = planning,
-                hasDestination = hasDestination,
-                onProfileChange = viewModel::setProfile,
-                onCurvinessChange = viewModel::setCurviness,
-                onAlternativesChange = viewModel::setAlternatives,
-                onCalculate = viewModel::calculateRoute,
-                onStart = viewModel::startNavigation,
-                onClear = viewModel::clearSelection,
+            MissingDataCard(
+                hasMaps = viewModel.hasMaps,
+                hasSegments = viewModel.hasSegments,
+                onOpenData = onOpenData,
+                modifier = Modifier.padding(12.dp),
             )
+
+            // Room for the sheet's peek, so the buttons never sit under it.
+            Spacer(Modifier.height(150.dp))
         }
 
-        MissingDataNotice(
-            hasMaps = viewModel.hasMaps,
-            hasSegments = viewModel.hasSegments,
-            onOpenData = onOpenData,
+        RoutePlanSheet(
+            settings = settings,
+            profiles = viewModel.profiles(),
+            planning = planning,
+            destinationName = selection.destinationName,
+            hasDestination = selection.isComplete,
+            hasExplicitStart = selection.start != null,
+            onProfileChange = viewModel::setProfile,
+            onCurvinessChange = viewModel::setCurviness,
+            onAlternativesChange = viewModel::setAlternatives,
+            onCalculate = viewModel::calculateRoute,
+            onStart = viewModel::startNavigation,
+            onDemo = viewModel::startDemo,
+            onClear = viewModel::clearSelection,
+            modifier = Modifier.align(Alignment.BottomCenter),
         )
     }
+}
+
+/** The search box on the map: a destination, or an invitation to pick one. */
+@Composable
+private fun SearchBar(text: String?, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = LocalRideColors.current
+    Surface(
+        color = colors.panel.copy(alpha = 0.96f),
+        shape = RoundedCornerShape(18.dp),
+        modifier = modifier
+            .height(64.dp)
+            .clickable(onClick = onClick),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_action_search),
+                contentDescription = null,
+                tint = colors.onPanel,
+                modifier = Modifier.size(24.dp),
+            )
+            Text(
+                text = text ?: stringResource(R.string.search_placeholder),
+                color = if (text == null) colors.muted else colors.onPanel,
+                fontSize = 17.sp,
+                fontWeight = if (text == null) FontWeight.Normal else FontWeight.Bold,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SearchRoot(viewModel: MapViewModel, onBack: () -> Unit) {
+    val query by viewModel.query.collectAsState()
+    val results by viewModel.results.collectAsState()
+    val indexState by viewModel.indexState.collectAsState()
+    val searching by viewModel.searching.collectAsState()
+    val navigationState by viewModel.navigationState.collectAsState()
+
+    SearchScreen(
+        query = query,
+        results = results,
+        indexState = indexState,
+        searching = searching,
+        near = navigationState.position ?: viewModel.mapController.center(),
+        onQueryChange = viewModel::onQueryChange,
+        onPick = {
+            viewModel.chooseSearchResult(it)
+            onBack()
+        },
+        onBack = onBack,
+    )
 }
 
 @Composable
@@ -266,8 +431,8 @@ private fun DownloadRoot(
 
     LaunchedEffect(Unit) { viewModel.loadRegions() }
 
-    val installed = remember(dataVersion, regions) { viewModel.installedRegions() }
-    val freeSpace = remember(dataVersion) { viewModel.freeSpace() }
+    val installed = remember(dataVersion, regions, queue) { viewModel.installedRegionPaths() }
+    val freeSpace = remember(dataVersion, queue) { viewModel.freeSpace() }
 
     MapDownloadScreen(
         regions = regions,
@@ -289,39 +454,26 @@ private fun OfflineDataRoot(
     onOpenDownloads: () -> Unit,
     onBack: () -> Unit,
 ) {
-    val colors = LocalRideColors.current
     val dataVersion by viewModel.dataVersion.collectAsState()
 
     // Reading dataVersion here is what makes the list refresh after an import
     // or a delete; the files themselves are plain disk reads.
-    val maps = remember(dataVersion) { viewModel.filesOf(OfflineFileKind.MAP) }
-    val segments = remember(dataVersion) { viewModel.filesOf(OfflineFileKind.SEGMENT) }
-    val profiles = remember(dataVersion) { viewModel.filesOf(OfflineFileKind.PROFILE) }
+    val regions = remember(dataVersion) { viewModel.installedRegions() }
+    val loose = remember(dataVersion) { viewModel.looseFiles() }
+    val profiles = remember(dataVersion) {
+        viewModel.filesOf(com.motoroute.data.map.OfflineFileKind.PROFILE)
+    }
     val freeSpace = remember(dataVersion) { viewModel.freeSpace() }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        OfflineDataScreen(
-            maps = maps,
-            segments = segments,
-            profiles = profiles,
-            freeSpaceBytes = freeSpace,
-            onImport = onImport,
-            onDownload = onOpenDownloads,
-            onDelete = viewModel::deleteFile,
-        )
-
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .windowInsetsPadding(WindowInsets.safeDrawing)
-                .padding(16.dp),
-        ) {
-            GloveButton(
-                iconRes = R.drawable.ic_action_route,
-                contentDescription = "Back to the map",
-                onClick = onBack,
-                background = colors.hudBackground,
-            )
-        }
-    }
+    OfflineDataScreen(
+        regions = regions,
+        looseFiles = loose,
+        profiles = profiles,
+        freeSpaceBytes = freeSpace,
+        onImport = onImport,
+        onDownload = onOpenDownloads,
+        onDeleteRegion = viewModel::deleteRegion,
+        onDeleteFile = viewModel::deleteFile,
+        onBack = onBack,
+    )
 }

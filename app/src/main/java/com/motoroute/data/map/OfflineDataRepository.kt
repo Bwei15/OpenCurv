@@ -24,6 +24,14 @@ class OfflineDataRepository(private val context: Context) {
     val mapDir: File get() = directoryFor(OfflineFileKind.MAP)
     val segmentDir: File get() = directoryFor(OfflineFileKind.SEGMENT)
 
+    /** Where derived data lives - the place-search index, and nothing precious. */
+    val indexDir: File get() = File(context.cacheDir, "search").apply { mkdirs() }
+
+    /** The bookkeeping that turns a pile of files back into "Niedersachsen". */
+    val regionIndexFile: File get() = File(context.filesDir, "regions.index")
+
+    fun mapFiles(): List<File> = list(OfflineFileKind.MAP).map { it.file }
+
     fun list(kind: OfflineFileKind): List<OfflineFile> =
         directoryFor(kind)
             .listFiles { f -> f.isFile && f.extension.equals(kind.extension, ignoreCase = true) }

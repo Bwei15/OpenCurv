@@ -27,6 +27,14 @@ data class RideColors(
     val warning: Color,
     val danger: Color,
     val ok: Color,
+    /** The position puck on the map. */
+    val rider: Color,
+    /** The destination pin. */
+    val destination: Color,
+    /** Card and sheet background on the screens used with the engine off. */
+    val panel: Color,
+    /** Text on [panel]. */
+    val onPanel: Color,
     val isNight: Boolean,
 )
 
@@ -39,12 +47,26 @@ val LocalRideColors = staticCompositionLocalOf {
         warning = OpenCurvColors.Warning,
         danger = OpenCurvColors.Danger,
         ok = OpenCurvColors.Ok,
+        rider = OpenCurvColors.DayRider,
+        destination = OpenCurvColors.DayDestination,
+        panel = OpenCurvColors.DayPanel,
+        onPanel = OpenCurvColors.DayOnSurface,
         isNight = false,
     )
 }
 
 /** Minimum touch target for a gloved hand, per the cockpit spec. */
 val GloveTargetSize = 84.dp
+
+/**
+ * Touch target for the screens used standing still.
+ *
+ * Downloads, settings and the file list are operated with the engine off and
+ * usually without gloves. Keeping the 84 dp riding targets there wasted half
+ * the screen and pushed the controls into each other; 56 dp is still well above
+ * Android's 48 dp minimum.
+ */
+val TapTargetSize = 56.dp
 
 /**
  * Typography is deliberately blunt: one sans-serif family, heavy weights, and
@@ -131,6 +153,10 @@ fun OpenCurvTheme(
             warning = OpenCurvColors.Warning,
             danger = OpenCurvColors.Danger,
             ok = OpenCurvColors.Ok,
+            rider = OpenCurvColors.NightRider,
+            destination = OpenCurvColors.NightDestination,
+            panel = OpenCurvColors.NightPanel,
+            onPanel = OpenCurvColors.NightOnSurface,
             isNight = true,
         )
     } else {
@@ -142,6 +168,10 @@ fun OpenCurvTheme(
             warning = OpenCurvColors.Warning,
             danger = OpenCurvColors.Danger,
             ok = OpenCurvColors.Ok,
+            rider = OpenCurvColors.DayRider,
+            destination = OpenCurvColors.DayDestination,
+            panel = OpenCurvColors.DayPanel,
+            onPanel = OpenCurvColors.DayOnSurface,
             isNight = false,
         )
     }

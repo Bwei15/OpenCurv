@@ -1,0 +1,38 @@
+# ---------------------------------------------------------------------------
+# spike_base.brf -- Minimalprofil fuer den RD5-Tag-Spike.
+#
+# NICHT fuer die App gedacht. Es enthaelt genau so viel, wie BRouter braucht,
+# und genau eine variable Stellschraube: den Kostenfaktor als Funktion von
+# opencurv:curve.
+#
+# Die drei konkreten Varianten (spike_neutral / spike_prefer_high /
+# spike_prefer_low / spike_numeric) werden aus dieser Datei per sed erzeugt,
+# siehe run_spike.sh. Die Zeile mit dem Marker @@CURVECOST@@ wird ersetzt.
+# ---------------------------------------------------------------------------
+
+---context:global
+
+assign turnInstructionMode = 0
+
+---context:way
+
+assign turncost = 0
+assign initialcost = 0
+assign uphillcostfactor = 0
+assign downhillcostfactor = 0
+
+assign any_road =
+  or highway=motorway|motorway_link|trunk|trunk_link|primary|primary_link
+  or highway=secondary|secondary_link|tertiary|tertiary_link
+     highway=unclassified|residential|living_street|road|track|service
+
+assign curvecost = @@CURVECOST@@
+
+assign costfactor
+  switch not any_road
+    10000
+    curvecost
+
+---context:node
+
+assign initialcost = 0

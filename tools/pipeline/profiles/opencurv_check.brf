@@ -1,0 +1,53 @@
+# ---------------------------------------------------------------------------
+# opencurv_check.brf -- PRUEFPROFIL der Pipeline, nicht das App-Profil.
+#
+# Es hat genau einen Zweck: nach dem WayLinker nachweisen, dass der Tag
+# `opencurv:curve` in der frisch gebauten .rd5 steht und die Kosten steuert.
+# Die Produktionsprofile der App (motorcycle_*.brf) bleiben unberuehrt.
+#
+# Der Platzhalter @@CURVECOST@@ wird von verify_region.sh ersetzt.
+#
+# ===========================================================================
+# DIE NaN-FALLE -- bitte vor dem Kopieren in ein App-Profil lesen.
+# ===========================================================================
+# `v:opencurv:curve` liefert Float.NaN, sobald der Way den Tag NICHT traegt
+# (BExpressionContext.getLookupValue, Wertindex 0). NaN pflanzt sich durch die
+# Kostenformel fort, BRouter haelt daraufhin JEDEN Weg fuer unbefahrbar und
+# meldet "from-position not mapped in existing datafile". Eine einzige Kachel
+# ohne Score legt also das ganze Routing lahm.
+#
+# Deshalb steht in JEDER Variante unten die Existenzpruefung
+#     switch not opencurv:curve=  <formel>  <default>
+# davor. "not opencurv:curve=" ist wahr, wenn der Tag gesetzt ist -- der
+# leere Wert bedeutet "nicht gesetzt". Achtung: `opencurv:curve=0` ist etwas
+# ANDERES, das matcht den echten Wert 0.
+#
+# Belege: 1.Doku/RD5_Pipeline.md, Abschnitt 5.4.
+# ---------------------------------------------------------------------------
+
+---context:global
+
+assign turnInstructionMode = 0
+
+---context:way
+
+assign turncost = 0
+assign initialcost = 0
+assign uphillcostfactor = 0
+assign downhillcostfactor = 0
+
+assign any_road =
+  or highway=motorway|motorway_link|trunk|trunk_link|primary|primary_link
+  or highway=secondary|secondary_link|tertiary|tertiary_link
+     highway=unclassified|residential|living_street|road|track|service
+
+assign curvecost = @@CURVECOST@@
+
+assign costfactor
+  switch not any_road
+    10000
+    curvecost
+
+---context:node
+
+assign initialcost = 0

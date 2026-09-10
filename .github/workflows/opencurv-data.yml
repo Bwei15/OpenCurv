@@ -1,0 +1,472 @@
+name: OpenCurv Daten-Pipeline
+
+# ============================================================================
+# Baut aus Geofabrik-Rohdaten und Copernicus-Hoehen die Artefakte, die die App
+# spaeter AUSSCHLIESSLICH laedt, und veroeffentlicht sie als GitHub-Release.
+#
+# Welche Regionen gebaut werden, steht NUR in tools/pipeline/config/regions.json.
+# Dieser Workflow kennt keine Region beim Namen.
+#
+# Aufbau (die Aufteilung in Jobs ist Plattenplatz-Disziplin, keine Kosmetik --
+# ein freier Runner hat nur rund 14 GB frei):
+#
+#   vorbereiten -> brouter (Fat-Jar, gecacht)
+#               -> region  (Matrix, ein Job je Bundesland)
+#               -> arena   (Testarena als Demo-Paket)
+#               -> release (sammelt ein, baut den Katalog, veroeffentlicht)
+#
+# Ein abgebrochener Lauf verwirft nicht alles: jede Region ist ein eigener Job
+# mit fail-fast:false, und der Release-Job veroeffentlicht, was fertig wurde.
+# ============================================================================
+
+on:
+  workflow_dispatch:
+    inputs:
+      region:
+        description: 'Region-ID aus regions.json, oder "all"'
+        required: true
+        default: 'all'
+        type: string
+      dry_run:
+        description: 'Nur bauen und pruefen, KEIN Release veroeffentlichen'
+        required: false
+        default: true
+        type: boolean
+      release_tag:
+        description: 'Release-Tag (leer = data-JJJJMMTT)'
+        required: false
+        default: ''
+        type: string
+  schedule:
+    # Einmal im Monat, nachts. OSM-Daten aendern sich langsam genug.
+    - cron: '17 3 1 * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: opencurv-data-${{ github.event.inputs.region || 'all' }}
+  cancel-in-progress: false
+
+env:
+  BROUTER_REF: master
+  JAVA_VERSION: '17'
+
+jobs:
+  # --------------------------------------------------------------------------
+  vorbereiten:
+    name: Konfiguration pruefen
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.m.outputs.matrix }}
+      release_tag: ${{ steps.t.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: regions.json validieren
+        run: python3 tools/pipeline/bin/regions.py check
+
+      - id: m
+        name: Matrix aufbauen
+        run: |
+          M=$(python3 tools/pipeline/bin/regions.py matrix \
+                --only "${{ github.event.inputs.region || 'all' }}")
+          echo "matrix=$M" >> "$GITHUB_OUTPUT"
+          echo "$M" | python3 -m json.tool >> "$GITHUB_STEP_SUMMARY"
+
+      - id: t
+        name: Release-Tag festlegen
+        run: |
+          T="${{ github.event.inputs.release_tag }}"
+          [ -n "$T" ] || T="$(python3 tools/pipeline/bin/regions.py release tagPrefix)$(date -u +%Y%m%d)"
+          echo "tag=$T" >> "$GITHUB_OUTPUT"
+          echo "Release-Tag: $T" >> "$GITHUB_STEP_SUMMARY"
+
+  # --------------------------------------------------------------------------
+  brouter:
+    name: BRouter-Mapcreator bauen
+    runs-on: ubuntu-latest
+    outputs:
+      rev: ${{ steps.b.outputs.rev }}
+    steps:
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      # Das im Repo einvendorte brouter/-Modul enthaelt KEINEN btools.mapcreator
+      # (nachgewiesen in 1.Doku/RD5_Pipeline.md, 2.5). Die Kachelerzeugung
+      # braucht deshalb den Upstream.
+      - name: Upstream-BRouter klonen
+        run: git clone --depth 1 --branch "$BROUTER_REF" https://github.com/abrensch/brouter.git upstream
+
+      - id: b
+        name: Revision festhalten
+        working-directory: upstream
+        run: echo "rev=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: brouter-gradle-${{ steps.b.outputs.rev }}
+          restore-keys: brouter-gradle-
+
+      - name: Fat-Jar bauen
+        working-directory: upstream
+        run: ./gradlew :brouter-server:fatJar --console=plain -q
+
+      - name: Jar und Filterprofile einsammeln
+        run: |
+          mkdir -p out/profiles2
+          cp upstream/brouter-server/build/libs/brouter-*-all.jar out/brouter-all.jar
+          cp upstream/misc/profiles2/all.brf \
+             upstream/misc/profiles2/trekking.brf \
+             upstream/misc/profiles2/softaccess.brf out/profiles2/
+          ls -l out out/profiles2
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: brouter-mapcreator
+          path: out/
+          retention-days: 5
+
+  # --------------------------------------------------------------------------
+  region:
+    name: ${{ matrix.name }}
+    needs: [vorbereiten, brouter]
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      # WICHTIG: Eine gescheiterte Region darf die anderen nicht mitreissen.
+      fail-fast: false
+      max-parallel: 4
+      matrix: ${{ fromJSON(needs.vorbereiten.outputs.matrix) }}
+    env:
+      REGION_ID: ${{ matrix.id }}
+      CURVE_LEVELS: ${{ matrix.curveLevels }}
+      DEM_ARCSEC: ${{ matrix.demArcsec }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Zwei JDKs mit Absicht: BRouters Mapcreator laeuft auf 17, Planetiler
+      # ist gegen 21 uebersetzt (gemessen: UnsupportedClassVersionError,
+      # Klassendateiversion 65 gegen 61). setup-java legt beide ab und setzt
+      # JAVA_HOME_17_X64 / JAVA_HOME_21_X64.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: |
+            21
+            17
+
+      - name: Java 17 als Standard setzen
+        run: |
+          echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+          echo "$JAVA_HOME_17_X64/bin" >> "$GITHUB_PATH"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: brouter-mapcreator
+          path: brouter-mc
+
+      - name: Werkzeuge
+        run: |
+          sudo apt-get update -qq
+          # gdal-bin: Copernicus GLO-30 liegt als COG mit breitenabhaengiger
+          # Spaltenzahl vor und muss auf das starre 3601x3601-Gitter des
+          # .hgt-Formats umgerechnet werden.
+          sudo apt-get install -y -qq gdal-bin
+          python3 -m pip install --quiet --disable-pip-version-check osmium
+          echo "gdal $(gdal_translate --version)"
+
+      - name: Plattenplatz am Anfang
+        id: disk0
+        run: |
+          df -h / | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "free_kb=$(df -k --output=avail / | tail -1)" >> "$GITHUB_OUTPUT"
+
+      # Vorinstalliertes, das wir sicher nicht brauchen. Bringt auf
+      # ubuntu-latest erfahrungsgemaess zweistellige GB -- der Grund, warum
+      # auch grosse Regionen auf den freien Runner passen.
+      - name: Platz schaffen
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" || true
+          df -h /
+
+      - name: Hoehenkacheln bestimmen
+        id: dem
+        run: |
+          TILES=$(python3 tools/pipeline/bin/regions.py dem-tiles "$REGION_ID" | tr '\n' ' ')
+          echo "tiles=$TILES" >> "$GITHUB_OUTPUT"
+          echo "benoetigt: $TILES"
+
+      # Hoehendaten sind teuer zu erzeugen (rund 30 MB GeoTIFF je Grad-Kachel)
+      # und aendern sich praktisch nie -> aggressiv cachen.
+      - uses: actions/cache@v4
+        id: demcache
+        with:
+          path: dem/srtm1_bef
+          key: dem-glo30-${{ env.DEM_ARCSEC }}-${{ steps.dem.outputs.tiles }}
+
+      - name: Hoehenkacheln bauen
+        if: steps.demcache.outputs.cache-hit != 'true'
+        env:
+          OPENCURV_BROUTER_JAR: ${{ github.workspace }}/brouter-mc/brouter-all.jar
+        run: |
+          BB=$(python3 -c "
+          import sys; sys.path.insert(0,'tools/pipeline/bin'); import regions as R
+          print(' '.join(str(x) for x in R.by_id(R.load(),'$REGION_ID')['bbox']))")
+          python3 tools/pipeline/bin/fetch_dem.py --bbox $BB \
+            --hgt-dir dem/hgt --bef-dir dem/srtm1_bef --arcsec "$DEM_ARCSEC"
+          # PLATTENPLATZ: die .hgt-Zwischenstufe ist ab hier tot (25 MB je
+          # Grad-Kachel), die .bef sind das Ergebnis.
+          rm -rf dem/hgt
+          du -sh dem/srtm1_bef
+
+      - name: Rohdaten holen
+        run: |
+          SRC=$(python3 tools/pipeline/bin/regions.py get "$REGION_ID" source)
+          mkdir -p raw
+          curl -sSL -f --retry 3 -o raw/src.osm.pbf \
+            "https://download.geofabrik.de/${SRC}-latest.osm.pbf"
+          curl -sSL -f --retry 3 -o raw/src.osm.pbf.md5 \
+            "https://download.geofabrik.de/${SRC}-latest.osm.pbf.md5"
+          # Geofabrik liefert die Pruefsumme mit dem Originalnamen davor.
+          EXPECT=$(awk '{print $1}' raw/src.osm.pbf.md5)
+          ACTUAL=$(md5sum raw/src.osm.pbf | awk '{print $1}')
+          if [ "$EXPECT" != "$ACTUAL" ]; then
+            echo "FEHLER: md5 der heruntergeladenen PBF stimmt nicht." >&2
+            echo "  erwartet: $EXPECT" >&2
+            echo "  bekommen: $ACTUAL" >&2
+            exit 1
+          fi
+          rm -f raw/src.osm.pbf.md5
+          ls -lh raw/
+
+      - name: Kurven-Score anbringen
+        run: |
+          tools/pipeline/bin/run_scorer.sh raw/src.osm.pbf raw/scored.osm.pbf "$CURVE_LEVELS"
+          # PLATTENPLATZ: Ab hier zaehlt nur noch die bewertete Datei.
+          # (Planetiler weiter unten liest ebenfalls die bewertete Datei --
+          # die Geometrie ist identisch, nur ein Tag mehr.)
+          rm -f raw/src.osm.pbf
+          df -h /
+
+      - name: Routing-Kacheln bauen
+        env:
+          OPENCURV_BROUTER_JAR: ${{ github.workspace }}/brouter-mc/brouter-all.jar
+          OPENCURV_UPSTREAM_PROFILES: ${{ github.workspace }}/brouter-mc/profiles2
+          OPENCURV_XMX: 5500M
+          OPENCURV_KEEP_INPUT: '1'
+        run: |
+          export OPENCURV_STEP_SUMMARY="$GITHUB_STEP_SUMMARY"
+          tools/pipeline/bin/build_rd5.sh \
+            raw/scored.osm.pbf dem/srtm1_bef "out/$REGION_ID" work/rd5
+          df -h /
+
+      - name: Routing-Kacheln abnehmen
+        env:
+          OPENCURV_BROUTER_JAR: ${{ github.workspace }}/brouter-mc/brouter-all.jar
+          OPENCURV_PIPELINE_BIN: ${{ github.workspace }}/tools/pipeline/bin
+        run: |
+          tools/pipeline/bin/verify_region.sh "out/$REGION_ID" "$REGION_ID" \
+            --expect-elevation | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # Planetilers Zusatzdaten sind regionsunabhaengig und gross (gemessen:
+      # water-polygons-split-3857.zip allein rund 950 MB). Ohne Cache zahlt
+      # jede der 16 Regionen diesen Download erneut.
+      - uses: actions/cache@v4
+        if: contains(matrix.artifacts, 'pmtiles')
+        with:
+          path: planetiler-sources
+          key: planetiler-sources-v1
+
+      - name: Vektorkacheln bauen
+        if: contains(matrix.artifacts, 'pmtiles')
+        env:
+          OPENCURV_XMX_TILES: 5g
+          PLANETILER_DOWNLOAD_DIR: ${{ github.workspace }}/planetiler-sources
+        run: |
+          # Planetiler ist gegen Java 21 uebersetzt (gemessen:
+          # UnsupportedClassVersionError 65 gegen 61 unter Java 17).
+          export JAVA_HOME="$JAVA_HOME_21_X64"
+          export PATH="$JAVA_HOME/bin:$PATH"
+          # Drittes Argument ausdruecklich: sonst leitet das Skript sein
+          # Arbeitsverzeichnis aus dem Ausgabepfad ab und das Aufraeumen
+          # unten trifft ins Leere.
+          tools/pipeline/bin/build_pmtiles.sh raw/scored.osm.pbf \
+            "out/$REGION_ID/$REGION_ID.pmtiles" work/planetiler || {
+              echo "::warning title=Vektorkacheln::Planetiler ist fuer $REGION_ID gescheitert. Die Routing-Kacheln bleiben gueltig und werden veroeffentlicht."
+              rm -f "out/$REGION_ID/$REGION_ID.pmtiles"
+            }
+          rm -rf work/planetiler
+          df -h /
+
+      - name: Rohdaten endgueltig freigeben
+        run: |
+          rm -rf raw work
+          df -h /
+
+      - name: Plattenplatz-Bilanz
+        run: |
+          {
+            echo "### Plattenplatz ${{ matrix.name }}"
+            echo ""
+            echo '```'
+            df -h /
+            echo '```'
+            echo ""
+            echo "Ergebnis:"
+            echo '```'
+            ls -l "out/$REGION_ID"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: region-${{ matrix.id }}
+          path: out/${{ matrix.id }}/
+          retention-days: 3
+          if-no-files-found: error
+
+  # --------------------------------------------------------------------------
+  arena:
+    name: Testarena als Demo-Paket
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: arena-gradle-${{ hashFiles('tools/testarena/**/*.gradle.kts') }}
+          restore-keys: arena-gradle-
+
+      # Der Auftraggeber will die synthetische Testkarte ausdruecklich als
+      # Artefakt, damit sich der Kurven-Algorithmus jederzeit nachmessen laesst.
+      - name: Arena erzeugen
+        run: ./gradlew -p tools/testarena generateArena --console=plain
+
+      - name: Demo-Paket schnueren
+        run: |
+          mkdir -p out
+          # Genau die Dateien, die den Messstand ausmachen: die synthetische
+          # Karte in beiden Formaten, die analytisch bekannte Wahrheit dazu
+          # und die Anleitung. Kein Build-Muell.
+          ( cd tools/testarena && zip -qr "$GITHUB_WORKSPACE/out/testarena-demo.zip" \
+              data arena_truth.json README.md )
+          ls -lh out/
+          unzip -l out/testarena-demo.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: testarena
+          path: out/
+          retention-days: 3
+
+  # --------------------------------------------------------------------------
+  release:
+    name: Katalog bauen und veroeffentlichen
+    needs: [vorbereiten, brouter, region, arena]
+    # Auch wenn einzelne Regionen gescheitert sind: veroeffentliche, was da ist.
+    # 'vorbereiten' muss aber durch sein -- von dort kommt der Release-Tag.
+    if: ${{ !cancelled() && needs.vorbereiten.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dl
+
+      - name: Was ist angekommen?
+        run: |
+          find dl -type f -printf '%10s  %p\n' | sort -k2
+          if [ -z "$(find dl -name '*.rd5' -print -quit)" ]; then
+            echo "FEHLER: keine einzige Region hat .rd5-Kacheln geliefert." >&2
+            echo "        Es gibt nichts zu veroeffentlichen. Sehen Sie in den" >&2
+            echo "        Regionsjobs nach, welche Stufe abgebrochen ist." >&2
+            exit 1
+          fi
+
+      - name: Katalog erzeugen
+        env:
+          OPENCURV_BROUTER_REV: ${{ needs.brouter.outputs.rev }}
+          OPENCURV_CURVE_LEVELS: '16'
+          OPENCURV_SCORER_ID: ${{ github.sha }}
+        run: |
+          mkdir -p assets shared
+          ARGS=""
+          for d in dl/region-*; do
+            [ -d "$d" ] || continue
+            RID="${d#dl/region-}"
+            # lookups.dat ist fuer alle Regionen identisch -> einmal gemeinsam.
+            if [ -f "$d/lookups.dat" ]; then
+              mv -f "$d/lookups.dat" shared/lookups.dat
+            fi
+            mkdir -p "assets/$RID"
+            # Dateinamen mit Regionspraefix, damit gleichnamige 5x5-Kacheln
+            # verschiedener Bundeslaender sich im Release nicht ueberschreiben.
+            for f in "$d"/*; do
+              [ -f "$f" ] || continue
+              b=$(basename "$f")
+              case "$b" in
+                "$RID"*) mv "$f" "assets/$RID/$b" ;;
+                *)       mv "$f" "assets/$RID/${RID}_$b" ;;
+              esac
+            done
+            ARGS="$ARGS --region $RID:assets/$RID"
+          done
+          if [ -d dl/testarena ]; then
+            cp dl/testarena/* shared/ || true
+          fi
+          python3 tools/pipeline/bin/make_catalog.py \
+            --out catalog.json \
+            --release-tag "${{ needs.vorbereiten.outputs.release_tag }}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --max-bytes "$(python3 tools/pipeline/bin/regions.py release maxAssetBytes)" \
+            --split \
+            --shared shared $ARGS
+          python3 -m json.tool catalog.json | head -60
+
+      - name: Pruefsummen und Bilanz
+        run: |
+          find assets shared -type f -exec sha256sum {} \; | sed 's| .*/| |' > SHA256SUMS
+          echo "### Release ${{ needs.vorbereiten.outputs.release_tag }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          python3 tools/pipeline/bin/catalog_summary.py catalog.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Veroeffentlichen
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ needs.vorbereiten.outputs.release_tag }}"
+          gh release view "$TAG" >/dev/null 2>&1 \
+            || gh release create "$TAG" --title "OpenCurv Daten $TAG" \
+                 --notes "Automatisch erzeugt von .github/workflows/opencurv-data.yml. Einstiegspunkt fuer die App ist catalog.json."
+          # --clobber, damit ein Wiederholungslauf einzelne Regionen ersetzen
+          # kann, ohne das ganze Release neu zu bauen.
+          gh release upload "$TAG" --clobber \
+            catalog.json SHA256SUMS \
+            $(find assets shared -type f)
+
+      - name: Trockenlauf-Hinweis
+        if: ${{ github.event.inputs.dry_run == 'true' }}
+        run: |
+          echo "::notice title=Trockenlauf::dry_run war gesetzt. Es wurde NICHTS veroeffentlicht. Der fertige Katalog und alle Dateien liegen als Workflow-Artefakt bereit."
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-bundle
+          path: |
+            catalog.json
+            SHA256SUMS
+          retention-days: 14

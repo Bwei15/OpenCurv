@@ -1,0 +1,129 @@
+Berlin	CITY	52.5200	13.4050	Hauptstadt
+Hamburg	CITY	53.5511	9.9937	Hansestadt
+München	CITY	48.1351	11.5820	Landeshauptstadt Bayern
+Köln	CITY	50.9375	6.9603	Nordrhein-Westfalen
+Frankfurt am Main	CITY	50.1109	8.6821	Hessen
+Stuttgart	CITY	48.7758	9.1829	Landeshauptstadt Baden-Württemberg
+Düsseldorf	CITY	51.2277	6.7735	Landeshauptstadt Nordrhein-Westfalen
+Leipzig	CITY	51.3397	12.3731	Sachsen
+Dortmund	CITY	51.5136	7.4653	Ruhrgebiet
+Essen	CITY	51.4556	7.0116	Ruhrgebiet
+Bremen	CITY	53.0793	8.8017	Freie Hansestadt
+Dresden	CITY	51.0504	13.7373	Landeshauptstadt Sachsen
+Hannover	CITY	52.3759	9.7320	Landeshauptstadt Niedersachsen
+Nürnberg	CITY	49.4521	11.0767	Franken
+Duisburg	CITY	51.4344	6.7623	Ruhrgebiet
+Bochum	CITY	51.4818	7.2162	Ruhrgebiet
+Wuppertal	CITY	51.2562	7.1508	Bergisches Land
+Bielefeld	CITY	52.0302	8.5325	Ostwestfalen
+Bonn	CITY	50.7374	7.0982	Nordrhein-Westfalen
+Münster	CITY	51.9607	7.6261	Westfalen
+Karlsruhe	CITY	49.0069	8.4037	Baden
+Mannheim	CITY	49.4875	8.4660	Baden-Württemberg
+Augsburg	CITY	48.3705	10.8978	Schwaben
+Wiesbaden	CITY	50.0782	8.2398	Landeshauptstadt Hessen
+Gelsenkirchen	CITY	51.5177	7.0858	Ruhrgebiet
+Mönchengladbach	CITY	51.1805	6.4428	Niederrhein
+Braunschweig	CITY	52.2689	10.5268	Niedersachsen
+Chemnitz	CITY	50.8278	12.9214	Sachsen
+Kiel	CITY	54.3233	10.1228	Landeshauptstadt Schleswig-Holstein
+Aachen	CITY	50.7753	6.0839	Eifel-Nähe
+Halle (Saale)	CITY	51.4828	11.9700	Sachsen-Anhalt
+Magdeburg	CITY	52.1205	11.6276	Landeshauptstadt Sachsen-Anhalt
+Freiburg im Breisgau	CITY	47.9990	7.8421	Schwarzwald
+Krefeld	CITY	51.3331	6.5623	Niederrhein
+Mainz	CITY	49.9929	8.2473	Landeshauptstadt Rheinland-Pfalz
+Lübeck	CITY	53.8655	10.6866	Ostsee
+Erfurt	CITY	50.9848	11.0299	Landeshauptstadt Thüringen
+Oberhausen	CITY	51.4700	6.8514	Ruhrgebiet
+Rostock	CITY	54.0924	12.0991	Ostsee
+Kassel	CITY	51.3127	9.4797	Nordhessen
+Hagen	CITY	51.3671	7.4633	Sauerland-Tor
+Potsdam	CITY	52.3906	13.0645	Landeshauptstadt Brandenburg
+Saarbrücken	CITY	49.2402	6.9969	Landeshauptstadt Saarland
+Hamm	CITY	51.6811	7.8183	Westfalen
+Ludwigshafen am Rhein	CITY	49.4774	8.4452	Pfalz
+Mülheim an der Ruhr	CITY	51.4272	6.8829	Ruhrgebiet
+Oldenburg	CITY	53.1435	8.2146	Niedersachsen
+Osnabrück	CITY	52.2799	8.0472	Niedersachsen
+Leverkusen	CITY	51.0459	6.9865	Rheinland
+Heidelberg	CITY	49.3988	8.6724	Odenwald-Tor
+Darmstadt	CITY	49.8728	8.6512	Hessen
+Solingen	CITY	51.1712	7.0848	Bergisches Land
+Herne	CITY	51.5380	7.2255	Ruhrgebiet
+Regensburg	CITY	49.0134	12.1016	Donau
+Neuss	CITY	51.2002	6.6937	Rheinland
+Paderborn	CITY	51.7189	8.7575	Ostwestfalen
+Ingolstadt	CITY	48.7665	11.4258	Bayern
+Offenbach am Main	CITY	50.1006	8.7668	Hessen
+Fürth	CITY	49.4771	10.9887	Franken
+Ulm	CITY	48.4011	9.9876	Donau
+Heilbronn	CITY	49.1427	9.2109	Baden-Württemberg
+Pforzheim	CITY	48.8936	8.6946	Nordschwarzwald
+Würzburg	CITY	49.7916	9.9534	Unterfranken
+Wolfsburg	CITY	52.4227	10.7865	Niedersachsen
+Göttingen	CITY	51.5413	9.9158	Südniedersachsen
+Recklinghausen	CITY	51.6141	7.1979	Ruhrgebiet
+Bottrop	CITY	51.5216	6.9253	Ruhrgebiet
+Koblenz	CITY	50.3569	7.5890	Deutsches Eck / Mosel
+Reutlingen	CITY	48.4914	9.2043	Schwäbische Alb
+Bremerhaven	CITY	53.5417	8.5768	Nordsee
+Bergisch Gladbach	CITY	50.9929	7.1287	Bergisches Land
+Jena	CITY	50.9271	11.5892	Thüringen
+Remscheid	CITY	51.1802	7.1895	Bergisches Land
+Erlangen	CITY	49.5964	11.0044	Franken
+Moers	CITY	51.4508	6.6264	Niederrhein
+Siegen	CITY	50.8748	8.0243	Siegerland
+Hildesheim	CITY	52.1548	9.9579	Niedersachsen
+Salzgitter	CITY	52.1513	10.3298	Niedersachsen
+Cottbus	CITY	51.7563	14.3329	Spreewald
+Kaiserslautern	CITY	49.4401	7.7491	Pfälzerwald
+Gütersloh	CITY	51.9063	8.3784	Westfalen
+Schwerin	CITY	53.6355	11.4012	Landeshauptstadt Mecklenburg-Vorpommern
+Witten	CITY	51.4475	7.3486	Ruhrgebiet
+Gera	CITY	50.8778	12.0833	Thüringen
+Iserlohn	CITY	51.3768	7.6958	Sauerland
+Ludwigsburg	CITY	48.8975	9.1916	Baden-Württemberg
+Hanau	CITY	50.1328	8.9287	Hessen
+Esslingen am Neckar	CITY	48.7428	9.3071	Baden-Württemberg
+Zwickau	CITY	50.7189	12.4922	Erzgebirge-Vorland
+Düren	CITY	50.8022	6.4841	Rureifel
+Ratingen	CITY	51.2964	6.8497	Rheinland
+Tübingen	CITY	48.5216	9.0576	Baden-Württemberg
+Flensburg	CITY	54.7836	9.4321	Schleswig
+Gießen	CITY	50.5873	8.6755	Mittelhessen
+Villingen-Schwenningen	CITY	48.0600	8.4586	Schwarzwald-Baar
+Konstanz	CITY	47.6779	9.1732	Bodensee
+Worms	CITY	49.6319	8.3619	Rheinhessen
+Minden	CITY	52.2889	8.9167	Weserbergland
+Norderstedt	CITY	53.7003	10.0086	Schleswig-Holstein
+Bamberg	CITY	49.8988	10.9028	Fränkische Schweiz
+Aschaffenburg	CITY	49.9744	9.1506	Spessart-Tor
+Kempten (Allgäu)	TOWN	47.7286	10.3158	Allgäu
+Garmisch-Partenkirchen	TOWN	47.4917	11.0955	Bayerische Alpen
+Berchtesgaden	TOWN	47.6297	13.0031	Bayerische Alpen
+Füssen	TOWN	47.5696	10.7004	Allgäu
+Lindau (Bodensee)	TOWN	47.5458	9.6840	Bodensee
+Passau	CITY	48.5665	13.4319	Drei-Flüsse-Stadt
+Goslar	TOWN	51.9060	10.4289	Harz
+Wernigerode	TOWN	51.8358	10.7853	Harz
+Winterberg	TOWN	51.1953	8.5336	Hochsauerland
+Cochem	TOWN	50.1469	7.1667	Moseltal
+Bernkastel-Kues	TOWN	49.9161	7.0750	Moseltal
+Rothenburg ob der Tauber	TOWN	49.3775	10.1802	Romantische Straße
+Rüdesheim am Rhein	TOWN	49.9789	7.9228	Mittelrheintal
+Bad Tölz	TOWN	47.7600	11.5583	Oberbayern
+Tegernsee	TOWN	47.7083	11.7578	Bayerische Alpen
+Baden-Baden	CITY	48.7606	8.2398	Schwarzwald
+Freudenstadt	TOWN	48.4633	8.4117	Schwarzwaldhochstraße
+Titisee-Neustadt	TOWN	47.9042	8.2142	Südschwarzwald
+Bad Pyrmont	TOWN	51.9861	9.2536	Weserbergland
+Schotten (Vogelsberg)	TOWN	50.5019	9.1231	Vogelsberg
+Feldberg (Schwarzwald)	POI	47.8744	8.0369	Höchster Berg Schwarzwald
+Nürburgring	POI	50.3342	6.9427	Eifel / Nordschleife
+Kyffhäuser	POI	51.4131	11.1092	Kurvenstrecke Kyffhäuser
+Wasserkuppe	POI	50.4978	9.9378	Rhön
+Brocken	POI	51.7992	10.6156	Harz
+Großer Feldberg (Taunus)	POI	50.2319	8.4583	Taunus
+Torfhaus (Harz)	POI	51.8050	10.5372	Motorradtreff Harz
+Johanniskreuz (Pfälzerwald)	POI	49.3375	7.8247	Motorradtreff Pfälzerwald

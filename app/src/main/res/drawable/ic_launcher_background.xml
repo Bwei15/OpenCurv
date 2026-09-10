@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  OpenCurv launcher background. Kurvenblau, darkened towards the bottom right
+  so the serpentine's wide near end sits on the deeper tone and its narrow far
+  end on the brighter one - the same depth cue the mark itself uses. It is a
+  full-bleed 108 x 108 fill, so every launcher mask (circle, squircle,
+  teardrop) crops it without exposing an edge.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M0,0 L108,0 L108,108 L0,108 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0"
+                android:startY="0"
+                android:endX="108"
+                android:endY="108">
+                <item android:offset="0" android:color="#FF2E4CEA" />
+                <item android:offset="0.55" android:color="#FF2440D9" />
+                <item android:offset="1" android:color="#FF16257F" />
+            </gradient>
+        </aapt:attr>
+    </path>
+</vector>

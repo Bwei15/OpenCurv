@@ -24,13 +24,20 @@ class OfflineDataRepository(private val context: Context) {
     val mapDir: File get() = directoryFor(OfflineFileKind.MAP)
     val segmentDir: File get() = directoryFor(OfflineFileKind.SEGMENT)
 
+    /** Where PMTiles archives live - what MapLibre actually renders from. */
+    val mapTilesDir: File get() = directoryFor(OfflineFileKind.MAPTILES)
+
     /** Where derived data lives - the place-search index, and nothing precious. */
     val indexDir: File get() = File(context.cacheDir, "search").apply { mkdirs() }
 
     /** The bookkeeping that turns a pile of files back into "Niedersachsen". */
     val regionIndexFile: File get() = File(context.filesDir, "regions.index")
 
-    fun mapFiles(): List<File> = list(OfflineFileKind.MAP).map { it.file }
+    fun mapFiles(): List<File> =
+        (mapDir.listFiles { f -> f.isFile && (f.extension.equals("map", ignoreCase = true) || f.extension.equals("pmtiles", ignoreCase = true)) }.orEmpty().toList() +
+         mapTilesDir.listFiles { f -> f.isFile && f.extension.equals("pmtiles", ignoreCase = true) }.orEmpty().toList())
+            .distinctBy { it.absolutePath }
+            .sortedBy { it.name }
 
     fun list(kind: OfflineFileKind): List<OfflineFile> =
         directoryFor(kind)
@@ -39,7 +46,13 @@ class OfflineDataRepository(private val context: Context) {
             .sortedBy { it.name }
             .map { OfflineFile(it, it.length(), kind) }
 
-    fun hasAny(kind: OfflineFileKind): Boolean = list(kind).isNotEmpty()
+    fun hasAny(kind: OfflineFileKind): Boolean = when (kind) {
+        OfflineFileKind.MAP, OfflineFileKind.MAPTILES ->
+            list(OfflineFileKind.MAP).isNotEmpty() ||
+            list(OfflineFileKind.MAPTILES).isNotEmpty() ||
+            mapDir.listFiles { f -> f.isFile && f.extension.equals("pmtiles", ignoreCase = true) }?.isNotEmpty() == true
+        else -> list(kind).isNotEmpty()
+    }
 
     /** Free space on the volume holding the offline data, in bytes. */
     fun freeSpaceBytes(): Long = context.filesDir.usableSpace

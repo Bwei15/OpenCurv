@@ -93,6 +93,7 @@
     <string name="kind_map">Map</string>
     <string name="kind_segment">Routing tile</string>
     <string name="kind_profile">Profile</string>
+    <string name="kind_maptiles">Map tiles</string>
 
     <!-- downloads -->
     <string name="download_title">Download maps</string>

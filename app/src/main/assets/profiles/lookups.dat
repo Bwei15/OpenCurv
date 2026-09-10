@@ -1,5 +1,5 @@
 ---lookupversion:11
----minorversion:2
+---minorversion:3
 
 ---context:way
 
@@ -823,6 +823,10 @@ construction;0000442502 steps
 construction;0000360177 road highway
 construction;0000000049 bridleway
 
+
+
+# OpenCurv: vorberechneter Kurven-/Fahrspass-Score, numerisch
+opencurv:curve;0000000001 *
 
 ---context:node
 

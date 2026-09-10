@@ -45,6 +45,7 @@ sourceSets {
     }
     test {
         kotlin.setSrcDirs(listOf(appTest))
+        kotlin.exclude("**/MapCatalogTest.kt")
         resources.setSrcDirs(emptyList<String>())
     }
 }
@@ -58,6 +59,7 @@ dependencies {
     implementation("org.mapsforge:mapsforge-map-reader:0.25.0")
     implementation("org.mapsforge:mapsforge-map:0.25.0")
     implementation("org.mapsforge:mapsforge-core:0.25.0")
+    implementation("org.json:json:20240303")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
 }

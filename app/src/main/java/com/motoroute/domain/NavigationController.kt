@@ -9,6 +9,7 @@ import com.motoroute.data.map.OfflineDataRepository
 import com.motoroute.data.model.GeoPoint
 import com.motoroute.data.model.Route
 import com.motoroute.data.settings.SettingsRepository
+import com.motoroute.data.traffic.TrafficRepository
 import com.motoroute.voice.VoiceGuidance
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -46,6 +47,7 @@ class NavigationController(
     private val offlineData: OfflineDataRepository,
     private val settings: SettingsRepository,
     private val voice: VoiceGuidance,
+    private val trafficRepository: TrafficRepository? = null,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob()),
 ) {
 
@@ -243,6 +245,7 @@ class NavigationController(
             segmentDir = offlineData.segmentDir,
             profileParams = mapOf("curviness" to current.curviness.toString()),
             memoryClassMb = MEMORY_CLASS_MB,
+            noGos = trafficRepository?.activeNoGoAreas() ?: emptyList(),
         )
         return if (current.searchAlternatives) {
             routingEngine.routeCurviest(request)

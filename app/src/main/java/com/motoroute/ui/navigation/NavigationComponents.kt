@@ -244,7 +244,7 @@ fun MetricReadout(
         Text(
             text = value,
             color = valueColor,
-            fontSize = 30.sp,
+            fontSize = 34.sp,
             fontWeight = FontWeight.Black,
             maxLines = 1,
         )

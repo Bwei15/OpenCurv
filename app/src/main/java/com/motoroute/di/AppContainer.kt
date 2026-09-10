@@ -46,11 +46,24 @@ class AppContainer(context: Context) {
         segmentDir = offlineData.segmentDir,
     )
 
-    /** Offline destination search, built from the maps already on the phone. */
+    /** Offline destination search, built from the maps already on the phone or bundled places. */
     val placeSearch = PlaceSearchRepository(
         mapFiles = offlineData::mapFiles,
         cacheDir = offlineData.indexDir,
         scope = scope,
+        basePlacesProvider = {
+            runCatching {
+                appContext.assets.open("catalog/places_de.tsv").use { stream ->
+                    PlaceSearchRepository.readPlaces(stream)
+                }
+            }.getOrNull().orEmpty()
+        },
+        placesFiles = {
+            (offlineData.mapDir.listFiles { f -> f.isFile && f.extension.equals("places", ignoreCase = true) }.orEmpty().toList() +
+             offlineData.mapTilesDir.listFiles { f -> f.isFile && f.extension.equals("places", ignoreCase = true) }.orEmpty().toList() +
+             offlineData.indexDir.listFiles { f -> f.isFile && f.extension.equals("places", ignoreCase = true) }.orEmpty().toList()
+            ).distinctBy { it.absolutePath }
+        },
     )
 
     val downloads = DownloadRepository(
@@ -58,6 +71,11 @@ class AppContainer(context: Context) {
         downloader = FileDownloader(),
         directoryFor = offlineData::directoryFor,
         freeSpaceBytes = offlineData::freeSpaceBytes,
+        regionStore = regions,
+    )
+
+    val traffic = com.motoroute.data.traffic.TrafficRepository(
+        cacheFile = java.io.File(appContext.filesDir, "traffic_cache.json"),
     )
 
     val navigation = NavigationController(
@@ -67,6 +85,7 @@ class AppContainer(context: Context) {
         offlineData = offlineData,
         settings = settings,
         voice = voice,
+        trafficRepository = traffic,
         scope = scope,
     )
 }

@@ -8,6 +8,7 @@ activityCompose = "1.9.3"
 composeBom = "2024.10.01"
 documentfile = "1.0.1"
 mapsforge = "0.25.0"
+maplibre = "11.11.0"
 junit = "4.13.2"
 desugar = "2.1.2"
 
@@ -31,6 +32,7 @@ kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-t
 mapsforge-map-android = { module = "org.mapsforge:mapsforge-map-android", version.ref = "mapsforge" }
 mapsforge-map-reader = { module = "org.mapsforge:mapsforge-map-reader", version.ref = "mapsforge" }
 mapsforge-themes = { module = "org.mapsforge:mapsforge-themes", version.ref = "mapsforge" }
+maplibre-android-sdk = { module = "org.maplibre.gl:android-sdk", version.ref = "maplibre" }
 junit = { module = "junit:junit", version.ref = "junit" }
 desugar-jdk-libs = { module = "com.android.tools:desugar_jdk_libs", version.ref = "desugar" }
 

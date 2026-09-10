@@ -332,12 +332,7 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     /** Queues a region as one package: its map and every routing tile it needs. */
     fun downloadRegion(region: MapRegion) {
         if (downloadBlockedReason() != null) return
-        container.regions.install(RegionStore.of(region))
-        val targets = buildList {
-            add(DownloadTarget.map(region))
-            region.segmentTiles.forEach { add(DownloadTarget.segment(it, region)) }
-        }
-        container.downloads.enqueue(targets)
+        container.downloads.downloadRegion(region, container.regions)
         _dataVersion.value++
     }
 

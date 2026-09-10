@@ -17,6 +17,10 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
 
+import btools.router.OsmNogoPolygon
+import com.motoroute.data.traffic.NoGoArea
+import com.motoroute.data.traffic.NoGoPolygon
+
 /** Everything a single routing request needs. */
 data class RouteRequest(
     val waypoints: List<GeoPoint>,
@@ -33,6 +37,9 @@ data class RouteRequest(
      * enough room to avoid thrashing.
      */
     val memoryClassMb: Int = 48,
+    /** Avoidance areas (e.g. road closures, construction from traffic feeds). */
+    val noGos: List<NoGoArea> = emptyList(),
+    val noGoPolygons: List<NoGoPolygon> = emptyList(),
 )
 
 class RoutingException(message: String) : Exception(message)
@@ -71,6 +78,30 @@ class BRouterEngine(
                 keyValues = HashMap(request.profileParams)
             }
             setAlternativeIdx(request.alternativeIndex)
+
+            if (request.noGos.isNotEmpty() || request.noGoPolygons.isNotEmpty()) {
+                val nogoList = ArrayList<OsmNodeNamed>(request.noGos.size + request.noGoPolygons.size)
+                for (nogo in request.noGos) {
+                    nogoList.add(OsmNodeNamed().apply {
+                        ilon = nogo.point.iLon()
+                        ilat = nogo.point.iLat()
+                        radius = nogo.radiusMeters.toDouble()
+                        name = "nogo" + nogo.radiusMeters
+                        isNogo = true
+                    })
+                }
+                for (poly in request.noGoPolygons) {
+                    val osmPoly = OsmNogoPolygon(poly.isClosed).apply {
+                        for (pt in poly.points) {
+                            addVertex(pt.iLon(), pt.iLat())
+                        }
+                        calcBoundingCircle()
+                    }
+                    nogoList.add(osmPoly)
+                }
+                nogopoints = nogoList
+                RoutingContext.prepareNogoPoints(nogopoints)
+            }
         }
 
         val nodes = request.waypoints.map { point ->

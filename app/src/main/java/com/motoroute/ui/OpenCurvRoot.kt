@@ -7,13 +7,18 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHost
@@ -130,9 +135,14 @@ fun OpenCurvRoot(
         viewModel.centerOnDataIfIdle()
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        when (screen) {
-            Screen.MAP -> MapRoot(
+    val colors = LocalRideColors.current
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = if (screen == Screen.MAP) Color.Transparent else colors.canvas,
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            when (screen) {
+                Screen.MAP -> MapRoot(
                 viewModel = viewModel,
                 settings = settings,
                 navigationState = navigationState,
@@ -208,6 +218,7 @@ fun OpenCurvRoot(
         )
     }
 }
+}
 
 @Composable
 private fun MapRoot(
@@ -254,29 +265,29 @@ private fun MapRoot(
         )
     }
 
-    if (navigating) {
-        ActiveNavigationScreen(
-            state = navigationState,
-            onStop = if (demoRunning) viewModel::stopDemo else viewModel::stopNavigation,
-            onToggleVoice = viewModel::toggleVoice,
-            onRecenter = viewModel::recenter,
-            onForceReroute = viewModel::forceReroute,
-            voiceEnabled = settings.voiceEnabled,
-            following = follow,
-            isDemo = demoRunning,
-            map = map,
-        )
-        return
-    }
+    val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val sheetPeek = if (selection.isComplete) 132.dp else 60.dp
 
     Box(modifier = Modifier.fillMaxSize()) {
         map()
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.safeDrawing),
-        ) {
+        if (navigating) {
+            ActiveNavigationScreen(
+                state = navigationState,
+                onStop = if (demoRunning) viewModel::stopDemo else viewModel::stopNavigation,
+                onToggleVoice = viewModel::toggleVoice,
+                onRecenter = viewModel::recenter,
+                onForceReroute = viewModel::forceReroute,
+                voiceEnabled = settings.voiceEnabled,
+                following = follow,
+                isDemo = demoRunning,
+            )
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)),
+            ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -345,7 +356,7 @@ private fun MapRoot(
             )
 
             // Room for the sheet's peek, so the buttons never sit under it.
-            Spacer(Modifier.height(150.dp))
+            Spacer(Modifier.height(sheetPeek + navBarBottom + 16.dp))
         }
 
         RoutePlanSheet(
@@ -365,6 +376,7 @@ private fun MapRoot(
             modifier = Modifier.align(Alignment.BottomCenter),
         )
     }
+}
 }
 
 /** The search box on the map: a destination, or an invitation to pick one. */

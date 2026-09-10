@@ -5,6 +5,7 @@ import android.media.AudioAttributes
 import android.speech.tts.TextToSpeech
 import android.speech.tts.TextToSpeech.QUEUE_ADD
 import android.speech.tts.TextToSpeech.QUEUE_FLUSH
+import android.speech.tts.UtteranceProgressListener
 import com.motoroute.domain.VoiceAnnouncement
 import com.motoroute.domain.guidance.Phrasebook
 import java.util.Locale
@@ -12,10 +13,28 @@ import java.util.Locale
 /**
  * Turn-by-turn speech using the platform TTS engine.
  *
- * The audio attributes matter more than they look: marking the stream as
+ * This class owns *how* an announcement reaches the headset, nothing about
+ * *when* to speak (that's [com.motoroute.domain.NavigationManager]'s state
+ * machine) or *what* to say (that's [Phrasebook]). Three things happen around
+ * every utterance, in order, all aimed at the same problem - a Bluetooth
+ * helmet headset that has gone to sleep and needs 0.5-1.5 s to open its audio
+ * track again (`1.Doku/AI_README.md` §2.1):
+ *
+ *  1. [NavigationAudioFocus] asks for transient-duck focus, so any music
+ *     already playing gets quieter instead of stopping - stopping it is what
+ *     causes the constant Bluetooth reconnect churn that eats the start of
+ *     the next sentence.
+ *  2. [PrerollChime] plays a short tone first, opening the Bluetooth track
+ *     before the words start so the distance at the front of the sentence
+ *     survives instead of being swallowed by the wake-up delay.
+ *  3. [BluetoothRoute] can (opt-in, see its own doc comment) switch the
+ *     announcement to the SCO/HFP profile for a rider running a second
+ *     intercom or radio mesh; everyone else stays on A2DP.
+ *
+ * The audio attributes still matter on their own: marking the stream as
  * ASSISTANCE_NAVIGATION_GUIDANCE is what makes a Bluetooth intercom duck the
- * music instead of talking over it, and what stops the announcement from being
- * routed to the phone speaker inside a helmet.
+ * music instead of talking over it, and what stops the announcement from
+ * being routed to the phone speaker inside a helmet.
  *
  * The wording lives in [Phrasebook], picked from the language the engine
  * actually ended up speaking - so a German phone gets German announcements, and
@@ -23,6 +42,8 @@ import java.util.Locale
  * read out by an English voice.
  */
 class VoiceGuidance(context: Context) {
+
+    private val appContext = context.applicationContext
 
     private var tts: TextToSpeech? = null
     private var ready = false
@@ -35,8 +56,24 @@ class VoiceGuidance(context: Context) {
     /** True when the engine is initialised and can actually say something. */
     val isReady: Boolean get() = ready
 
+    private val chime = PrerollChime(appContext)
+    private val audioFocus = NavigationAudioFocus(appContext)
+    private val bluetoothRoute = BluetoothRoute(appContext)
+
+    /**
+     * Opt-in fallback to the SCO/HFP profile for a rider running a separate
+     * intercom or radio mesh alongside OpenCurv's own announcements - off by
+     * default, see [BluetoothRoute]. There is currently no UI switch for this;
+     * see `1.Doku/Sprachausgabe.md` for where one should go.
+     */
+    var useIntercomVoiceProfile: Boolean
+        get() = bluetoothRoute.preferScoForAnnouncements
+        set(value) {
+            bluetoothRoute.preferScoForAnnouncements = value
+        }
+
     init {
-        tts = TextToSpeech(context.applicationContext) { status ->
+        tts = TextToSpeech(appContext) { status ->
             ready = status == TextToSpeech.SUCCESS
             if (ready) {
                 tts?.setAudioAttributes(
@@ -57,17 +94,31 @@ class VoiceGuidance(context: Context) {
                     locale
                 }
                 phrasebook = Phrasebook.forLanguage(spoken.language)
+                tts?.setOnUtteranceProgressListener(EndOfUtteranceListener(::onAnnouncementFinished))
             }
         }
+    }
+
+    private fun onAnnouncementFinished() {
+        bluetoothRoute.stopIfNeeded()
+        audioFocus.release()
     }
 
     fun speak(announcement: VoiceAnnouncement) {
         if (!enabled || !ready) return
         val text = phrase(announcement)
-        // Arrival and the final 50 m call flush the queue: a stale "in three
-        // hundred metres" arriving after the turn is worse than silence.
-        val mode = if (announcement.distanceMeters <= 60) QUEUE_FLUSH else QUEUE_ADD
-        tts?.speak(text, mode, null, "opencurv-${announcement.hashCode()}")
+        if (text.isBlank()) return
+        // The final ("jetzt"/"now") call and the rare priority events (arrival,
+        // off-route) are the only ones allowed to cut off something already
+        // playing - a stale "in three hundred metres" arriving after the turn
+        // is worse than silence, but a queued-up backlog of early calls is not
+        // worth losing either.
+        val mode = if (announcement.isFinal) QUEUE_FLUSH else QUEUE_ADD
+        audioFocus.duck()
+        bluetoothRoute.startIfNeeded()
+        chime.playThenSpeak {
+            tts?.speak(text, mode, null, "opencurv-${System.nanoTime()}")
+        }
     }
 
     /**
@@ -79,12 +130,17 @@ class VoiceGuidance(context: Context) {
      */
     fun speakTest(): Boolean {
         if (!ready) return false
-        tts?.speak(phrasebook.testAnnouncement, QUEUE_FLUSH, null, "opencurv-test")
+        audioFocus.duck()
+        bluetoothRoute.startIfNeeded()
+        chime.playThenSpeak {
+            tts?.speak(phrasebook.testAnnouncement, QUEUE_FLUSH, null, "opencurv-test")
+        }
         return true
     }
 
     fun stop() {
         tts?.stop()
+        onAnnouncementFinished()
     }
 
     fun shutdown() {
@@ -92,8 +148,22 @@ class VoiceGuidance(context: Context) {
         tts?.shutdown()
         tts = null
         ready = false
+        chime.release()
+        onAnnouncementFinished()
     }
 
     /** The sentence that would be spoken. Kept public so it can be inspected in tests. */
     fun phrase(announcement: VoiceAnnouncement): String = phrasebook.announce(announcement)
+}
+
+/** Releases the audio focus/SCO grabbed for one utterance once it truly ends, however it ends. */
+private class EndOfUtteranceListener(private val onFinished: () -> Unit) : UtteranceProgressListener() {
+    override fun onStart(utteranceId: String?) = Unit
+    override fun onDone(utteranceId: String?) = onFinished()
+
+    @Suppress("OVERRIDE_DEPRECATION", "DEPRECATION")
+    override fun onError(utteranceId: String?) = onFinished()
+
+    override fun onError(utteranceId: String?, errorCode: Int) = onFinished()
+    override fun onStop(utteranceId: String?, interrupted: Boolean) = onFinished()
 }

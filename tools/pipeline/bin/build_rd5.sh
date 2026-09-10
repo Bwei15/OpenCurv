@@ -36,6 +36,26 @@ JAR="${OPENCURV_BROUTER_JAR:?OPENCURV_BROUTER_JAR muss auf das BRouter-Fat-Jar z
 [ -f "$JAR" ] || { echo "FEHLER: BRouter-Jar nicht gefunden: $JAR" >&2; exit 1; }
 [ -f "$PBF" ] || { echo "FEHLER: Eingabe-PBF nicht gefunden: $PBF" >&2; exit 1; }
 
+# Absolute Pfade herstellen, damit 'cd "$WORK"' spaetere Stufen nicht bricht
+PBF="$(cd "$(dirname "$PBF")" && pwd)/$(basename "$PBF")"
+JAR="$(cd "$(dirname "$JAR")" && pwd)/$(basename "$JAR")"
+
+mkdir -p "$OUTDIR" "$WORK"
+OUTDIR="$(cd "$OUTDIR" && pwd)"
+WORK="$(cd "$WORK" && pwd)"
+
+if [ "$BEFDIR" != "none" ]; then
+  if [ -d "$BEFDIR" ]; then
+    BEFDIR="$(cd "$BEFDIR" && pwd)"
+  elif [ -d "$(dirname "$BEFDIR")" ]; then
+    BEFDIR="$(cd "$(dirname "$BEFDIR")" && pwd)/$(basename "$BEFDIR")"
+  fi
+fi
+
+if [ -n "$SUMMARY" ] && [ -d "$(dirname "$SUMMARY")" ]; then
+  SUMMARY="$(cd "$(dirname "$SUMMARY")" && pwd)/$(basename "$SUMMARY")"
+fi
+
 PBF_MB=$(( $(wc -c < "$PBF") / 1048576 ))
 
 # --- Dichte Karten: bei kleinen Eingaben stuerzt DenseLongMap ab -----------
@@ -93,6 +113,7 @@ grep -q '^opencurv:curve;' "$WORK/lookups.dat" \
 PROF="$WORK/profiles"
 mkdir -p "$PROF"
 UP_PROFILES="${OPENCURV_UPSTREAM_PROFILES:-$(dirname "$(dirname "$(dirname "$JAR")")")/../misc/profiles2}"
+[ -d "$UP_PROFILES" ] && UP_PROFILES="$(cd "$UP_PROFILES" && pwd)"
 for p in all trekking softaccess; do
   if [ -f "$UP_PROFILES/$p.brf" ]; then
     cp "$UP_PROFILES/$p.brf" "$PROF/"

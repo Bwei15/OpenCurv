@@ -2,6 +2,7 @@ package com.motoroute.ui.components
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
@@ -23,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -63,18 +65,34 @@ fun DraggableSheet(
     var contentHeightPx by remember { mutableFloatStateOf(0f) }
     val peekPx = with(density) { peekHeight.toPx() }
     val maxOffset = (contentHeightPx - peekPx).coerceAtLeast(0f)
-
     val offset = remember { Animatable(0f) }
+    // The sheet opens collapsed - the map owns the screen in the resting
+    // state, and the rider drags it up when they actually want the plan.
+    // Only the very first layout pass snaps to the peek; once the rider (or
+    // the sheet itself, later) has moved it, a change in content height
+    // (a different planning state, say) must not yank it back down again.
+    var collapsedOnce by remember { mutableStateOf(false) }
+    var lastMaxOffset by remember { mutableFloatStateOf(0f) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(maxOffset) {
         offset.updateBounds(0f, maxOffset)
-        if (offset.value > maxOffset) offset.snapTo(maxOffset)
+        val wasCollapsed = !collapsedOnce || kotlin.math.abs(offset.value - lastMaxOffset) < 4f || offset.value >= lastMaxOffset
+        if (!collapsedOnce && maxOffset > 0f) {
+            offset.snapTo(maxOffset)
+            collapsedOnce = true
+        } else if (wasCollapsed && maxOffset > 0f) {
+            offset.animateTo(maxOffset, tween(ANIMATION_MILLIS))
+        } else if (offset.value > maxOffset) {
+            offset.snapTo(maxOffset)
+        }
+        lastMaxOffset = maxOffset
     }
 
     Surface(
         color = background,
         shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
+        border = BorderStroke(1.dp, handleColor),
         modifier = modifier
             .fillMaxWidth()
             .offset { IntOffset(0, offset.value.roundToInt()) }

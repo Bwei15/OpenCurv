@@ -5,6 +5,9 @@ import com.motoroute.data.model.GeoPoint
 import com.motoroute.data.model.Maneuver
 import com.motoroute.data.model.NavigationInstruction
 import com.motoroute.data.model.Route
+import com.motoroute.domain.geo.Geo
+import com.motoroute.domain.guidance.AnnouncementTiming
+import com.motoroute.domain.guidance.CurveCombo
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -47,21 +50,55 @@ data class NavigationState(
     }
 }
 
-/** A spoken announcement the voice layer should read out. */
+/** What kind of thing the voice layer is being asked to say. */
+enum class AnnouncementKind {
+    /** An ordinary turn-by-turn call for the current manoeuvre. */
+    MANEUVER,
+
+    /** A single warning covering a whole run of close/sharp bends - see [CurveCombo]. */
+    CURVE_WARNING,
+
+    /** "Still on the right road" cue after a long stretch with nothing to say. */
+    FREE_RIDE,
+    ARRIVAL,
+    OFF_ROUTE,
+}
+
+/**
+ * A spoken announcement the voice layer should read out.
+ *
+ * This is deliberately a plain description of *what to say*, with no opinion
+ * on wording (that is [com.motoroute.domain.guidance.Phrasebook]'s job) or on
+ * how it reaches the headset (that is `voice.VoiceGuidance`'s job). Its only
+ * other consumer-facing property is [isFinal], which the audio layer uses to
+ * decide whether this announcement is allowed to interrupt one still playing.
+ */
 data class VoiceAnnouncement(
-    val maneuver: Maneuver,
-    val distanceMeters: Int,
-    val roundaboutExit: Int,
-    val isImmediate: Boolean,
+    val kind: AnnouncementKind,
+    val maneuver: Maneuver = Maneuver.CONTINUE,
+    val distanceMeters: Int = 0,
+    val roundaboutExit: Int = 0,
+    /** True for the last-chance ("jetzt"/"now") call - always allowed to cut in. */
+    val isFinal: Boolean = false,
+    /** How many linked manoeuvres this single utterance covers (see [CurveCombo]). */
+    val comboCount: Int = 1,
+    /** Set on a two-manoeuvre combo's final call: "..., then immediately <this>". */
+    val secondManeuver: Maneuver? = null,
+    /** Set on [AnnouncementKind.FREE_RIDE]: how far the quiet stretch still runs. */
+    val freeRideKm: Int = 0,
 )
 
 /**
  * The turn-by-turn state machine.
  *
  * Feed it filtered fixes; it decides which instruction is current, how far the
- * maneuver is, when to speak, when the rider has left the route, and when the
+ * manoeuvre is, when to speak, when the rider has left the route, and when the
  * destination is reached. It owns no Android types so it can be unit tested
  * against a synthetic GPS track.
+ *
+ * Timing is worked out in [AnnouncementTiming] and manoeuvre-clustering in
+ * [CurveCombo]; this class only holds the per-ride bookkeeping (which tier of
+ * which instruction has already been said) and wires the two together.
  */
 class NavigationManager(
     private val matcher: MapMatcher = MapMatcher(),
@@ -76,17 +113,33 @@ class NavigationManager(
     private var route: Route? = null
     private var instructionIndex = 0
 
-    /** Announcement rings already fired for the current instruction. */
-    private var announcedRings = BooleanArray(ANNOUNCE_RINGS_M.size)
+    /** Which of [AnnouncementTiming.applicableTiers] have already fired for the current instruction. */
+    private var announcedTiers = BooleanArray(TIER_COUNT)
+
+    /** The run of linked manoeuvres [instructionIndex] currently starts, per [CurveCombo]. */
+    private var currentRun: List<Int> = emptyList()
+    private var currentRunStartIndex = -1
+    private var currentRunIsLockout = false
+
+    /** True once a lockout run's single warning has been spoken. */
+    private var lockoutAnnounced = false
+
+    /** Distance-from-start at which something was last actually said - drives the free-ride cue. */
+    private var lastSpokenAtDistance = 0.0
+
+    /** For the live "are we actively leaned into a bend right now" heading-rate check. */
+    private var lastFixHeadingDegrees: Double? = null
+    private var lastFixTimeMillis: Long = 0L
+
+    /** Wall-clock time a due, non-final tier first started being deferred for active cornering. */
+    private var corneringDeferredSinceMillis: Long? = null
 
     private var consecutiveOffRouteFixes = 0
+    private var arrivalAnnounced = false
 
     fun start(route: Route) {
         this.route = route
-        instructionIndex = 0
-        announcedRings = BooleanArray(ANNOUNCE_RINGS_M.size)
-        consecutiveOffRouteFixes = 0
-        arrivalAnnounced = false
+        resetAnnouncementState()
         matcher.reset()
         _state.value = NavigationState(
             route = route,
@@ -114,10 +167,7 @@ class NavigationManager(
      */
     fun replaceRoute(newRoute: Route) {
         route = newRoute
-        instructionIndex = 0
-        announcedRings = BooleanArray(ANNOUNCE_RINGS_M.size)
-        consecutiveOffRouteFixes = 0
-        arrivalAnnounced = false
+        resetAnnouncementState()
         matcher.reset()
         _state.value = _state.value.copy(
             route = newRoute,
@@ -130,6 +180,21 @@ class NavigationManager(
             remainingDistanceMeters = newRoute.distanceMeters,
             remainingSeconds = newRoute.estimatedSeconds,
         )
+    }
+
+    private fun resetAnnouncementState() {
+        instructionIndex = 0
+        announcedTiers = BooleanArray(TIER_COUNT)
+        currentRun = emptyList()
+        currentRunStartIndex = -1
+        currentRunIsLockout = false
+        lockoutAnnounced = false
+        lastSpokenAtDistance = 0.0
+        lastFixHeadingDegrees = null
+        lastFixTimeMillis = 0L
+        corneringDeferredSinceMillis = null
+        consecutiveOffRouteFixes = 0
+        arrivalAnnounced = false
     }
 
     /**
@@ -153,6 +218,8 @@ class NavigationManager(
             return false
         }
 
+        val headingRateDegPerSec = headingRateSince(fix)
+
         advanceInstructions(route, match.distanceFromStart)
 
         val current = route.instructions.getOrNull(instructionIndex)
@@ -160,7 +227,16 @@ class NavigationManager(
         val distanceToManeuver =
             (current?.distanceFromStart?.minus(match.distanceFromStart) ?: 0.0).coerceAtLeast(0.0)
 
-        maybeAnnounce(current, next, distanceToManeuver)
+        maybeAnnounce(
+            route = route,
+            current = current,
+            distanceToManeuver = distanceToManeuver,
+            distanceFromStart = match.distanceFromStart,
+            speedMps = fix.speedMps,
+            headingRateDegPerSec = headingRateDegPerSec,
+            nowMillis = nowMillis,
+        )
+        maybeAnnounceFreeRide(current, match.distanceFromStart, headingRateDegPerSec, fix.speedMps)
 
         val remaining = (route.distanceMeters - match.distanceFromStart).coerceAtLeast(0.0)
         val remainingSeconds = estimateRemainingSeconds(route, remaining, fix.speedMps)
@@ -191,15 +267,26 @@ class NavigationManager(
         )
 
         if (arrived) {
-            emitArrival()
+            emitArrival(match.distanceFromStart)
         }
         return shouldReroute
     }
 
+    /** Live yaw rate in degrees/second, derived from consecutive fixes' heading. */
+    private fun headingRateSince(fix: FilteredFix): Double {
+        val previousHeading = lastFixHeadingDegrees
+        val previousTime = lastFixTimeMillis
+        lastFixHeadingDegrees = fix.headingDegrees
+        lastFixTimeMillis = fix.timestampMillis
+        if (previousHeading == null) return 0.0
+        val dtSeconds = (fix.timestampMillis - previousTime).coerceAtLeast(1) / 1000.0
+        return Geo.bearingDifference(previousHeading, fix.headingDegrees) / dtSeconds
+    }
+
     /**
-     * Steps to the next instruction once the maneuver point is behind us.
+     * Steps to the next instruction once the manoeuver point is behind us.
      *
-     * A maneuver counts as executed as soon as the snapped position is
+     * A manoeuver counts as executed as soon as the snapped position is
      * [PASSED_METERS] past it - waiting for the exact node would leave the HUD
      * showing a turn the rider has already taken.
      */
@@ -208,7 +295,6 @@ class NavigationManager(
             val instruction = route.instructions[instructionIndex]
             if (distanceFromStart - instruction.distanceFromStart > PASSED_METERS) {
                 instructionIndex++
-                announcedRings = BooleanArray(ANNOUNCE_RINGS_M.size)
             } else {
                 break
             }
@@ -216,50 +302,131 @@ class NavigationManager(
     }
 
     /**
-     * Fires the 1000 m / 300 m / 50 m announcements, plus an immediate "and
-     * then" when two maneuvers follow each other inside [IMMEDIATE_LINK_M].
+     * Decides whether to speak about the current instruction, and if so, says
+     * exactly one thing.
      *
-     * The rings are triggers, not text: the announcement carries the distance
-     * actually measured at that moment. Crossing several rings in one fix (a
-     * fresh reroute can drop the rider 400 m from a turn) retires the wider
-     * rings silently instead of announcing "in one kilometre" from 400 m out.
+     * Two problems are solved together here, because they are really the same
+     * problem: a fixed-distance trigger cannot tell "far away" from "close",
+     * so on this app's own curvy roads - where the next manoeuvre is
+     * routinely under 300 m away - it used to announce the same turn two or
+     * three times in as many seconds as the rider closed in on it (widest
+     * ring fires, then the narrower ones each fire again separately a moment
+     * later). Working in time-to-manoeuvre instead of distance, and always
+     * retiring every wider tier the instant a narrower one is already due,
+     * fixes that for a single manoeuvre. [CurveCombo] fixes the other half:
+     * a run of hairpins close together in time is spoken about once, not once
+     * per apex.
      */
     private fun maybeAnnounce(
+        route: Route,
         current: NavigationInstruction?,
-        next: NavigationInstruction?,
-        distance: Double,
+        distanceToManeuver: Double,
+        distanceFromStart: Double,
+        speedMps: Double,
+        headingRateDegPerSec: Double,
+        nowMillis: Long,
     ) {
         if (current == null || !current.maneuver.isTurn) return
 
-        for ((i, ring) in ANNOUNCE_RINGS_M.withIndex()) {
-            if (announcedRings[i]) continue
-            if (distance > ring) continue
+        if (instructionIndex !in currentRun) {
+            currentRun = CurveCombo.run(route.instructions, instructionIndex, speedMps)
+            currentRunStartIndex = instructionIndex
+            currentRunIsLockout = CurveCombo.isLockout(route.instructions, currentRun)
+            announcedTiers = BooleanArray(TIER_COUNT)
+            lockoutAnnounced = false
+            corneringDeferredSinceMillis = null
+        }
 
-            // Entering this ring retires every wider one.
-            for (j in 0..i) announcedRings[j] = true
+        // A later member of an already-announced run: it was covered by the
+        // run's own announcement (or is a lone sharp bend already warned
+        // about), stay silent while it is passed.
+        if (instructionIndex != currentRunStartIndex) return
 
-            val immediate = next != null &&
-                next.distanceFromStart - current.distanceFromStart < IMMEDIATE_LINK_M
-            _announcements.tryEmit(
+        if (currentRunIsLockout && lockoutAnnounced) return
+
+        val applicable = AnnouncementTiming.applicableTiers(speedMps)
+        val timeToManeuver = AnnouncementTiming.timeToManeuverSeconds(distanceToManeuver, speedMps)
+        val deepest = AnnouncementTiming.deepestDueTierIndex(applicable, timeToManeuver)
+        if (deepest == -1) return
+
+        val isFinalTier = deepest == AnnouncementTiming.FINAL_TIER_INDEX
+        val activelyCornering = AnnouncementTiming.isActivelyCornering(headingRateDegPerSec, speedMps)
+        if (activelyCornering && !isFinalTier) {
+            val deferredSince = corneringDeferredSinceMillis ?: nowMillis.also {
+                corneringDeferredSinceMillis = it
+            }
+            if (nowMillis - deferredSince < AnnouncementTiming.ACTIVE_CORNER_DEFER_CAP_MILLIS) return
+        }
+        corneringDeferredSinceMillis = null
+
+        if (currentRunIsLockout) {
+            lockoutAnnounced = true
+            emit(
                 VoiceAnnouncement(
-                    maneuver = current.maneuver,
-                    distanceMeters = distance.roundToInt(),
-                    roundaboutExit = current.roundaboutExit,
-                    isImmediate = immediate && i == ANNOUNCE_RINGS_M.lastIndex,
+                    kind = AnnouncementKind.CURVE_WARNING,
+                    maneuver = CurveCombo.sharpestIn(route.instructions, currentRun),
+                    isFinal = isFinalTier,
+                    comboCount = currentRun.size,
                 ),
+                distanceFromStart,
             )
             return
         }
+
+        if (announcedTiers[deepest]) return
+        for (i in 0..deepest) announcedTiers[i] = true
+
+        val secondManeuver = if (isFinalTier && currentRun.size == 2) {
+            route.instructions[currentRun[1]].maneuver
+        } else {
+            null
+        }
+
+        emit(
+            VoiceAnnouncement(
+                kind = AnnouncementKind.MANEUVER,
+                maneuver = current.maneuver,
+                distanceMeters = distanceToManeuver.roundToInt(),
+                roundaboutExit = current.roundaboutExit,
+                isFinal = isFinalTier,
+                secondManeuver = secondManeuver,
+            ),
+            distanceFromStart,
+        )
     }
 
-    private var arrivalAnnounced = false
+    /**
+     * "Dem Straßenverlauf 12 Kilometer folgen" - a rider who has heard nothing
+     * for a long stretch should not have to check the screen to know the app
+     * is still tracking them. Fires once per [AnnouncementTiming.FREE_RIDE_METERS]
+     * of silence, and defers to the same live-cornering check as everything
+     * else (there is even less reason to interrupt a bend for a reassurance).
+     */
+    private fun maybeAnnounceFreeRide(
+        current: NavigationInstruction?,
+        distanceFromStart: Double,
+        headingRateDegPerSec: Double,
+        speedMps: Double,
+    ) {
+        if (current == null) return
+        if (distanceFromStart - lastSpokenAtDistance < AnnouncementTiming.FREE_RIDE_METERS) return
+        val distanceToNext = current.distanceFromStart - distanceFromStart
+        if (distanceToNext < AnnouncementTiming.FREE_RIDE_MIN_LEAD_METERS) return
+        if (AnnouncementTiming.isActivelyCornering(headingRateDegPerSec, speedMps)) return
 
-    private fun emitArrival() {
+        val km = (distanceToNext / 1000.0).roundToInt().coerceAtLeast(1)
+        emit(VoiceAnnouncement(kind = AnnouncementKind.FREE_RIDE, freeRideKm = km), distanceFromStart)
+    }
+
+    private fun emit(announcement: VoiceAnnouncement, atDistanceFromStart: Double) {
+        lastSpokenAtDistance = atDistanceFromStart
+        _announcements.tryEmit(announcement)
+    }
+
+    private fun emitArrival(distanceFromStart: Double) {
         if (arrivalAnnounced) return
         arrivalAnnounced = true
-        _announcements.tryEmit(
-            VoiceAnnouncement(Maneuver.DESTINATION, 0, 0, isImmediate = false),
-        )
+        emit(VoiceAnnouncement(kind = AnnouncementKind.ARRIVAL, isFinal = true), distanceFromStart)
     }
 
     private fun distanceBetween(
@@ -290,8 +457,8 @@ class NavigationManager(
     }
 
     companion object {
-        /** Spoken warning distances, widest first. */
-        val ANNOUNCE_RINGS_M = intArrayOf(1000, 300, 50)
+        /** Number of tiers tracked per instruction: EARLY, CONFIRM, FINAL. */
+        const val TIER_COUNT = 3
 
         /** Cross-track distance that counts as "off route". */
         const val OFF_ROUTE_METERS = 35.0
@@ -299,14 +466,10 @@ class NavigationManager(
         /** How many consecutive off-route fixes before a reroute is requested. */
         const val OFF_ROUTE_FIXES = 3
 
-        /** Metres past a maneuver before the state machine steps on. */
+        /** Metres past a manoeuver before the state machine steps on. */
         const val PASSED_METERS = 15.0
 
         /** Distance to the destination that counts as arrived. */
         const val ARRIVAL_RADIUS_M = 25.0
-
-        /** Two maneuvers closer than this get an "and then immediately" hint. */
-        const val IMMEDIATE_LINK_M = 150.0
-
     }
 }

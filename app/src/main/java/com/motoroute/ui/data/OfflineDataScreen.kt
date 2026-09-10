@@ -271,5 +271,6 @@ private fun kindLabel(kind: OfflineFileKind): String = stringResource(
         OfflineFileKind.MAP -> R.string.kind_map
         OfflineFileKind.SEGMENT -> R.string.kind_segment
         OfflineFileKind.PROFILE -> R.string.kind_profile
+        OfflineFileKind.MAPTILES -> R.string.kind_maptiles
     },
 )

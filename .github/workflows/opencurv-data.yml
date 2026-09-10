@@ -191,8 +191,14 @@ jobs:
       # auch grosse Regionen auf den freien Runner passen.
       - name: Platz schaffen
         run: |
+          # NICHT "$AGENT_TOOLSDIRECTORY" (= /opt/hostedtoolcache) loeschen:
+          # dort liegen die JDKs, die setup-java zwei Schritte vorher abgelegt
+          # hat. Der erste echte Actions-Lauf ist genau daran gescheitert -
+          # "JAVA_HOME is set to an invalid directory". /usr/local/lib/android
+          # allein bringt rund 9 GB, das reicht.
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
-                      /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" || true
+                      /usr/local/share/boost || true
+          echo "JAVA_HOME=$JAVA_HOME  ->  $([ -x "$JAVA_HOME/bin/java" ] && echo ok || echo FEHLT)"
           df -h /
 
       - name: Hoehenkacheln bestimmen

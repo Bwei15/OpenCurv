@@ -272,16 +272,26 @@ Design-System umstellt:
 | Sprachausgabe | Sonnet | Ursache der Mehrfachansagen behoben, zeitbasierte Trigger in Sekunden, Headset-Aufwach-Chime (340 ms), Schräglagen-Sprechverbot. Commit `c5c349f`. |
 | Karten-Renderer & UI-Polisher | Sonnet | Mapsforge-Rendering durch MapLibre Native SDK (11.11.0) ersetzt. Vektorkacheln via PMTiles offline geladen. Tag/Nacht-Styles mit lokalen Offline-Glyphen. Alle 4 UI-Befunde (Zahnrad-Icon, Statusbar-Insets, kompakter Sheet-Peek, HUD-Schriftgrößen 34 sp) behoben. `MapLibreStyleTest` grün. |
 
-### Welle 4 — In Vorbereitung
+### Welle 4 — Läuft
 
 | Agent | Modell | Auftrag |
 | --- | --- | --- |
-| Ortssuche- & Daten-Ingenieur | Sonnet | Ortssuche und Regionen-Download anpassen: Alte Mapsforge-Downloads durch unsere GitHub-Release-Artefakte (PMTiles + RD5 + Catalog) ersetzen. |
+| Ortssuche- & Daten-Ingenieur | Sonnet | Ortssuche und Regionen-Download anpassen: Alte Mapsforge-Downloads durch unsere GitHub-Release-Artefakte (PMTiles + RD5 + Catalog) ersetzen; autarker Basis-Ortskatalog. |
 | Release & Dokumentation | Sonnet | README aktualisieren (neue Architektur, Screenshots, Installationshinweise), Versionsabnahme v0.1.5. |
+
+### Welle 5 — Geplant: Echtzeitverkehr & Baustellen-Vermeidung (Mobilithek / BMDV)
+
+| Agent | Modell | Auftrag |
+| --- | --- | --- |
+| Verkehrsdaten-Architekt | Sonnet/Opus | Anbindung der öffentlichen Mobilithek-Schnittstelle (BMDV / Autobahn GmbH / Länder-DATEX II) als rein optionaler Opt-in-Dienst (Offline-Autarkie bleibt unberührt). |
+| Dynamisches Routing (No-Go) | Sonnet | Überführung von gemeldeten Vollsperrungen und Tagesbaustellen auf Landstraßen in BRouters `nogos`-Schnittstelle (`RouteRequest`), sodass Baustellen aktiv umfahren werden. |
+| MapLibre Incident-Layer | Sonnet | Visualisierung von Baustellen, Sperrungen und Pässen direkt auf der GPU über MapLibre als dynamische GeoJSON-Source. |
 
 ### Noch offen
 
-- **Ortssuche & Downloads** auf die neuen GitHub-Release-Artefakte (`pmtiles`, `.rd5`, `catalog.json`) umstellen.
+- **Ortssuche & Downloads** auf die neuen GitHub-Release-Artefakte (`pmtiles`, `.rd5`, `catalog.json`) umstellen (in Arbeit).
 - **H3-Kurven-Hotspots** (optional für Rundtouren-Feature zurückgestellt).
 - **Release v0.1.5** und README-Dokumentation.
+- **Echtzeitdaten-Integration** (Welle 5).
+
 

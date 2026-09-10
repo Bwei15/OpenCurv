@@ -245,3 +245,63 @@ Design-System umstellt:
    `MetricReadout` mit 30 sp liegt unter dem lesbaren Mindestwert,
    `ic_maneuver_roundabout` ist beschnitten, und die 18 Aktionssymbole
    verwenden sechs verschiedene Strichstärken.
+
+---
+
+## Fortschritt (10.09.2026, Stand nach Welle 2)
+
+### Abgeschlossen und nachgeprüft
+
+| Ergebnis | Beleg |
+| --- | --- |
+| Bestandsaufnahme des Workspaces | `AI_Workspace_Overview.md` |
+| Technologie-Entscheidungsvorlage | `Research_Tech_Options.md` |
+| Design-System, Compose-Tokens, neues App-Icon | `Design_System.md`, Build grün, auf dem Emulator sichtbar |
+| Testarena mit Mess-Harness | `Testarena.md`, 13 Tests grün |
+| Beweis, dass der Kurven-Tag durch BRouter kommt | `RD5_Pipeline.md`, unabhängig aus leerem Verzeichnis nachvollzogen |
+| **Der Kurven-Score** | `Kurven_Score.md`, 50 Tests grün, `tools/curvescore/report/arena.svg` |
+| Cloud-Pipeline (gebaut, lokal gemessen) | `Cloud_Pipeline.md` — **nie auf GitHub Actions gelaufen** |
+
+### Der Kurven-Score in Zahlen
+
+Rangliste auf der Testarena (Stufe 0–15): S-Kurven 9, Serpentine 8, fließende
+Landstraße 3, Hundskurve 3, 90°-Ecken 1, Schotter 1, Schnellstraße 1,
+Autobahn 0, **Ortsnetz-Gitter 0**. Alle neun Erwartungen E1–E9 erfüllt.
+
+Der entscheidende Punkt: Das Ortsnetz-Gitter hat über 700° Gesamt-Richtungs-
+änderung und landet trotzdem auf der letzten Position — Faktor 8 unter der
+langweiligen Schnellstraße. Der Kniff ist **Persistenz statt Umkreisradius**:
+Eine Ecke ist ein Stützpunkt mit mindestens 40° Ablenkung, dessen Nachbarn
+weniger als 35 % davon weitertragen. Von 160°/km überleben 3°/km als
+Kurvenwert. Der Umkreisradius-Ansatz aus `adamfranco/curvature` kann das
+prinzipiell nicht: Eine 90°-Ecke zwischen 25-m-Geraden hat R = 17,7 m —
+praktisch dasselbe wie die 24-m-Kehren einer Serpentine.
+
+Laufzeit-Hochrechnung Bayern: 5–7 Minuten auf 4 Kernen, also rund ein Zehntel
+des Stundenbudgets. Der Engpass ist das PBF-Dekodieren, nicht der Score.
+
+### Welle 3 — läuft
+
+| Agent | Modell | Auftrag |
+| --- | --- | --- |
+| Pipeline-Integrator | Sonnet | Schließt das größte offene Risiko: den **echten** Scorer durch die Pipeline schicken (alle bisherigen Messungen entstanden mit einem Platzhalter), den Speicherbedarf gegen die Runner-Grenze prüfen, und die NaN-Falle in den Produktionsprofilen schließen. |
+| Karten-Renderer | Sonnet | Mapsforge-Rendering raus, MapLibre Native mit lokalen PMTiles rein. Stil aus `Map_Design.md`, Tag/Nacht, 3D-Perspektive. Dazu die vier Layoutfehler von oben. |
+| Sprachausgabe | Sonnet | Ursache der Mehrfachansagen beheben, zeitbasierte statt distanzbasierte Trigger, Bluetooth-Vorlauf gegen die Aufwachlatenz, Sprechverbot in Schräglage. |
+
+**Modellwahl:** Opus wurde am 10.09.2026 vom Ausgabelimit gestoppt (der
+Pipeline-Agent starb mitten in der Arbeit). Welle 3 läuft deshalb auf Sonnet,
+dafür mit deutlich ausführlicheren Aufträgen, in denen die recherchierten
+Fallstricke schon benannt sind.
+
+### Noch offen
+
+- **Ortssuche** liest weiterhin aus Mapsforge-`.map`-Dateien. Solange das so
+  ist, kann die App nicht ausschließlich von den Release-Artefakten leben.
+  Eigener Auftrag für Welle 4.
+- **Downloads** zeigen noch auf mapsforge.org und die BRouter-Server statt auf
+  unsere GitHub-Releases.
+- **H3-Kurven-Hotspots** wurden zurückgestellt; der Katalog ist darauf
+  vorbereitet.
+- **Kein einziger GitHub-Actions-Lauf.** Braucht `gh auth login`.
+- **README und Release v0.1.5** kommen zum Schluss, damit sie die neue
+  Architektur beschreiben und nicht die alte.

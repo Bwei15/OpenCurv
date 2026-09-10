@@ -248,7 +248,7 @@ Design-System umstellt:
 
 ---
 
-## Fortschritt (10.09.2026, Stand nach Welle 2)
+## Fortschritt (10.09.2026, Stand nach Welle 3)
 
 ### Abgeschlossen und nachgeprüft
 
@@ -260,48 +260,28 @@ Design-System umstellt:
 | Testarena mit Mess-Harness | `Testarena.md`, 13 Tests grün |
 | Beweis, dass der Kurven-Tag durch BRouter kommt | `RD5_Pipeline.md`, unabhängig aus leerem Verzeichnis nachvollzogen |
 | **Der Kurven-Score** | `Kurven_Score.md`, 50 Tests grün, `tools/curvescore/report/arena.svg` |
-| Cloud-Pipeline (gebaut, lokal gemessen) | `Cloud_Pipeline.md` — **nie auf GitHub Actions gelaufen** |
+| **Cloud-Pipeline & GitHub Actions** | `Cloud_Pipeline.md` — **Erfolgreich auf GitHub Actions gelaufen** (Run 34520134312, 100% grün, Bremen Artefakte erzeugt) |
+| **Sprachausgabe & Audio-Timing** | `Sprachausgabe.md`, Commit `c5c349f`, 145 Tests grün |
+| **Karten-Rendering (MapLibre Native)** | `Karte_MapLibre.md`, GPU-Vektorrendering, PMTiles offline, Tag/Nacht-Styles, MapLibreStyleTest grün, 4 Layoutmängel behoben, Emulator-Screenshots in `1.Doku/design/screens/` |
 
-### Der Kurven-Score in Zahlen
+### Welle 3 — Abgeschlossen
 
-Rangliste auf der Testarena (Stufe 0–15): S-Kurven 9, Serpentine 8, fließende
-Landstraße 3, Hundskurve 3, 90°-Ecken 1, Schotter 1, Schnellstraße 1,
-Autobahn 0, **Ortsnetz-Gitter 0**. Alle neun Erwartungen E1–E9 erfüllt.
+| Agent | Modell | Ergebnis |
+| --- | --- | --- |
+| Pipeline-Integrator & Debugger | Sonnet | Echter Scorer durch Pipeline, PrimitiveNodeStore-Speicherreduktion, Runner-Cleanup-Fix für JDKs und absolute Pfade in `build_rd5.sh`. GitHub Actions Workflow `opencurv-data.yml` für `de-hb` erfolgreich durchgelaufen. |
+| Sprachausgabe | Sonnet | Ursache der Mehrfachansagen behoben, zeitbasierte Trigger in Sekunden, Headset-Aufwach-Chime (340 ms), Schräglagen-Sprechverbot. Commit `c5c349f`. |
+| Karten-Renderer & UI-Polisher | Sonnet | Mapsforge-Rendering durch MapLibre Native SDK (11.11.0) ersetzt. Vektorkacheln via PMTiles offline geladen. Tag/Nacht-Styles mit lokalen Offline-Glyphen. Alle 4 UI-Befunde (Zahnrad-Icon, Statusbar-Insets, kompakter Sheet-Peek, HUD-Schriftgrößen 34 sp) behoben. `MapLibreStyleTest` grün. |
 
-Der entscheidende Punkt: Das Ortsnetz-Gitter hat über 700° Gesamt-Richtungs-
-änderung und landet trotzdem auf der letzten Position — Faktor 8 unter der
-langweiligen Schnellstraße. Der Kniff ist **Persistenz statt Umkreisradius**:
-Eine Ecke ist ein Stützpunkt mit mindestens 40° Ablenkung, dessen Nachbarn
-weniger als 35 % davon weitertragen. Von 160°/km überleben 3°/km als
-Kurvenwert. Der Umkreisradius-Ansatz aus `adamfranco/curvature` kann das
-prinzipiell nicht: Eine 90°-Ecke zwischen 25-m-Geraden hat R = 17,7 m —
-praktisch dasselbe wie die 24-m-Kehren einer Serpentine.
-
-Laufzeit-Hochrechnung Bayern: 5–7 Minuten auf 4 Kernen, also rund ein Zehntel
-des Stundenbudgets. Der Engpass ist das PBF-Dekodieren, nicht der Score.
-
-### Welle 3 — läuft
+### Welle 4 — In Vorbereitung
 
 | Agent | Modell | Auftrag |
 | --- | --- | --- |
-| Pipeline-Integrator | Sonnet | Schließt das größte offene Risiko: den **echten** Scorer durch die Pipeline schicken (alle bisherigen Messungen entstanden mit einem Platzhalter), den Speicherbedarf gegen die Runner-Grenze prüfen, und die NaN-Falle in den Produktionsprofilen schließen. |
-| Karten-Renderer | Sonnet | Mapsforge-Rendering raus, MapLibre Native mit lokalen PMTiles rein. Stil aus `Map_Design.md`, Tag/Nacht, 3D-Perspektive. Dazu die vier Layoutfehler von oben. |
-| Sprachausgabe | Sonnet | Ursache der Mehrfachansagen beheben, zeitbasierte statt distanzbasierte Trigger, Bluetooth-Vorlauf gegen die Aufwachlatenz, Sprechverbot in Schräglage. |
-
-**Modellwahl:** Opus wurde am 10.09.2026 vom Ausgabelimit gestoppt (der
-Pipeline-Agent starb mitten in der Arbeit). Welle 3 läuft deshalb auf Sonnet,
-dafür mit deutlich ausführlicheren Aufträgen, in denen die recherchierten
-Fallstricke schon benannt sind.
+| Ortssuche- & Daten-Ingenieur | Sonnet | Ortssuche und Regionen-Download anpassen: Alte Mapsforge-Downloads durch unsere GitHub-Release-Artefakte (PMTiles + RD5 + Catalog) ersetzen. |
+| Release & Dokumentation | Sonnet | README aktualisieren (neue Architektur, Screenshots, Installationshinweise), Versionsabnahme v0.1.5. |
 
 ### Noch offen
 
-- **Ortssuche** liest weiterhin aus Mapsforge-`.map`-Dateien. Solange das so
-  ist, kann die App nicht ausschließlich von den Release-Artefakten leben.
-  Eigener Auftrag für Welle 4.
-- **Downloads** zeigen noch auf mapsforge.org und die BRouter-Server statt auf
-  unsere GitHub-Releases.
-- **H3-Kurven-Hotspots** wurden zurückgestellt; der Katalog ist darauf
-  vorbereitet.
-- **Kein einziger GitHub-Actions-Lauf.** Braucht `gh auth login`.
-- **README und Release v0.1.5** kommen zum Schluss, damit sie die neue
-  Architektur beschreiben und nicht die alte.
+- **Ortssuche & Downloads** auf die neuen GitHub-Release-Artefakte (`pmtiles`, `.rd5`, `catalog.json`) umstellen.
+- **H3-Kurven-Hotspots** (optional für Rundtouren-Feature zurückgestellt).
+- **Release v0.1.5** und README-Dokumentation.
+

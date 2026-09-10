@@ -5,7 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import com.motoroute.di.AppContainer
 import kotlinx.coroutines.launch
-import org.mapsforge.map.android.graphics.AndroidGraphicFactory
+import org.maplibre.android.MapLibre
 
 class OpenCurvApp : Application() {
 
@@ -15,8 +15,9 @@ class OpenCurvApp : Application() {
     override fun onCreate() {
         super.onCreate()
 
-        // Mapsforge needs its graphics factory before any MapView exists.
-        AndroidGraphicFactory.createInstance(this)
+        // MapLibre needs its singleton set up before any MapView exists. No
+        // API key/account: unlike Mapbox, MapLibre is not gated behind one.
+        MapLibre.getInstance(this)
 
         container = AppContainer(this)
         createNotificationChannel()

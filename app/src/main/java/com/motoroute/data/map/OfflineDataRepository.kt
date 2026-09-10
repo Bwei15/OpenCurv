@@ -24,6 +24,9 @@ class OfflineDataRepository(private val context: Context) {
     val mapDir: File get() = directoryFor(OfflineFileKind.MAP)
     val segmentDir: File get() = directoryFor(OfflineFileKind.SEGMENT)
 
+    /** Where PMTiles archives live - what MapLibre actually renders from. */
+    val mapTilesDir: File get() = directoryFor(OfflineFileKind.MAPTILES)
+
     /** Where derived data lives - the place-search index, and nothing precious. */
     val indexDir: File get() = File(context.cacheDir, "search").apply { mkdirs() }
 

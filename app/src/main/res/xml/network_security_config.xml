@@ -6,6 +6,11 @@
   Everything else is denied by the platform, not merely avoided by our code:
   cleartext is off everywhere, and no other domain is listed. A bug, a bad
   catalog entry or a redirect cannot widen this.
+
+  Map rendering (MapLibre) needs no entry here at all: the style JSON, the
+  glyph PBFs and the PMTiles vector-tile archive are all read from the
+  device (asset:// and pmtiles://file://), never fetched over HTTP. Verified
+  in airplane mode - see 1.Doku/Karte_MapLibre.md.
 -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="false" />

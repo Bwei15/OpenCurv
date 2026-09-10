@@ -1,13 +1,19 @@
 package com.motoroute.ui.plan
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -66,15 +72,25 @@ fun RoutePlanSheet(
 ) {
     val colors = LocalRideColors.current
 
+    // A resting-state panel, not a driving HUD: Design_System.md is explicit
+    // that the sheet is playful and light while parked and only turns dark
+    // and HUD-like once the rider is actually navigating (a different screen
+    // entirely - see ActiveNavigationScreen). Regel 2 applies too: a floating
+    // plate needs its own 1 dp rim, since a shadow alone is invisible in
+    // direct sun and directionless over a plain road.
+    val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val peekHeight = (if (hasDestination) PEEK_HEIGHT_DESTINATION else PEEK_HEIGHT_EMPTY) + navBarBottom
+
     DraggableSheet(
-        peekHeight = PEEK_HEIGHT,
-        background = colors.hudBackground.copy(alpha = 0.96f),
-        handleColor = colors.hudForeground,
+        peekHeight = peekHeight,
+        background = colors.panel,
+        handleColor = colors.panelRim,
         modifier = modifier,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .navigationBarsPadding()
                 .padding(horizontal = 16.dp)
                 .padding(bottom = 20.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -85,7 +101,7 @@ fun RoutePlanSheet(
                     ?: stringResource(
                         if (hasDestination) R.string.plan_destination_pin else R.string.plan_no_destination,
                     ),
-                color = colors.hudForeground,
+                color = colors.onPanel,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Black,
                 maxLines = 1,
@@ -123,7 +139,7 @@ fun RoutePlanSheet(
                         )
                         Text(
                             text = stringResource(R.string.plan_calculating),
-                            color = colors.hudForeground,
+                            color = colors.onPanel,
                             fontSize = 16.sp,
                         )
                     }
@@ -193,7 +209,7 @@ fun RoutePlanSheet(
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = colors.route,
                             selectedLabelColor = Color.Black,
-                            labelColor = colors.hudForeground,
+                            labelColor = colors.onPanel,
                         ),
                     )
                 }
@@ -205,7 +221,7 @@ fun RoutePlanSheet(
                         R.string.plan_curviness,
                         stringResource(curvinessLabel(settings.curviness)),
                     ),
-                    color = colors.hudForeground,
+                    color = colors.onPanel,
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp,
                 )
@@ -228,7 +244,7 @@ fun RoutePlanSheet(
                 )
                 Text(
                     text = stringResource(R.string.plan_alternatives),
-                    color = colors.hudForeground,
+                    color = colors.onPanel,
                     fontSize = 14.sp,
                 )
             }
@@ -261,7 +277,7 @@ private fun RouteSummary(route: Route) {
 private fun Metric(
     value: String,
     caption: String,
-    color: Color = LocalRideColors.current.hudForeground,
+    color: Color = LocalRideColors.current.onPanel,
 ) {
     Column {
         Text(value, color = color, fontSize = 20.sp, fontWeight = FontWeight.Black)
@@ -283,7 +299,8 @@ private fun formatDuration(seconds: Int): String {
     return if (hours > 0) "${hours} h ${minutes} min" else "$minutes min"
 }
 
-private val PEEK_HEIGHT = 132.dp
+private val PEEK_HEIGHT_EMPTY = 60.dp
+private val PEEK_HEIGHT_DESTINATION = 132.dp
 
 /**
  * A card, not a curtain: the old empty state covered the whole map until data
@@ -303,8 +320,9 @@ fun MissingDataCard(
     if (dismissed) return
 
     androidx.compose.material3.Surface(
-        color = colors.hudBackground.copy(alpha = 0.94f),
+        color = colors.panel,
         shape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, colors.panelRim),
         modifier = modifier.fillMaxWidth(),
     ) {
         Column(
@@ -315,7 +333,7 @@ fun MissingDataCard(
                 text = stringResource(
                     if (!hasMaps) R.string.empty_no_map else R.string.empty_no_segments,
                 ),
-                color = colors.hudForeground,
+                color = colors.onPanel,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Black,
             )

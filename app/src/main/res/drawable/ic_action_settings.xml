@@ -1,14 +1,11 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="48dp" android:height="48dp"
-    android:viewportWidth="48" android:viewportHeight="48"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48"
     android:tint="#FFFFFFFF">
-    <path android:pathData="M24,15 a9,9 0 1,0 0.1,0" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
-    <path android:pathData="M24,3 L24,9" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
-    <path android:pathData="M24,39 L24,45" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
-    <path android:pathData="M3,24 L9,24" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
-    <path android:pathData="M39,24 L45,24" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
-    <path android:pathData="M9,9 L13,13" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
-    <path android:pathData="M35,35 L39,39" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
-    <path android:pathData="M39,9 L35,13" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
-    <path android:pathData="M13,35 L9,39" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M 43.86,30.84 L 39.85,37.78 L 33.84,35.32 L 28.88,38.18 L 28.01,44.61 L 19.99,44.61 L 19.12,38.18 L 14.16,35.32 L 8.15,37.78 L 4.14,30.84 L 9.28,26.86 L 9.28,21.14 L 4.14,17.16 L 8.15,10.22 L 14.16,12.68 L 19.12,9.82 L 19.99,3.39 L 28.01,3.39 L 28.88,9.82 L 33.84,12.68 L 39.85,10.22 L 43.86,17.16 L 38.72,21.14 L 38.72,26.86 Z M 24,17 a 7,7 0 1,0 0,14 a 7,7 0 1,0 0,-14 Z" />
 </vector>

@@ -8,32 +8,30 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.motoroute.data.model.GeoPoint
 import com.motoroute.data.model.Route
 import com.motoroute.data.settings.MapStyle
-import com.motoroute.domain.CameraController
 import com.motoroute.ui.theme.LocalRideColors
-import org.mapsforge.core.model.LatLong
-import org.mapsforge.map.android.view.MapView
 
 /**
  * The map.
  *
- * A Mapsforge [MapView] hosted in Compose through [AndroidView]. Mapsforge is
- * a 2-D renderer, so the "3-D" perspective the cockpit spec asks for is applied
- * as a projective transform on the view itself ([perspectiveTilt]). That is an
- * honest trade: the road layout gets the depth cue a rider expects, at the cost
- * of labels leaning with it. It can be switched off in settings.
+ * A MapLibre [org.maplibre.android.maps.MapView] hosted in Compose through
+ * [AndroidView]. Unlike the Mapsforge screen this replaces, the "3-D"
+ * perspective the cockpit spec asks for is a real camera tilt rendered by the
+ * GPU ([MapController.follow]), not a projective transform on the Android
+ * view - so road labels stay upright as the map tilts instead of leaning with
+ * it.
  *
- * Camera control is one-directional: the map is only moved when [follow] is on.
- * The moment the rider drags or pinches, the host turns [follow] off and the
- * map stays exactly where they left it - the behaviour every phone map has, and
- * the one this app was missing.
+ * Camera control is one-directional: the map is only moved when [follow] is
+ * on. The moment the rider drags, pinches, rotates or tilts the map by hand,
+ * the host turns [follow] off and the map stays exactly where they left it.
  */
 @Composable
 fun MapScreen(
@@ -54,10 +52,32 @@ fun MapScreen(
     onMapLongPress: ((GeoPoint) -> Unit)? = null,
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val rideColors = LocalRideColors.current
     val gesture = rememberUpdatedState(onUserGesture)
 
-    val mapView = remember(context) { controller.attach(context) { gesture.value() } }
+    // Seeding the theme the map is attached with matters: see the doc comment
+    // on MapController.attach for why loading day and then immediately
+    // reloading night used to leave the map blank.
+    val mapView = remember(context) {
+        controller.attach(context, rideColors.isNight, style) { gesture.value() }
+    }
+
+    // MapLibre's GL surface needs the full Android lifecycle forwarded - a
+    // MapView is not a Fragment here, Compose does not do that for us.
+    DisposableEffect(lifecycleOwner, mapView) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> controller.onStart()
+                Lifecycle.Event.ON_RESUME -> controller.onResume()
+                Lifecycle.Event.ON_PAUSE -> controller.onPause()
+                Lifecycle.Event.ON_STOP -> controller.onStop()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     DisposableEffect(mapView) {
         onDispose { controller.detach() }
@@ -67,25 +87,25 @@ fun MapScreen(
         controller.applyTheme(rideColors.isNight, style)
     }
 
-    LaunchedEffect(route) {
-        controller.showRoute(route, rideColors.route.toArgb())
+    LaunchedEffect(route, rideColors) {
+        controller.showRoute(route, rideColors.route.toArgb(), rideColors.routeCasing.toArgb())
     }
 
-    LaunchedEffect(destination) {
+    LaunchedEffect(destination, rideColors) {
         controller.showDestination(destination, rideColors.destination.toArgb())
     }
 
-    LaunchedEffect(start) {
+    LaunchedEffect(start, rideColors) {
         controller.showStart(start, rideColors.ok.toArgb())
     }
 
-    LaunchedEffect(position, headingDegrees) {
+    LaunchedEffect(position, headingDegrees, rideColors) {
         controller.showPosition(position, headingDegrees, rideColors.rider.toArgb())
     }
 
-    LaunchedEffect(position, headingDegrees, zoom, headingUp, follow) {
+    LaunchedEffect(position, headingDegrees, zoom, headingUp, follow, perspectiveTilt) {
         if (follow) {
-            controller.follow(position, headingDegrees, zoom, headingUp)
+            controller.follow(position, headingDegrees, zoom, headingUp, perspectiveTilt)
         } else if (!headingUp) {
             controller.resetRotation()
         }
@@ -93,37 +113,12 @@ fun MapScreen(
 
     Box(modifier = modifier.fillMaxSize()) {
         AndroidView(
-            factory = { mapView },
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer {
-                    // A tilt of ~50 degrees, with the horizon pushed to the top
-                    // third so most of the screen shows the road ahead.
-                    rotationX = perspectiveTilt
-                    cameraDistance = 24f * density
-                    transformOrigin = TransformOrigin(0.5f, 0.72f)
-                },
-            update = { view ->
-                if (onMapTap != null || onMapLongPress != null) {
-                    view.setOnTouchListener(
-                        controller.tapListener(
-                            view = view,
-                            onTap = { onMapTap?.invoke(it) },
-                            onLongPress = { onMapLongPress?.invoke(it) },
-                        ),
-                    )
-                }
+            factory = {
+                (mapView.parent as? android.view.ViewGroup)?.removeView(mapView)
+                mapView
             },
+            modifier = Modifier.fillMaxSize(),
+            update = { controller.setTapHandlers(onMapTap, onMapLongPress) },
         )
     }
 }
-
-/** Convenience: turns a Mapsforge LatLong into our own point type. */
-fun LatLong.toGeoPoint(): GeoPoint = GeoPoint(latitude, longitude)
-
-/** Convenience: and back. */
-fun GeoPoint.toLatLong(): LatLong = LatLong(latitude, longitude)
-
-/** Zoom clamped to what the renderer and the data can actually serve. */
-fun clampZoom(zoom: Int): Byte =
-    zoom.coerceIn(CameraController.MIN_ZOOM, CameraController.MAX_ZOOM).toByte()

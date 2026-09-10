@@ -55,12 +55,12 @@ fun ActiveNavigationScreen(
     following: Boolean,
     isDemo: Boolean,
     modifier: Modifier = Modifier,
-    map: @Composable () -> Unit,
+    map: @Composable (() -> Unit)? = null,
 ) {
     val colors = LocalRideColors.current
 
     Box(modifier = modifier.fillMaxSize()) {
-        map()
+        map?.invoke()
 
         Column(
             modifier = Modifier

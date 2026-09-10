@@ -74,6 +74,10 @@ class AppContainer(context: Context) {
         regionStore = regions,
     )
 
+    val traffic = com.motoroute.data.traffic.TrafficRepository(
+        cacheFile = java.io.File(appContext.filesDir, "traffic_cache.json"),
+    )
+
     val navigation = NavigationController(
         locationProvider = locationProvider,
         routingEngine = routingEngine,
@@ -81,6 +85,7 @@ class AppContainer(context: Context) {
         offlineData = offlineData,
         settings = settings,
         voice = voice,
+        trafficRepository = traffic,
         scope = scope,
     )
 }

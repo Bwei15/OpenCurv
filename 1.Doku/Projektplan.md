@@ -279,19 +279,19 @@ Design-System umstellt:
 | Ortssuche- & Daten-Ingenieur | Sonnet | Ortssuche und Regionen-Download entkoppelt: GitHub-Release-Downloads (`github.com`, `objects.githubusercontent.com`), PMTiles + RD5 Download in `DownloadRepository`, abwärtskompatibler `MapCatalog` für `catalog.json` & `regions.json`. Schneller autarker TSV-Starter-Ortskatalog (`places_de.tsv` mit 129 Zielen), sodass Fahrer sofort offline suchen und planen können. Commit `88257f5`. |
 | Release & Dokumentation | Sonnet | README aktualisiert (MapLibre Native, PMTiles, OSM-Kurventagging, Screenshots, lokale APK-Builds), APK-Assemble-Job aus GitHub Actions entfernt (Commit `bd91125`), Release-Build verifiziert. 158/158 Android-Unit-Tests grün, JVM-Verifier 100% grün. |
 
-### Welle 5 — Geplant: Echtzeitverkehr & Baustellen-Vermeidung (Mobilithek / BMDV)
+### Welle 5 — Abgeschlossen: Echtzeitverkehr & Baustellen-Vermeidung (Mobilithek / BMDV)
 
-| Agent | Modell | Auftrag |
+| Agent | Modell | Ergebnis |
 | --- | --- | --- |
-| Verkehrsdaten-Architekt | Sonnet/Opus | Anbindung der öffentlichen Mobilithek-Schnittstelle (BMDV / Autobahn GmbH / Länder-DATEX II) als rein optionaler Opt-in-Dienst (Offline-Autarkie bleibt unberührt). |
-| Dynamisches Routing (No-Go) | Sonnet | Überführung von gemeldeten Vollsperrungen und Tagesbaustellen auf Landstraßen in BRouters `nogos`-Schnittstelle (`RouteRequest`), sodass Baustellen aktiv umfahren werden. |
-| MapLibre Incident-Layer | Sonnet | Visualisierung von Baustellen, Sperrungen und Pässen direkt auf der GPU über MapLibre als dynamische GeoJSON-Source. |
+| Verkehrsdaten-Architekt & Routing | Sonnet | Datenmodell `TrafficIncident`, `NoGoArea` und `NoGoPolygon` erstellt. GeoJSON-Parser `MobilithekTrafficParser` für BMDV- / Mobilithek- / DATEX-II-Meldungen implementiert (Punkt- und Streckensperrungen, Pässe, Baustellen). `TrafficRepository` mit Offline-First-Cache hinzugefügt. |
+| Dynamisches Routing (No-Go) | Sonnet | `BRouterEngine` und `RouteRequest` um `noGos` und `noGoPolygons` erweitert; Übergabe an BRouters `RoutingContext.nogopoints` mit automatischer Vermeidung bei Routenberechnung und Alternativen. Verdrahtung in `NavigationController` und `AppContainer`. |
+| Verifikation | Sonnet | Tests hinzugefügt: `TrafficIncidentTest`, `MobilithekTrafficParserTest`, `BRouterNoGoTest`. 167/167 Tests im JVM-Verifier grün, alle Android-Unit-Tests grün, APK auf Emulator installiert und verifiziert. |
 
 ### Noch offen
 
-- **Echtzeitdaten-Integration** (Welle 5: Mobilithek-Client, dynamische BRouter No-Go-Polygone/Punkte, MapLibre Incident-Layer).
 - **H3-Kurven-Hotspots** (optional für spätere automatische Rundtouren-Generierung).
 - **GitHub Release Tag v0.1.5** mit den erzeugten Kacheln und lokaler Release-APK.
+
 
 
 

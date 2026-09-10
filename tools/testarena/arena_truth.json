@@ -1,0 +1,457 @@
+{
+  "meta": {
+    "originLat": 0.3,
+    "originLon": -1.0,
+    "whyThisLocation": "Offener Atlantik vor Westafrika, einige Zehnerkilometer von Null Island (0°N/0°E) entfernt - fernab jeder echten Straße, aber immer noch 'rund um 0/0' wie gefordert, und bewusst NICHT exakt auf 0/0 (das ist ein bekannter Sammelpunkt für fehlerhafte GPS-Fixes und wird von Werkzeugen mitunter speziell behandelt).",
+    "pointSpacingMetersMin": 8.0,
+    "pointSpacingMetersMax": 30.0,
+    "alphaOmegaStraightLineDistanceM": 4000.0,
+    "tolerances": {
+      "radiusRelativeTolerance": 0.01,
+      "lengthRelativeTolerance": 0.03,
+      "turnDegRelativeTolerance": 0.03,
+      "explanation": "Jeder Kurvenpunkt liegt exakt (bis auf Gleitkomma-Rauschen) auf dem kommandierten Kreisbogen, daher ist die Radius-Toleranz eng (1%). Länge und Gesamt-Richtungsänderung werden aus der abgetasteten Punktfolge als Sehnen-Summe gemessen; bei engen Radien (15-30 m) mit Stützpunktabstand ~10 m weicht eine Sehne vom wahren Bogen um bis zu ~(Abstand/Radius)²/24 ab - daher 3% Toleranz."
+    }
+  },
+  "namedNodes": {
+    "ALPHA": {
+      "lat": 0.3,
+      "lon": -1.0
+    },
+    "OMEGA": {
+      "lat": 0.33593261136478086,
+      "lon": -1.0
+    },
+    "HILL_START": {
+      "lat": 0.3,
+      "lon": -0.9505919821005419
+    },
+    "HILL_END": {
+      "lat": 0.3161696751141514,
+      "lon": -0.9505919821005419
+    },
+    "GREEN_START": {
+      "lat": 0.3,
+      "lon": -0.9281337921462427
+    },
+    "GREEN_END": {
+      "lat": 0.3161696751141514,
+      "lon": -0.9281337921462427
+    }
+  },
+  "elements": [
+    {
+      "routeId": "R1_HIGHWAY",
+      "name": "Schnellstraße Alpha-Omega",
+      "description": "Die kürzeste, kerzengerade Verbindung zwischen ALPHA und OMEGA. Schnell, aber ohne jede Kurve.",
+      "fromNode": "ALPHA",
+      "toNode": "OMEGA",
+      "highway": "primary",
+      "surface": "asphalt",
+      "maxspeedKmh": 100,
+      "landuse": null,
+      "wayIds": [
+        100000
+      ],
+      "lengthM": 4000.0,
+      "curveCount": 0,
+      "minRadiusM": null,
+      "meanRadiusM": null,
+      "sharpCornerCount": 0,
+      "totalTurnDeg": 0.0,
+      "elevationGainM": 0.0,
+      "elevationLossM": 0.0
+    },
+    {
+      "routeId": "R7_MOTORWAY",
+      "name": "Autobahn Alpha-Omega",
+      "description": "Die schnellste Alternative: kreuzungsfrei, breite Radien (900 m), fast schnurgerade. Ein reiner Zeit-Optimierer würde immer diese Route wählen.",
+      "fromNode": "ALPHA",
+      "toNode": "OMEGA",
+      "highway": "motorway",
+      "surface": "asphalt",
+      "maxspeedKmh": 130,
+      "landuse": null,
+      "wayIds": [
+        100001
+      ],
+      "lengthM": 4780.894781899608,
+      "curveCount": 2,
+      "minRadiusM": 900.0,
+      "meanRadiusM": 900.0,
+      "sharpCornerCount": 0,
+      "totalTurnDeg": 20.0,
+      "elevationGainM": 0.0,
+      "elevationLossM": 0.0
+    },
+    {
+      "routeId": "R2_SERPENTINE",
+      "name": "Serpentine Alpha-Omega",
+      "description": "Ein Pass mit 14 echten Kehren, Radius 24 m. Viel länger als die Schnellstraße, aber die Art Kurven, für die OpenCurv gebaut ist.",
+      "fromNode": "ALPHA",
+      "toNode": "OMEGA",
+      "highway": "tertiary",
+      "surface": "asphalt",
+      "maxspeedKmh": 50,
+      "landuse": null,
+      "wayIds": [
+        100002
+      ],
+      "lengthM": 4816.580863465643,
+      "curveCount": 14,
+      "minRadiusM": 24.0,
+      "meanRadiusM": 24.0,
+      "sharpCornerCount": 0,
+      "totalTurnDeg": 2352.0,
+      "elevationGainM": 0.0,
+      "elevationLossM": 0.0
+    },
+    {
+      "routeId": "R3_FLOWING",
+      "name": "Landstraße Alpha-Omega",
+      "description": "Weite, fließende Schwünge mit Radius 180-320 m - die klassische 'Sonntagsausfahrt'-Straße.",
+      "fromNode": "ALPHA",
+      "toNode": "OMEGA",
+      "highway": "secondary",
+      "surface": "asphalt",
+      "maxspeedKmh": 90,
+      "landuse": null,
+      "wayIds": [
+        100003
+      ],
+      "lengthM": 4956.496551105983,
+      "curveCount": 4,
+      "minRadiusM": 180.0,
+      "meanRadiusM": 255.0,
+      "sharpCornerCount": 0,
+      "totalTurnDeg": 210.0,
+      "elevationGainM": 0.0,
+      "elevationLossM": 0.0
+    },
+    {
+      "routeId": "R4_S_CURVES",
+      "name": "Wellenstraße Alpha-Omega",
+      "description": "30 mittelenge Kurven (Radius 45 m) im dichten Richtungswechsel - eine echte Handling-Strecke.",
+      "fromNode": "ALPHA",
+      "toNode": "OMEGA",
+      "highway": "tertiary",
+      "surface": "asphalt",
+      "maxspeedKmh": 60,
+      "landuse": null,
+      "wayIds": [
+        100004
+      ],
+      "lengthM": 4262.776577690156,
+      "curveCount": 30,
+      "minRadiusM": 45.0,
+      "meanRadiusM": 45.0,
+      "sharpCornerCount": 0,
+      "totalTurnDeg": 1400.0,
+      "elevationGainM": 0.0,
+      "elevationLossM": 0.0
+    },
+    {
+      "routeId": "R6_GRAVEL",
+      "name": "Schotterpiste Alpha-Omega",
+      "description": "Ungeteerte Piste mit ähnlicher Kurvigkeit wie die Landstraße - für ein Straßen-Profil trotzdem meist die falsche Wahl.",
+      "fromNode": "ALPHA",
+      "toNode": "OMEGA",
+      "highway": "track",
+      "surface": "gravel",
+      "maxspeedKmh": 40,
+      "landuse": null,
+      "wayIds": [
+        100005
+      ],
+      "lengthM": 4342.2983423383885,
+      "curveCount": 3,
+      "minRadiusM": 90.0,
+      "meanRadiusM": 96.66666666666667,
+      "sharpCornerCount": 0,
+      "totalTurnDeg": 120.0,
+      "elevationGainM": 0.0,
+      "elevationLossM": 0.0
+    },
+    {
+      "routeId": "R8_JOG90",
+      "name": "Kreuzungsfolge Alpha-Omega",
+      "description": "Eine sonst gerade Straße, die sechsmal im rechten Winkel versetzt ist (alte Flurgrenzen). Viel Richtungsänderung, aber keine einzige echte Kurve.",
+      "fromNode": "ALPHA",
+      "toNode": "OMEGA",
+      "highway": "tertiary",
+      "surface": "asphalt",
+      "maxspeedKmh": 70,
+      "landuse": null,
+      "wayIds": [
+        100006
+      ],
+      "lengthM": 4870.303411530792,
+      "curveCount": 0,
+      "minRadiusM": null,
+      "meanRadiusM": null,
+      "sharpCornerCount": 6,
+      "totalTurnDeg": 540.0,
+      "elevationGainM": 0.0,
+      "elevationLossM": 0.0
+    },
+    {
+      "routeId": "R9_DOGLEG",
+      "name": "Hundskurve Alpha-Omega",
+      "description": "3,5 km schnelle Gerade, die unvermittelt in einen 20-m-Radius läuft - eine einzelne Überraschungskurve, kein Kurvenerlebnis.",
+      "fromNode": "ALPHA",
+      "toNode": "OMEGA",
+      "highway": "tertiary",
+      "surface": "asphalt",
+      "maxspeedKmh": 90,
+      "landuse": null,
+      "wayIds": [
+        100007
+      ],
+      "lengthM": 4325.969579321285,
+      "curveCount": 1,
+      "minRadiusM": 20.0,
+      "meanRadiusM": 20.0,
+      "sharpCornerCount": 0,
+      "totalTurnDeg": 95.0,
+      "elevationGainM": 0.0,
+      "elevationLossM": 0.0
+    },
+    {
+      "routeId": "R5_GRID",
+      "name": "Ortsdurchfahrt Alpha-Omega",
+      "description": "Acht rechtwinklige Ecken durch ein Wohngebiet (Tempo 50). Geometrisch die 'kurvigste' Alternative (größte Gesamt-Richtungsänderung, siehe sharpCornerCount) - aber Radius 0, Ortsdurchfahrt: ein guter Algorithmus MUSS das abwerten, nicht belohnen.",
+      "fromNode": "ALPHA",
+      "toNode": "OMEGA",
+      "highway": "residential",
+      "surface": "asphalt",
+      "maxspeedKmh": 50,
+      "landuse": "residential",
+      "wayIds": [
+        100009
+      ],
+      "lengthM": 4470.929806958935,
+      "curveCount": 0,
+      "minRadiusM": null,
+      "meanRadiusM": null,
+      "sharpCornerCount": 8,
+      "totalTurnDeg": 716.8201698801358,
+      "elevationGainM": 0.0,
+      "elevationLossM": 0.0
+    },
+    {
+      "routeId": "R_HILL_FLAT",
+      "name": "Talstraße Alpha-Omega",
+      "description": "Gleicher Grundriss wie R_HILL_CLIMB, aber eben (ele konstant 0 m). Dient als Neutralitäts-Kontrolle: Kurvenbewertung darf sich zwischen den beiden NICHT unterscheiden, denn die Grundriss-Geometrie ist identisch.",
+      "fromNode": "HILL_START",
+      "toNode": "HILL_END",
+      "highway": "tertiary",
+      "surface": "asphalt",
+      "maxspeedKmh": 70,
+      "landuse": null,
+      "wayIds": [
+        100010
+      ],
+      "lengthM": 1183.9724354387524,
+      "curveCount": 2,
+      "minRadiusM": 220.0,
+      "meanRadiusM": 220.0,
+      "sharpCornerCount": 0,
+      "totalTurnDeg": 100.0,
+      "elevationGainM": 0.0,
+      "elevationLossM": 0.0
+    },
+    {
+      "routeId": "R_HILL_CLIMB",
+      "name": "Passstraße Alpha-Omega",
+      "description": "Gleicher Grundriss wie R_HILL_FLAT (gespiegelt, identische Radien/Längen), aber mit 350 Höhenmetern (linearer Anstieg).",
+      "fromNode": "HILL_START",
+      "toNode": "HILL_END",
+      "highway": "tertiary",
+      "surface": "asphalt",
+      "maxspeedKmh": 60,
+      "landuse": null,
+      "wayIds": [
+        100011
+      ],
+      "lengthM": 1183.9724354387524,
+      "curveCount": 2,
+      "minRadiusM": 220.0,
+      "meanRadiusM": 220.0,
+      "sharpCornerCount": 0,
+      "totalTurnDeg": 100.0,
+      "elevationGainM": 350.0,
+      "elevationLossM": 0.0
+    },
+    {
+      "routeId": "R_FOREST",
+      "name": "Waldstraße Alpha-Omega",
+      "description": "Gleicher Grundriss wie R_INDUSTRIAL (gespiegelt), führt aber durch landuse=forest statt landuse=industrial.",
+      "fromNode": "GREEN_START",
+      "toNode": "GREEN_END",
+      "highway": "tertiary",
+      "surface": "asphalt",
+      "maxspeedKmh": 70,
+      "landuse": "forest",
+      "wayIds": [
+        100012
+      ],
+      "lengthM": 1183.9724354387524,
+      "curveCount": 2,
+      "minRadiusM": 220.0,
+      "meanRadiusM": 220.0,
+      "sharpCornerCount": 0,
+      "totalTurnDeg": 100.0,
+      "elevationGainM": 0.0,
+      "elevationLossM": 0.0
+    },
+    {
+      "routeId": "R_INDUSTRIAL",
+      "name": "Industriestraße Alpha-Omega",
+      "description": "Gleicher Grundriss wie R_FOREST (identische Radien/Längen/Kurven), führt aber durch landuse=industrial.",
+      "fromNode": "GREEN_START",
+      "toNode": "GREEN_END",
+      "highway": "tertiary",
+      "surface": "asphalt",
+      "maxspeedKmh": 70,
+      "landuse": "industrial",
+      "wayIds": [
+        100014
+      ],
+      "lengthM": 1183.9724354387524,
+      "curveCount": 2,
+      "minRadiusM": 220.0,
+      "meanRadiusM": 220.0,
+      "sharpCornerCount": 0,
+      "totalTurnDeg": 100.0,
+      "elevationGainM": 0.0,
+      "elevationLossM": 0.0
+    }
+  ],
+  "expectations": [
+    {
+      "id": "E1_CURVES_OVER_HIGHWAY",
+      "from": "ALPHA",
+      "to": "OMEGA",
+      "preferRouteIds": [
+        "R2_SERPENTINE",
+        "R3_FLOWING",
+        "R4_S_CURVES"
+      ],
+      "overRouteIds": [
+        "R1_HIGHWAY"
+      ],
+      "severity": "hard",
+      "reason": "Ein Kurven-Router darf nicht einfach die kürzeste/geradeste Straße nehmen, nur weil sie kürzer ist - das ist Calimotos Fehler, den OpenCurv vermeiden soll."
+    },
+    {
+      "id": "E2_CURVES_OVER_MOTORWAY",
+      "from": "ALPHA",
+      "to": "OMEGA",
+      "preferRouteIds": [
+        "R2_SERPENTINE",
+        "R3_FLOWING",
+        "R4_S_CURVES"
+      ],
+      "overRouteIds": [
+        "R7_MOTORWAY"
+      ],
+      "severity": "hard",
+      "reason": "Die Autobahn ist die schnellste Option; ein Kurven-Router muss ihr trotzdem widerstehen können."
+    },
+    {
+      "id": "E3_CURVES_OVER_GRID",
+      "from": "ALPHA",
+      "to": "OMEGA",
+      "preferRouteIds": [
+        "R2_SERPENTINE",
+        "R3_FLOWING",
+        "R4_S_CURVES"
+      ],
+      "overRouteIds": [
+        "R5_GRID"
+      ],
+      "severity": "hard",
+      "reason": "Kernfalle: R5_GRID hat die meisten Richtungswechsel überhaupt (sharpCornerCount = 8, totalTurnDeg ≈ 720°), aber Radius 0 und Tempo-50-Ortsdurchfahrt. Geometrische Kurvigkeit ist nicht dasselbe wie eine gute Motorradkurve."
+    },
+    {
+      "id": "E4_CURVES_OVER_DOGLEG",
+      "from": "ALPHA",
+      "to": "OMEGA",
+      "preferRouteIds": [
+        "R2_SERPENTINE",
+        "R3_FLOWING",
+        "R4_S_CURVES"
+      ],
+      "overRouteIds": [
+        "R9_DOGLEG"
+      ],
+      "severity": "hard",
+      "reason": "Eine einzelne Überraschungskurve nach 2,6 km Gerade ist kein Kurvenerlebnis und obendrein ein Sicherheitsrisiko - niedrige Kurvendichte trotz vorhandener Kurve."
+    },
+    {
+      "id": "E5_CURVES_OVER_JOG90",
+      "from": "ALPHA",
+      "to": "OMEGA",
+      "preferRouteIds": [
+        "R2_SERPENTINE",
+        "R3_FLOWING",
+        "R4_S_CURVES"
+      ],
+      "overRouteIds": [
+        "R8_JOG90"
+      ],
+      "severity": "hard",
+      "reason": "Stumpfe 90°-Ecken sind Richtungswechsel, aber keine fahrbaren Kurven (Radius 0, wie bei R5_GRID)."
+    },
+    {
+      "id": "E6_CURVES_OVER_GRAVEL",
+      "from": "ALPHA",
+      "to": "OMEGA",
+      "preferRouteIds": [
+        "R2_SERPENTINE",
+        "R3_FLOWING",
+        "R4_S_CURVES"
+      ],
+      "overRouteIds": [
+        "R6_GRAVEL"
+      ],
+      "severity": "soft",
+      "reason": "Für ein Straßen-/Sporttourenprofil sollte Asphalt vor Schotter gehen, obwohl R6_GRAVEL ähnlich kurvig ist wie R3_FLOWING. Bei einem Enduro-/Adventure-Profil kehrt sich diese Erwartung bewusst um - deshalb 'soft', nicht 'hard'."
+    },
+    {
+      "id": "E7_HIGHWAY_OVER_GRID",
+      "from": "ALPHA",
+      "to": "OMEGA",
+      "preferRouteIds": [
+        "R1_HIGHWAY"
+      ],
+      "overRouteIds": [
+        "R5_GRID"
+      ],
+      "severity": "hard",
+      "reason": "Selbst die langweilige Schnellstraße muss die Ortsdurchfahrt schlagen - R5_GRID darf nicht einmal die zweitbeste Wahl sein."
+    },
+    {
+      "id": "E8_ELEVATION_NEUTRALITY",
+      "from": "HILL_START",
+      "to": "HILL_END",
+      "preferRouteIds": [],
+      "overRouteIds": [],
+      "severity": "info",
+      "reason": "R_HILL_FLAT und R_HILL_CLIMB haben identische Grundriss-Geometrie (Radien, Längen, Kurvenzahl) und unterscheiden sich nur um 350 Höhenmeter. Eine reine Kurvenbewertung sollte beide gleich bewerten; eine starke, unbegründete Präferenz für eine der beiden zeigt, dass der Algorithmus fälschlich auf das ele-Tag statt auf Kurvengeometrie reagiert. Nicht automatisch auswertbar aus einer einzelnen Route - als Hinweis für manuelle Prüfung gedacht."
+    },
+    {
+      "id": "E9_SCENIC_FOREST_OVER_INDUSTRIAL",
+      "from": "GREEN_START",
+      "to": "GREEN_END",
+      "preferRouteIds": [
+        "R_FOREST"
+      ],
+      "overRouteIds": [
+        "R_INDUSTRIAL"
+      ],
+      "severity": "soft",
+      "reason": "Bei identischer Kurvengeometrie ist der Wald die landschaftlich schönere Wahl. Das ist ein Zukunfts-Hook für eine Szenerie-Bewertung, noch keine harte Anforderung - so lange OpenCurv Landuse nicht gewichtet, ist Gleichstand hier akzeptabel."
+    }
+  ]
+}

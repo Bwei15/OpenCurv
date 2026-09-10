@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#0B0F14</color>
+    <!--
+      Fallback for anything that cannot use the gradient background vector
+      (older launcher paths, notification backdrops). The middle stop of
+      drawable/ic_launcher_background.xml: Kurvenblau, the brand primary.
+    -->
+    <color name="ic_launcher_background">#2440D9</color>
 </resources>

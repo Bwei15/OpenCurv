@@ -20,3 +20,18 @@ local.properties
 *.map
 *.rd5
 .kotlin/
+# Cloud-Pipeline (tools/pipeline): alle Zwischen- und Endstaende der
+# Datenerzeugung. Nichts davon gehoert ins Repository -- die Artefakte
+# entstehen in GitHub Actions und werden als Release veroeffentlicht.
+/tools/pipeline/work/
+/tools/pipeline/bin/__pycache__/
+/tools/pipeline/out/
+/tools/pipeline/.venv/
+*.osm.pbf
+*.osm.pbf.md5
+*.pmtiles
+*.bef
+*.hgt
+catalog.json
+SHA256SUMS
+__pycache__/

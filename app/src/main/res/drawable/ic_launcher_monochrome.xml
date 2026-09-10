@@ -1,14 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  OpenCurv launcher foreground: one serpentine, drawn as a road ribbon that
+  OpenCurv themed-icon layer: one serpentine, drawn as a road ribbon that
   narrows with distance. Not a motorcycle and not a map pin - the product is
   the curve, so the curve is the mark.
 
   108 x 108 dp adaptive grid. The whole figure lives inside a 60 dp box centred
   at (54, 54), i.e. comfortably inside the 66 dp guaranteed-visible safe zone
-  (21..87), so no launcher mask can clip it. It is a filled outline rather than
-  a stroked path because the width has to change along the way, and it doubles
-  as the monochrome layer: the silhouette alone still reads as a serpentine.
+  (21..87), so no launcher mask can clip it.
+
+  Identical geometry to the foreground. The colour below is irrelevant: for a
+  themed icon the system keeps only the alpha and replaces the fill with a
+  wallpaper-derived tint. That is exactly why the mark had to work as a plain
+  silhouette from the first sketch.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
@@ -17,5 +20,5 @@
     android:viewportHeight="108">
     <path
         android:pathData="M56.3,83.1 L57.9,81.7 L59.6,80.3 L61.2,79 L62.8,77.6 L64.3,76.2 L65.6,74.7 L66.9,73.1 L67.9,71.4 L68.7,69.6 L69.2,67.7 L69.4,65.7 L69.1,63.7 L68.4,61.8 L67.5,60.1 L66.4,58.6 L65.1,57.1 L63.7,55.8 L62.1,54.5 L60.5,53.3 L58.8,52.1 L57,50.9 L55.3,49.8 L53.5,48.6 L51.9,47.5 L50.3,46.4 L48.9,45.3 L47.6,44.3 L46.5,43.3 L45.6,42.3 L45,41.5 L44.5,40.7 L44.2,40 L44.1,39.3 L44.1,38.7 L44.3,37.9 L44.7,37.1 L45.3,36.1 L46.1,35.1 L47.2,34 L48.4,32.8 L49.8,31.6 L51.3,30.4 L52.9,29.2 L54.6,28 L52.1,24.4 L50.3,25.6 L48.6,26.7 L46.9,27.9 L45.4,29.1 L43.9,30.4 L42.5,31.7 L41.3,33 L40.2,34.4 L39.4,36 L38.9,37.6 L38.6,39.3 L38.8,41.1 L39.2,42.8 L40,44.4 L40.9,45.9 L42.1,47.4 L43.4,48.8 L44.9,50.1 L46.4,51.4 L48.1,52.7 L49.7,54 L51.4,55.2 L53.1,56.5 L54.7,57.7 L56.2,58.9 L57.5,60 L58.7,61.2 L59.7,62.2 L60.4,63.2 L60.9,64 L61.2,64.7 L61.3,65.3 L61.3,65.7 L61.1,66 L60.9,66.5 L60.5,67.1 L60,67.8 L59.1,68.6 L58.1,69.5 L56.9,70.5 L55.4,71.5 L53.9,72.5 L52.2,73.6 L50.4,74.6 L49.4,75.5 L48.6,76.6 L48.2,77.9 L48.2,79.3 L48.5,80.6 L49.1,81.8 L50,82.8 L51.2,83.5 L52.4,83.9 L53.8,84 L55.1,83.7 Z"
-        android:fillColor="#F1EFE8" />
+        android:fillColor="#FF000000" />
 </vector>

@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "_comment": [
+    "DIE Konfigurationsdatei der Pipeline. Welche Regionen gebaut werden,",
+    "steht AUSSCHLIESSLICH hier -- kein Workflow und kein Skript kennt eine",
+    "Region beim Namen.",
+    "",
+    "Eine Region hinzufuegen: einen Eintrag in 'regions' anhaengen, fertig.",
+    "Pflichtfelder: id, name, source. Alles andere ist optional und faellt",
+    "auf 'defaults' zurueck. 'bbox' darf fehlen -- dann liest die Pipeline",
+    "die Bounding-Box aus dem PBF-Kopf. Angegeben ist sie nur, damit der",
+    "DEM-Job die noetigen Hoehenkacheln kennt, OHNE vorher das PBF zu laden.",
+    "",
+    "Die bbox-Werte stammen aus https://download.geofabrik.de/index-v1.json",
+    "(abgerufen 2026-09-10), nicht geschaetzt.",
+    "",
+    "'enabled': false nimmt eine Region aus dem planmaessigen Lauf heraus,",
+    "sie bleibt aber ueber workflow_dispatch einzeln baubar."
+  ],
+
+  "defaults": {
+    "sourceType": "geofabrik",
+    "curveLevels": 16,
+    "demArcsec": 1,
+    "runner": "ubuntu-latest",
+    "artifacts": ["rd5", "pmtiles"],
+    "enabled": true
+  },
+
+  "release": {
+    "tagPrefix": "data-",
+    "maxAssetBytes": 2147483648,
+    "splitMarginBytes": 104857600,
+    "catalogName": "catalog.json"
+  },
+
+  "dem": {
+    "source": "copernicus-glo30",
+    "bucket": "https://copernicus-dem-30m.s3.amazonaws.com",
+    "_comment": "GLO-30 liegt als COG im oeffentlichen S3-Bucket, ohne Anmeldung ueber HTTPS erreichbar. Umsetzung nach .hgt mit gdal_translate, dann nach .bef mit btools.mapcreator.ElevationRasterTileConverter."
+  },
+
+  "regions": [
+    { "id": "de-bw", "name": "Baden-Wuerttemberg", "source": "europe/germany/baden-wuerttemberg", "bbox": [7.5065, 47.5308, 10.5150, 49.7946] },
+    { "id": "de-by", "name": "Bayern",             "source": "europe/germany/bayern",             "bbox": [8.9752, 47.2654, 13.8495, 50.5662] },
+    { "id": "de-be", "name": "Berlin",             "source": "europe/germany/berlin",             "bbox": [13.0828, 52.3345, 13.7622, 52.6783] },
+    { "id": "de-bb", "name": "Brandenburg",        "source": "europe/germany/brandenburg",        "bbox": [11.2240, 51.3525, 14.7748, 53.5784] },
+    { "id": "de-hb", "name": "Bremen",             "source": "europe/germany/bremen",             "bbox": [8.4810, 53.0103, 8.9913, 53.6106] },
+    { "id": "de-hh", "name": "Hamburg",            "source": "europe/germany/hamburg",            "bbox": [7.9678, 53.3918, 10.3320, 54.0626] },
+    { "id": "de-he", "name": "Hessen",             "source": "europe/germany/hessen",             "bbox": [7.7680, 49.3932, 10.2460, 51.6592] },
+    { "id": "de-mv", "name": "Mecklenburg-Vorpommern", "source": "europe/germany/mecklenburg-vorpommern", "bbox": [10.5881, 53.1062, 14.4229, 54.9837] },
+    { "id": "de-ni", "name": "Niedersachsen",      "source": "europe/germany/niedersachsen",      "bbox": [6.2953, 51.2935, 11.6073, 54.2396] },
+    { "id": "de-nw", "name": "Nordrhein-Westfalen","source": "europe/germany/nordrhein-westfalen","bbox": [5.8644, 50.3209, 9.4683, 52.5335] },
+    { "id": "de-rp", "name": "Rheinland-Pfalz",    "source": "europe/germany/rheinland-pfalz",    "bbox": [6.1091, 48.9638, 8.5112, 50.9440] },
+    { "id": "de-sl", "name": "Saarland",           "source": "europe/germany/saarland",           "bbox": [6.3545, 49.1081, 7.4063, 49.6415] },
+    { "id": "de-sn", "name": "Sachsen",            "source": "europe/germany/sachsen",            "bbox": [11.8668, 50.1666, 15.0508, 51.6874] },
+    { "id": "de-st", "name": "Sachsen-Anhalt",     "source": "europe/germany/sachsen-anhalt",     "bbox": [10.5473, 50.9289, 13.2127, 53.0566] },
+    { "id": "de-sh", "name": "Schleswig-Holstein", "source": "europe/germany/schleswig-holstein", "bbox": [7.4646, 53.3569, 11.7993, 55.1463] },
+    { "id": "de-th", "name": "Thueringen",         "source": "europe/germany/thueringen",         "bbox": [9.8632, 50.1997, 12.6611, 51.6524] }
+  ]
+}

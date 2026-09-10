@@ -272,12 +272,12 @@ Design-System umstellt:
 | Sprachausgabe | Sonnet | Ursache der Mehrfachansagen behoben, zeitbasierte Trigger in Sekunden, Headset-Aufwach-Chime (340 ms), Schräglagen-Sprechverbot. Commit `c5c349f`. |
 | Karten-Renderer & UI-Polisher | Sonnet | Mapsforge-Rendering durch MapLibre Native SDK (11.11.0) ersetzt. Vektorkacheln via PMTiles offline geladen. Tag/Nacht-Styles mit lokalen Offline-Glyphen. Alle 4 UI-Befunde (Zahnrad-Icon, Statusbar-Insets, kompakter Sheet-Peek, HUD-Schriftgrößen 34 sp) behoben. `MapLibreStyleTest` grün. |
 
-### Welle 4 — Läuft
-
-| Agent | Modell | Auftrag |
+### Welle 4 — Abgeschlossen
+ 
+| Agent | Modell | Ergebnis |
 | --- | --- | --- |
-| Ortssuche- & Daten-Ingenieur | Sonnet | Ortssuche und Regionen-Download anpassen: Alte Mapsforge-Downloads durch unsere GitHub-Release-Artefakte (PMTiles + RD5 + Catalog) ersetzen; autarker Basis-Ortskatalog. |
-| Release & Dokumentation | Sonnet | README aktualisieren (neue Architektur, Screenshots, Installationshinweise), Versionsabnahme v0.1.5. |
+| Ortssuche- & Daten-Ingenieur | Sonnet | Ortssuche und Regionen-Download entkoppelt: GitHub-Release-Downloads (`github.com`, `objects.githubusercontent.com`), PMTiles + RD5 Download in `DownloadRepository`, abwärtskompatibler `MapCatalog` für `catalog.json` & `regions.json`. Schneller autarker TSV-Starter-Ortskatalog (`places_de.tsv` mit 129 Zielen), sodass Fahrer sofort offline suchen und planen können. Commit `88257f5`. |
+| Release & Dokumentation | Sonnet | README aktualisiert (MapLibre Native, PMTiles, OSM-Kurventagging, Screenshots, lokale APK-Builds), APK-Assemble-Job aus GitHub Actions entfernt (Commit `bd91125`), Release-Build verifiziert. 158/158 Android-Unit-Tests grün, JVM-Verifier 100% grün. |
 
 ### Welle 5 — Geplant: Echtzeitverkehr & Baustellen-Vermeidung (Mobilithek / BMDV)
 
@@ -289,9 +289,9 @@ Design-System umstellt:
 
 ### Noch offen
 
-- **Ortssuche & Downloads** auf die neuen GitHub-Release-Artefakte (`pmtiles`, `.rd5`, `catalog.json`) umstellen (in Arbeit).
-- **H3-Kurven-Hotspots** (optional für Rundtouren-Feature zurückgestellt).
-- **Release v0.1.5** und README-Dokumentation.
-- **Echtzeitdaten-Integration** (Welle 5).
+- **Echtzeitdaten-Integration** (Welle 5: Mobilithek-Client, dynamische BRouter No-Go-Polygone/Punkte, MapLibre Incident-Layer).
+- **H3-Kurven-Hotspots** (optional für spätere automatische Rundtouren-Generierung).
+- **GitHub Release Tag v0.1.5** mit den erzeugten Kacheln und lokaler Release-APK.
+
 
 

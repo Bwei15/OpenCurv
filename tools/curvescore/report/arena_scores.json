@@ -1,0 +1,541 @@
+{
+  "ranking": [
+    {
+      "routeId": "R4_S_CURVES",
+      "name": "Wellenstraße Alpha-Omega",
+      "level": 9,
+      "raw01": 0.5905161551676478,
+      "continuous": 8.857742327514716,
+      "lengthM": 4254.4526470244355,
+      "confidence": 0.855,
+      "terms": {
+        "density": 0.7319924828520971,
+        "engagement": 0.4768526285269797,
+        "alternation": 0.49481528014773346,
+        "rhythm": 0.2783952940126719,
+        "gradient": 0.0,
+        "scenery": 0.5,
+        "roadClass": 0.9
+      },
+      "penalties": {
+        "corner": 1.0,
+        "settlement": 1.0,
+        "traffic": 1.0,
+        "surface": 1.0
+      },
+      "stats": {
+        "curveCount": 31.0,
+        "cornerCount": 0.0,
+        "minRadiusM": 42.92622685809795,
+        "curvatureDegPerKm": 254.7774360681155,
+        "cornersPerKm": 0.0
+      },
+      "truth": {
+        "curveCount": 30,
+        "sharpCornerCount": 0,
+        "minRadiusM": 45.0,
+        "totalTurnDeg": 1400.0
+      }
+    },
+    {
+      "routeId": "R2_SERPENTINE",
+      "name": "Serpentine Alpha-Omega",
+      "level": 8,
+      "raw01": 0.508688521917941,
+      "continuous": 7.630327828769115,
+      "lengthM": 4804.006729752912,
+      "confidence": 0.855,
+      "terms": {
+        "density": 0.660209383748841,
+        "engagement": 0.33138369637693194,
+        "alternation": 0.46803135658295036,
+        "rhythm": 0.24601173427461273,
+        "gradient": 0.0,
+        "scenery": 0.48688917867828935,
+        "roadClass": 0.9
+      },
+      "penalties": {
+        "corner": 1.0,
+        "settlement": 0.9672229466957235,
+        "traffic": 1.0,
+        "surface": 1.0
+      },
+      "stats": {
+        "curveCount": 15.0,
+        "cornerCount": 0.0,
+        "minRadiusM": 23.891415553543997,
+        "curvatureDegPerKm": 443.01411234798667,
+        "cornersPerKm": 0.0
+      },
+      "truth": {
+        "curveCount": 14,
+        "sharpCornerCount": 0,
+        "minRadiusM": 24.0,
+        "totalTurnDeg": 2352.0
+      }
+    },
+    {
+      "routeId": "R_HILL_CLIMB",
+      "name": "Passstraße Alpha-Omega",
+      "level": 4,
+      "raw01": 0.30375570272025937,
+      "continuous": 4.55633554080389,
+      "lengthM": 2238.5933973864767,
+      "confidence": 0.9,
+      "terms": {
+        "density": 0.3248639500452305,
+        "engagement": 0.2190884239366073,
+        "alternation": 0.05499738499788503,
+        "rhythm": 0.0,
+        "gradient": 0.206191866078644,
+        "scenery": 0.5,
+        "roadClass": 0.9
+      },
+      "penalties": {
+        "corner": 1.0,
+        "settlement": 1.0,
+        "traffic": 1.0,
+        "surface": 1.0
+      },
+      "stats": {
+        "curveCount": 4.0,
+        "cornerCount": 0.0,
+        "minRadiusM": 218.39801884825357,
+        "curvatureDegPerKm": 85.15978987917363,
+        "cornersPerKm": 0.0
+      },
+      "truth": {
+        "curveCount": 2,
+        "sharpCornerCount": 0,
+        "minRadiusM": 220.0,
+        "totalTurnDeg": 100.0
+      }
+    },
+    {
+      "routeId": "R_HILL_FLAT",
+      "name": "Talstraße Alpha-Omega",
+      "level": 4,
+      "raw01": 0.28927081196289556,
+      "continuous": 4.339062179443434,
+      "lengthM": 2238.592543277515,
+      "confidence": 0.9,
+      "terms": {
+        "density": 0.3248624817646268,
+        "engagement": 0.218665707340299,
+        "alternation": 0.05499738499788503,
+        "rhythm": 0.0,
+        "gradient": 0.0,
+        "scenery": 0.5,
+        "roadClass": 0.9
+      },
+      "penalties": {
+        "corner": 1.0,
+        "settlement": 1.0,
+        "traffic": 1.0,
+        "surface": 1.0
+      },
+      "stats": {
+        "curveCount": 4.0,
+        "cornerCount": 0.0,
+        "minRadiusM": 218.74183704432326,
+        "curvatureDegPerKm": 85.15847017174899,
+        "cornersPerKm": 0.0
+      },
+      "truth": {
+        "curveCount": 2,
+        "sharpCornerCount": 0,
+        "minRadiusM": 220.0,
+        "totalTurnDeg": 100.0
+      }
+    },
+    {
+      "routeId": "R_FOREST",
+      "name": "Waldstraße Alpha-Omega",
+      "level": 4,
+      "raw01": 0.2648029929236863,
+      "continuous": 3.9720448938552946,
+      "lengthM": 2238.5927351361047,
+      "confidence": 0.855,
+      "terms": {
+        "density": 0.32483625818818584,
+        "engagement": 0.21884402285660032,
+        "alternation": 0.054997384997885035,
+        "rhythm": 0.0,
+        "gradient": 0.0,
+        "scenery": 0.7304807692307692,
+        "roadClass": 0.9
+      },
+      "penalties": {
+        "corner": 1.0,
+        "settlement": 0.8969284188034189,
+        "traffic": 1.0,
+        "surface": 1.0
+      },
+      "stats": {
+        "curveCount": 4.0,
+        "cornerCount": 0.0,
+        "minRadiusM": 218.1996437898599,
+        "curvatureDegPerKm": 85.1597898791737,
+        "cornersPerKm": 0.0
+      },
+      "truth": {
+        "curveCount": 2,
+        "sharpCornerCount": 0,
+        "minRadiusM": 220.0,
+        "totalTurnDeg": 100.0
+      }
+    },
+    {
+      "routeId": "R3_FLOWING",
+      "name": "Landstraße Alpha-Omega",
+      "level": 3,
+      "raw01": 0.22745096450226027,
+      "continuous": 3.411764467533904,
+      "lengthM": 4950.592719133532,
+      "confidence": 0.855,
+      "terms": {
+        "density": 0.230196723891112,
+        "engagement": 0.17793835463920463,
+        "alternation": 0.0,
+        "rhythm": 0.0,
+        "gradient": 0.0,
+        "scenery": 0.5,
+        "roadClass": 0.85
+      },
+      "penalties": {
+        "corner": 1.0,
+        "settlement": 1.0,
+        "traffic": 1.0,
+        "surface": 1.0
+      },
+      "stats": {
+        "curveCount": 5.0,
+        "cornerCount": 0.0,
+        "minRadiusM": 179.35280828338318,
+        "curvatureDegPerKm": 45.592447387409074,
+        "cornersPerKm": 0.0
+      },
+      "truth": {
+        "curveCount": 4,
+        "sharpCornerCount": 0,
+        "minRadiusM": 180.0,
+        "totalTurnDeg": 210.0
+      }
+    },
+    {
+      "routeId": "R9_DOGLEG",
+      "name": "Hundskurve Alpha-Omega",
+      "level": 3,
+      "raw01": 0.19521450094493814,
+      "continuous": 2.9282175141740723,
+      "lengthM": 4320.713373344623,
+      "confidence": 0.855,
+      "terms": {
+        "density": 0.14376487224827503,
+        "engagement": 0.03014049531919876,
+        "alternation": 0.21429337818747382,
+        "rhythm": 0.0,
+        "gradient": 0.0,
+        "scenery": 0.5,
+        "roadClass": 0.9
+      },
+      "penalties": {
+        "corner": 1.0,
+        "settlement": 1.0,
+        "traffic": 1.0,
+        "surface": 1.0
+      },
+      "stats": {
+        "curveCount": 2.0,
+        "cornerCount": 0.0,
+        "minRadiusM": 19.991225407820686,
+        "curvatureDegPerKm": 22.871365844370423,
+        "cornersPerKm": 0.0
+      },
+      "truth": {
+        "curveCount": 1,
+        "sharpCornerCount": 0,
+        "minRadiusM": 20.0,
+        "totalTurnDeg": 95.0
+      }
+    },
+    {
+      "routeId": "R_INDUSTRIAL",
+      "name": "Industriestraße Alpha-Omega",
+      "level": 1,
+      "raw01": 0.1105255079587691,
+      "continuous": 1.6578826193815366,
+      "lengthM": 2238.5917978018297,
+      "confidence": 0.855,
+      "terms": {
+        "density": 0.32483736943213454,
+        "engagement": 0.21920414122340023,
+        "alternation": 0.054997384997885035,
+        "rhythm": 0.0,
+        "gradient": 0.0,
+        "scenery": 0.2166666666666667,
+        "roadClass": 0.9
+      },
+      "penalties": {
+        "corner": 1.0,
+        "settlement": 0.46875,
+        "traffic": 1.0,
+        "surface": 1.0
+      },
+      "stats": {
+        "curveCount": 4.0,
+        "cornerCount": 0.0,
+        "minRadiusM": 218.19964378829252,
+        "curvatureDegPerKm": 85.15978987917437,
+        "cornersPerKm": 0.0
+      },
+      "truth": {
+        "curveCount": 2,
+        "sharpCornerCount": 0,
+        "minRadiusM": 220.0,
+        "totalTurnDeg": 100.0
+      }
+    },
+    {
+      "routeId": "R8_JOG90",
+      "name": "Kreuzungsfolge Alpha-Omega",
+      "level": 1,
+      "raw01": 0.09802354231335995,
+      "continuous": 1.4703531347003993,
+      "lengthM": 4864.858228409259,
+      "confidence": 0.855,
+      "terms": {
+        "density": 0.19486470330166228,
+        "engagement": 0.03293570857771644,
+        "alternation": 0.0,
+        "rhythm": 0.0,
+        "gradient": 0.0,
+        "scenery": 0.5,
+        "roadClass": 0.9
+      },
+      "penalties": {
+        "corner": 0.5189198564104841,
+        "settlement": 1.0,
+        "traffic": 1.0,
+        "surface": 1.0
+      },
+      "stats": {
+        "curveCount": 2.0,
+        "cornerCount": 5.0,
+        "minRadiusM": 56.50359055598193,
+        "curvatureDegPerKm": 30.129643180936608,
+        "cornersPerKm": 1.000015436536581
+      },
+      "truth": {
+        "curveCount": 0,
+        "sharpCornerCount": 6,
+        "minRadiusM": null,
+        "totalTurnDeg": 540.0
+      }
+    },
+    {
+      "routeId": "R6_GRAVEL",
+      "name": "Schotterpiste Alpha-Omega",
+      "level": 1,
+      "raw01": 0.0825223710892771,
+      "continuous": 1.2378355663391565,
+      "lengthM": 4337.070413346831,
+      "confidence": 0.855,
+      "terms": {
+        "density": 0.263214891834697,
+        "engagement": 0.09814117654824726,
+        "alternation": 0.0011100922009734187,
+        "rhythm": 0.2436164588675682,
+        "gradient": 0.0,
+        "scenery": 0.4373333333333332,
+        "roadClass": 0.35
+      },
+      "penalties": {
+        "corner": 0.9382454093225872,
+        "settlement": 0.8433333333333333,
+        "traffic": 1.0,
+        "surface": 0.5
+      },
+      "stats": {
+        "curveCount": 3.0,
+        "cornerCount": 1.0,
+        "minRadiusM": 89.79459130436906,
+        "curvatureDegPerKm": 24.040815888993187,
+        "cornersPerKm": 0.11028548963007309
+      },
+      "truth": {
+        "curveCount": 3,
+        "sharpCornerCount": 0,
+        "minRadiusM": 90.0,
+        "totalTurnDeg": 120.0
+      }
+    },
+    {
+      "routeId": "R1_HIGHWAY",
+      "name": "Schnellstraße Alpha-Omega",
+      "level": 1,
+      "raw01": 0.07600000000000004,
+      "continuous": 1.1400000000000006,
+      "lengthM": 3995.5283399994487,
+      "confidence": 0.855,
+      "terms": {
+        "density": 0.0,
+        "engagement": 0.0,
+        "alternation": 0.0,
+        "rhythm": 0.0,
+        "gradient": 0.0,
+        "scenery": 0.5,
+        "roadClass": 0.6
+      },
+      "penalties": {
+        "corner": 1.0,
+        "settlement": 1.0,
+        "traffic": 1.0,
+        "surface": 1.0
+      },
+      "stats": {
+        "curveCount": 0.0,
+        "cornerCount": 0.0,
+        "minRadiusM": 0.0,
+        "curvatureDegPerKm": 0.0,
+        "cornersPerKm": 0.0
+      },
+      "truth": {
+        "curveCount": 0,
+        "sharpCornerCount": 0,
+        "minRadiusM": null,
+        "totalTurnDeg": 0.0
+      }
+    },
+    {
+      "routeId": "R7_MOTORWAY",
+      "name": "Autobahn Alpha-Omega",
+      "level": 0,
+      "raw01": 0.052628035219685045,
+      "continuous": 0.7894205282952756,
+      "lengthM": 4775.5310808720005,
+      "confidence": 0.855,
+      "terms": {
+        "density": 0.019219470415501087,
+        "engagement": 0.007983139961741655,
+        "alternation": 0.0,
+        "rhythm": 0.0,
+        "gradient": 0.0,
+        "scenery": 0.4678571428571428,
+        "roadClass": 0.3
+      },
+      "penalties": {
+        "corner": 0.8712818291900634,
+        "settlement": 0.9196428571428571,
+        "traffic": 1.0,
+        "surface": 1.0
+      },
+      "stats": {
+        "curveCount": 2.0,
+        "cornerCount": 1.0,
+        "minRadiusM": 885.5770641050534,
+        "curvatureDegPerKm": 3.6548861631612373,
+        "cornersPerKm": 0.21453118570253665
+      },
+      "truth": {
+        "curveCount": 2,
+        "sharpCornerCount": 0,
+        "minRadiusM": 900.0,
+        "totalTurnDeg": 20.0
+      }
+    },
+    {
+      "routeId": "R5_GRID",
+      "name": "Ortsdurchfahrt Alpha-Omega",
+      "level": 0,
+      "raw01": 0.009558618245964729,
+      "continuous": 0.14337927368947093,
+      "lengthM": 4465.928382274467,
+      "confidence": 0.855,
+      "terms": {
+        "density": 0.02982709941995636,
+        "engagement": 0.009062579633740117,
+        "alternation": 0.0,
+        "rhythm": 0.0,
+        "gradient": 0.0,
+        "scenery": 0.3891304347826085,
+        "roadClass": 0.25
+      },
+      "penalties": {
+        "corner": 0.6747336543683682,
+        "settlement": 0.25,
+        "traffic": 1.0,
+        "surface": 1.0
+      },
+      "stats": {
+        "curveCount": 1.0,
+        "cornerCount": 8.0,
+        "minRadiusM": 369.79148310936324,
+        "curvatureDegPerKm": 3.374769307160849,
+        "cornersPerKm": 1.731449945673527
+      },
+      "truth": {
+        "curveCount": 0,
+        "sharpCornerCount": 8,
+        "minRadiusM": null,
+        "totalTurnDeg": 716.8201698801358
+      }
+    }
+  ],
+  "expectations": [
+    {
+      "id": "E1_CURVES_OVER_HIGHWAY",
+      "severity": "hard",
+      "passed": true,
+      "detail": "min(R2_SERPENTINE/R3_FLOWING/R4_S_CURVES)\u003dR3_FLOWING [0.2275, Stufe 3]  vs  max(R1_HIGHWAY)\u003dR1_HIGHWAY [0.0760, Stufe 1]"
+    },
+    {
+      "id": "E2_CURVES_OVER_MOTORWAY",
+      "severity": "hard",
+      "passed": true,
+      "detail": "min(R2_SERPENTINE/R3_FLOWING/R4_S_CURVES)\u003dR3_FLOWING [0.2275, Stufe 3]  vs  max(R7_MOTORWAY)\u003dR7_MOTORWAY [0.0526, Stufe 0]"
+    },
+    {
+      "id": "E3_CURVES_OVER_GRID",
+      "severity": "hard",
+      "passed": true,
+      "detail": "min(R2_SERPENTINE/R3_FLOWING/R4_S_CURVES)\u003dR3_FLOWING [0.2275, Stufe 3]  vs  max(R5_GRID)\u003dR5_GRID [0.0096, Stufe 0]"
+    },
+    {
+      "id": "E4_CURVES_OVER_DOGLEG",
+      "severity": "hard",
+      "passed": true,
+      "detail": "min(R2_SERPENTINE/R3_FLOWING/R4_S_CURVES)\u003dR3_FLOWING [0.2275, Stufe 3]  vs  max(R9_DOGLEG)\u003dR9_DOGLEG [0.1952, Stufe 3]"
+    },
+    {
+      "id": "E5_CURVES_OVER_JOG90",
+      "severity": "hard",
+      "passed": true,
+      "detail": "min(R2_SERPENTINE/R3_FLOWING/R4_S_CURVES)\u003dR3_FLOWING [0.2275, Stufe 3]  vs  max(R8_JOG90)\u003dR8_JOG90 [0.0980, Stufe 1]"
+    },
+    {
+      "id": "E6_CURVES_OVER_GRAVEL",
+      "severity": "soft",
+      "passed": true,
+      "detail": "min(R2_SERPENTINE/R3_FLOWING/R4_S_CURVES)\u003dR3_FLOWING [0.2275, Stufe 3]  vs  max(R6_GRAVEL)\u003dR6_GRAVEL [0.0825, Stufe 1]"
+    },
+    {
+      "id": "E7_HIGHWAY_OVER_GRID",
+      "severity": "hard",
+      "passed": true,
+      "detail": "min(R1_HIGHWAY)\u003dR1_HIGHWAY [0.0760, Stufe 1]  vs  max(R5_GRID)\u003dR5_GRID [0.0096, Stufe 0]"
+    },
+    {
+      "id": "E8_ELEVATION_NEUTRALITY",
+      "severity": "info",
+      "passed": true,
+      "detail": "flach 0.2893 (Stufe 4) vs. Steigung 0.3038 (Stufe 4), Differenz 0 Stufe(n), erlaubt \u003c\u003d 1"
+    },
+    {
+      "id": "E9_SCENIC_FOREST_OVER_INDUSTRIAL",
+      "severity": "soft",
+      "passed": true,
+      "detail": "min(R_FOREST)\u003dR_FOREST [0.2648, Stufe 4]  vs  max(R_INDUSTRIAL)\u003dR_INDUSTRIAL [0.1105, Stufe 1]"
+    }
+  ]
+}

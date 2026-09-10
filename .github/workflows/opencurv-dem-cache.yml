@@ -1,0 +1,108 @@
+name: OpenCurv Hoehendaten vorwaermen
+
+# ============================================================================
+# Baut die Copernicus-Hoehenraster (.bef) fuer alle Regionen aus regions.json
+# und legt sie in den Actions-Cache -- damit der eigentliche Datenlauf sie
+# nicht selbst erzeugen muss.
+#
+# Warum ein eigener Workflow: Das Erzeugen der Hoehenraster ist der teuerste
+# Einzelschritt, der sich NICHT jeden Monat aendert. Fuer Bayern gemessen:
+# 900 MB GeoTIFF laden (289 s) und daraus 145 MB .bef rechnen (28 s), mit
+# 1,4 GB Spitzen-Arbeitsspeicher. Einmal vorwaermen, danach greift der Cache.
+#
+# Der Cache-Schluessel ist derselbe wie in opencurv-data.yml
+# (dem-glo30-<arcsec>-<kachelliste>), deshalb teilen sich Regionen mit
+# gleichem Kachelbedarf einen Eintrag.
+#
+# Der Lauf ist rein additiv: er veroeffentlicht nichts und aendert nichts.
+# ============================================================================
+
+on:
+  workflow_dispatch:
+    inputs:
+      region:
+        description: 'Region-ID aus regions.json, oder "all"'
+        required: true
+        default: 'all'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: opencurv-dem-cache
+  cancel-in-progress: false
+
+jobs:
+  vorbereiten:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.m.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tools/pipeline/bin/regions.py check
+      - id: m
+        run: |
+          echo "matrix=$(python3 tools/pipeline/bin/regions.py matrix \
+            --only "${{ github.event.inputs.region || 'all' }}")" >> "$GITHUB_OUTPUT"
+
+  dem:
+    name: Hoehen ${{ matrix.name }}
+    needs: vorbereiten
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix: ${{ fromJSON(needs.vorbereiten.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Werkzeuge
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gdal-bin
+
+      - name: BRouter-Jar (nur fuer den Rasterwandler)
+        run: |
+          git clone --depth 1 https://github.com/abrensch/brouter.git upstream
+          ( cd upstream && ./gradlew :brouter-server:fatJar --console=plain -q )
+          cp upstream/brouter-server/build/libs/brouter-*-all.jar brouter-all.jar
+          rm -rf upstream
+
+      - id: dem
+        run: |
+          TILES=$(python3 tools/pipeline/bin/regions.py dem-tiles "${{ matrix.id }}" | tr '\n' ' ')
+          echo "tiles=$TILES" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v4
+        id: c
+        with:
+          path: dem/srtm1_bef
+          key: dem-glo30-${{ matrix.demArcsec }}-${{ steps.dem.outputs.tiles }}
+
+      - name: Bauen
+        if: steps.c.outputs.cache-hit != 'true'
+        env:
+          OPENCURV_BROUTER_JAR: ${{ github.workspace }}/brouter-all.jar
+        run: |
+          BB=$(python3 -c "
+          import sys; sys.path.insert(0,'tools/pipeline/bin'); import regions as R
+          print(' '.join(str(x) for x in R.by_id(R.load(),'${{ matrix.id }}')['bbox']))")
+          python3 tools/pipeline/bin/fetch_dem.py --bbox $BB \
+            --hgt-dir dem/hgt --bef-dir dem/srtm1_bef \
+            --arcsec "${{ matrix.demArcsec }}"
+          rm -rf dem/hgt
+          du -sh dem/srtm1_bef | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Bilanz
+        run: |
+          {
+            echo "### ${{ matrix.name }}"
+            echo "- Kacheln: \`${{ steps.dem.outputs.tiles }}\`"
+            echo "- Cache-Treffer: ${{ steps.c.outputs.cache-hit || 'nein' }}"
+            echo "- Groesse: $(du -sh dem/srtm1_bef 2>/dev/null | awk '{print $1}')"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -42,6 +42,8 @@ class PlaceSearchRepository(
     private val cacheDir: File,
     private val scope: CoroutineScope,
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val basePlacesProvider: (() -> List<Place>)? = null,
+    private val placesFiles: (() -> List<File>)? = null,
 ) {
 
     private val _state = MutableStateFlow<IndexState>(IndexState.Idle)
@@ -54,23 +56,57 @@ class PlaceSearchRepository(
 
     val size: Int get() = synchronized(places) { places.size }
 
+    /** Adds places to the index, e.g. from an external source or test fixture. */
+    fun loadPlaces(list: List<Place>) {
+        addAll(list)
+        if (size > 0 && (_state.value is IndexState.Idle || _state.value is IndexState.NoMaps)) {
+            _state.value = IndexState.Ready(size)
+        }
+    }
+
     /** Builds the index if it is not already there for exactly these maps. */
     fun ensureIndex() {
-        val files = mapFiles()
-        if (files.isEmpty()) {
-            _state.value = IndexState.NoMaps
+        loadBaseAndPlacesFiles()
+
+        val maps = mapFiles().filter { it.extension.equals("map", ignoreCase = true) }
+        if (maps.isEmpty()) {
+            _state.value = if (size > 0) IndexState.Ready(size) else IndexState.NoMaps
             return
         }
-        val fingerprint = files.map(::fingerprintOf).toSet()
-        if (fingerprint == indexedFiles && job?.isActive != true) return
+
+        val fingerprint = maps.map(::fingerprintOf).toSet()
+        if (fingerprint == indexedFiles && job?.isActive != true) {
+            if (_state.value !is IndexState.Ready) {
+                _state.value = IndexState.Ready(size)
+            }
+            return
+        }
         if (job?.isActive == true) return
 
         indexedFiles = fingerprint
-        synchronized(places) {
-            places.clear()
-            seen.clear()
+        job = scope.launch(dispatcher) { build(maps) }
+    }
+
+    private fun loadBaseAndPlacesFiles() {
+        basePlacesProvider?.invoke()?.let { addAll(it) }
+
+        placesFiles?.invoke()?.forEach { file ->
+            if (file.isFile) addAll(readPlaces(file))
         }
-        job = scope.launch(dispatcher) { build(files) }
+
+        val candidateDirs = mapFiles().mapNotNull { it.parentFile }.distinct()
+        for (dir in candidateDirs) {
+            dir.listFiles { f -> f.isFile && f.extension.equals("places", ignoreCase = true) }
+                ?.forEach { file -> addAll(readPlaces(file)) }
+        }
+
+        cacheDir.listFiles { f ->
+            f.isFile && f.extension.equals("places", ignoreCase = true) && !f.name.contains('-')
+        }?.forEach { file -> addAll(readPlaces(file)) }
+
+        if (size > 0 && _state.value is IndexState.Idle) {
+            _state.value = IndexState.Ready(size)
+        }
     }
 
     /** Called when maps are added or removed. */
@@ -120,11 +156,14 @@ class PlaceSearchRepository(
 
     /** Where the map data sits, so the map can open somewhere useful with no GPS. */
     suspend fun mapStartPosition(): GeoPoint? = withContext(dispatcher) {
-        mapFiles().firstNotNullOfOrNull { file ->
-            MapPlaceReader(file).use { reader ->
-                reader.startPosition()?.let { GeoPoint(it.latitude, it.longitude) }
+        val fromMap = mapFiles()
+            .filter { it.extension.equals("map", ignoreCase = true) }
+            .firstNotNullOfOrNull { file ->
+                MapPlaceReader(file).use { reader ->
+                    reader.startPosition()?.let { GeoPoint(it.latitude, it.longitude) }
+                }
             }
-        }
+        fromMap ?: synchronized(places) { places.firstOrNull()?.point }
     }
 
     private suspend fun scanNearby(
@@ -133,21 +172,23 @@ class PlaceSearchRepository(
     ): List<Pair<Place, Int>> = withTimeoutOrNull(NEARBY_TIMEOUT_MS) {
         withContext(dispatcher) {
             val found = ArrayList<Pair<Place, Int>>()
-            mapFiles().forEach { file ->
-                MapPlaceReader(file).use { reader ->
-                    if (!reader.isUsable) return@use
-                    reader.searchNearby(
-                        normalisedQuery = normalised,
-                        centreLat = near.latitude,
-                        centreLon = near.longitude,
-                        radiusMeters = NEARBY_RADIUS_METERS,
-                        limit = NEARBY_LIMIT,
-                    ) { place ->
-                        val rank = PlaceQuery.rank(place, normalised, distance(near, place))
-                        if (rank > 0) found += place to rank
+            mapFiles()
+                .filter { it.extension.equals("map", ignoreCase = true) }
+                .forEach { file ->
+                    MapPlaceReader(file).use { reader ->
+                        if (!reader.isUsable) return@use
+                        reader.searchNearby(
+                            normalisedQuery = normalised,
+                            centreLat = near.latitude,
+                            centreLon = near.longitude,
+                            radiusMeters = NEARBY_RADIUS_METERS,
+                            limit = NEARBY_LIMIT,
+                        ) { place ->
+                            val rank = PlaceQuery.rank(place, normalised, distance(near, place))
+                            if (rank > 0) found += place to rank
+                        }
                     }
                 }
-            }
             found
         }
     } ?: emptyList()
@@ -237,18 +278,7 @@ class PlaceSearchRepository(
     private fun readCache(file: File): List<Place>? = runCatching {
         val cache = cacheFileOf(file)
         if (!cache.isFile) return null
-        cache.readLines().mapNotNull { line ->
-            val parts = line.split('\t')
-            if (parts.size < 4) return@mapNotNull null
-            val kind = runCatching { PlaceKind.valueOf(parts[1]) }.getOrNull()
-                ?: return@mapNotNull null
-            Place(
-                name = parts[0],
-                kind = kind,
-                latitude = parts[2].toDoubleOrNull() ?: return@mapNotNull null,
-                longitude = parts[3].toDoubleOrNull() ?: return@mapNotNull null,
-            )
-        }
+        readPlaces(cache)
     }.getOrNull()
 
     private fun writeCache(file: File, places: List<Place>) {
@@ -263,13 +293,14 @@ class PlaceSearchRepository(
                 .forEach { it.delete() }
 
             val text = places.joinToString("\n") {
-                "${it.name.replace('\t', ' ')}\t${it.kind.name}\t${it.latitude}\t${it.longitude}"
+                val detailPart = if (it.detail != null) "\t${it.detail}" else ""
+                "${it.name.replace('\t', ' ')}\t${it.kind.name}\t${it.latitude}\t${it.longitude}$detailPart"
             }
             cacheFileOf(file).writeText(text)
         }
     }
 
-    private companion object {
+    companion object {
         /** Cities and towns live in the lowest zoom interval of the map. */
         const val COARSE_ZOOM: Byte = 8
 
@@ -282,5 +313,31 @@ class PlaceSearchRepository(
         const val NEARBY_LIMIT = 40
         const val NEARBY_TIMEOUT_MS = 4_000L
         const val MAX_RESULTS = 30
+
+        fun parsePlaceLine(line: String): Place? {
+            val trimmed = line.trim()
+            if (trimmed.isEmpty() || trimmed.startsWith("#")) return null
+            val parts = trimmed.split('\t')
+            if (parts.size < 4) return null
+            val name = parts[0].trim()
+            if (name.isEmpty()) return null
+            val kindStr = parts[1].trim()
+            val kind = PlaceKind.entries.firstOrNull { it.name.equals(kindStr, ignoreCase = true) }
+                ?: PlaceKind.ofPlaceTag(kindStr.lowercase())
+                ?: PlaceKind.TOWN
+            val lat = parts[2].trim().toDoubleOrNull() ?: return null
+            val lon = parts[3].trim().toDoubleOrNull() ?: return null
+            val detail = parts.getOrNull(4)?.trim()?.takeIf { it.isNotEmpty() }
+            return Place(name, kind, lat, lon, detail)
+        }
+
+        fun readPlaces(reader: java.io.BufferedReader): List<Place> =
+            reader.lineSequence().mapNotNull(::parsePlaceLine).toList()
+
+        fun readPlaces(file: File): List<Place> =
+            if (!file.isFile) emptyList() else file.bufferedReader().use(::readPlaces)
+
+        fun readPlaces(stream: java.io.InputStream): List<Place> =
+            stream.bufferedReader().use(::readPlaces)
     }
 }

@@ -20,5 +20,8 @@
         <domain includeSubdomains="false">download.mapsforge.org</domain>
         <!-- BRouter routing tiles (.rd5) -->
         <domain includeSubdomains="false">brouter.de</domain>
+        <!-- GitHub release downloads (.pmtiles, .rd5, catalog.json) -->
+        <domain includeSubdomains="false">github.com</domain>
+        <domain includeSubdomains="true">githubusercontent.com</domain>
     </domain-config>
 </network-security-config>

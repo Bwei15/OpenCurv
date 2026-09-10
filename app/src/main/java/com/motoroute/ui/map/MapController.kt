@@ -268,10 +268,10 @@ class MapController(private val offlineData: OfflineDataRepository) {
     private fun buildStyleJson(context: Context, night: Boolean): String {
         val asset = if (night) "maplibre/style_night.json" else "maplibre/style_day.json"
         val template = context.assets.open(asset).bufferedReader().use { it.readText() }
-        val pmtilesFile = offlineData.mapTilesDir
-            .listFiles { f -> f.isFile && f.extension.equals("pmtiles", ignoreCase = true) }
-            ?.sortedBy { it.name }
-            ?.firstOrNull()
+        val pmtilesFile = (offlineData.mapTilesDir.listFiles { f -> f.isFile && f.extension.equals("pmtiles", ignoreCase = true) }.orEmpty().toList() +
+            offlineData.mapDir.listFiles { f -> f.isFile && f.extension.equals("pmtiles", ignoreCase = true) }.orEmpty().toList())
+            .sortedBy { it.name }
+            .firstOrNull()
 
         if (pmtilesFile != null) {
             val url = "pmtiles://file://${pmtilesFile.absolutePath}"

@@ -138,6 +138,62 @@ class DownloadRepositoryTest {
         assertTrue(repository.state.value.items.isEmpty())
     }
 
+    @Test
+    fun `downloadRegion registers region in RegionStore and enqueues pmtiles and segments`() = runTest {
+        val dirs = directories()
+        val store = com.motoroute.data.download.RegionStore(
+            File(folder.root, "regions.index"),
+            dirs(OfflineFileKind.MAP),
+            dirs(OfflineFileKind.SEGMENT),
+        )
+        val repository = DownloadRepository(
+            scope = TestScope(UnconfinedTestDispatcher(testScheduler)),
+            downloader = failingDownloader(),
+            directoryFor = dirs,
+            freeSpaceBytes = { Long.MAX_VALUE },
+            regionStore = store,
+        )
+
+        val pmtilesRegion = com.motoroute.data.download.MapRegion(
+            path = "de-by",
+            name = "Bayern",
+            country = "Germany",
+            bounds = com.motoroute.data.model.BoundingBox(47.2, 8.9, 50.6, 13.9),
+            approxSizeMb = 100,
+            mapFile = "de-by.pmtiles",
+            mapUrl = "https://github.com/Bwei15/OpenCurv/releases/download/data-20260910/de-by.pmtiles",
+            customSegmentTiles = listOf("de-by_E10_N45.rd5", "de-by_E10_N50.rd5"),
+            segmentUrls = mapOf(
+                "de-by_E10_N45.rd5" to "https://github.com/Bwei15/OpenCurv/releases/download/data-20260910/de-by_E10_N45.rd5",
+                "de-by_E10_N50.rd5" to "https://github.com/Bwei15/OpenCurv/releases/download/data-20260910/de-by_E10_N50.rd5",
+            ),
+        )
+
+        repository.downloadRegion(pmtilesRegion)
+
+        // Verify RegionStore registration
+        val record = store.record("de-by")
+        org.junit.Assert.assertNotNull(record)
+        assertEquals("de-by.pmtiles", record!!.mapFile)
+        assertEquals(listOf("de-by_E10_N45.rd5", "de-by_E10_N50.rd5"), record.segmentFiles)
+
+        // Verify queue items
+        val items = repository.state.value.items
+        assertEquals(3, items.size)
+        val mapTarget = items[0].target
+        assertEquals("de-by.pmtiles", mapTarget.fileName)
+        assertEquals(OfflineFileKind.MAP, mapTarget.kind)
+        assertEquals("https://github.com/Bwei15/OpenCurv/releases/download/data-20260910/de-by.pmtiles", mapTarget.url)
+
+        val seg1 = items[1].target
+        assertEquals("de-by_E10_N45.rd5", seg1.fileName)
+        assertEquals(OfflineFileKind.SEGMENT, seg1.kind)
+
+        val seg2 = items[2].target
+        assertEquals("de-by_E10_N50.rd5", seg2.fileName)
+        assertEquals(OfflineFileKind.SEGMENT, seg2.kind)
+    }
+
     /**
      * A downloader whose connections always refuse, so nothing touches a
      * network. It runs on the test dispatcher, otherwise the real IO

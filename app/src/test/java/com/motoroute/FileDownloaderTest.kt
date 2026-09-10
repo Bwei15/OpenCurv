@@ -25,6 +25,12 @@ class FileDownloaderTest {
     }
 
     @Test
+    fun `github release hosts are accepted`() {
+        downloader.validate("https://github.com/Bwei15/OpenCurv/releases/download/data-20260910/catalog.json")
+        downloader.validate("https://objects.githubusercontent.com/github-production-release-asset-2e65be/de-by.pmtiles")
+    }
+
+    @Test
     fun `any other host is refused`() {
         val error = assertThrows(DownloadRejected::class.java) {
             downloader.validate("https://example.com/evil.map")

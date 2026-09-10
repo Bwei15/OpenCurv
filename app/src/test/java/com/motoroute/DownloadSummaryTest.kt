@@ -63,6 +63,46 @@ class DownloadSummaryTest {
     }
 
     @Test
+    fun `pmtiles and rd5 files of a region become one row`() {
+        val queue = DownloadQueueState(
+            items = listOf(
+                item(
+                    DownloadTarget(
+                        url = "https://github.com/Bwei15/OpenCurv/releases/download/data-20260910/de-by.pmtiles",
+                        fileName = "de-by.pmtiles",
+                        kind = OfflineFileKind.MAP,
+                        label = "Bayern",
+                        regionPath = "de-by",
+                        regionName = "Bayern",
+                    ),
+                    DownloadState.DONE,
+                ),
+                item(
+                    DownloadTarget(
+                        url = "https://github.com/Bwei15/OpenCurv/releases/download/data-20260910/de-by_E10_N45.rd5",
+                        fileName = "de-by_E10_N45.rd5",
+                        kind = OfflineFileKind.SEGMENT,
+                        label = "de-by_E10_N45.rd5",
+                        regionPath = "de-by",
+                        regionName = "Bayern",
+                    ),
+                    DownloadState.RUNNING,
+                    50,
+                    100,
+                ),
+            ),
+        )
+
+        val region = queue.byRegion().single()
+        assertEquals("Bayern", region.regionName)
+        assertEquals(2, region.filesTotal)
+        assertEquals(1, region.filesDone)
+        assertTrue(region.isRunning)
+        assertFalse(region.isFinished)
+        assertEquals(0.75f, region.fraction, 0.01f)
+    }
+
+    @Test
     fun `two regions stay two rows, in the order they were queued`() {
         val queue = DownloadQueueState(
             items = listOf(

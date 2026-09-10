@@ -9,6 +9,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 /**
  * Offline search has to survive being typed at by someone in a hurry: no
@@ -82,5 +83,92 @@ class PlaceSearchTest {
         val place = Place("Bad Pyrmont", PlaceKind.TOWN, 51.9861, 9.2536)
         val point = GeoPoint(51.9861, 9.2536)
         assertTrue(Geo.distanceMeters(place.point, point) < 1.0)
+    }
+
+    @Test
+    fun `readPlaces parses tab-separated place lines correctly`() {
+        val tsv = """
+            # Kommentarzeile
+            Berlin	CITY	52.5200	13.4050	Hauptstadt
+            München	city	48.1351	11.5820
+            Nürburgring	POI	50.3342	6.9427	Eifel / Nordschleife
+            
+            Bad Pyrmont	town	51.9861	9.2536
+        """.trimIndent()
+
+        val parsed = com.motoroute.data.search.PlaceSearchRepository.readPlaces(tsv.byteInputStream())
+        assertEquals(4, parsed.size)
+
+        assertEquals("Berlin", parsed[0].name)
+        assertEquals(PlaceKind.CITY, parsed[0].kind)
+        assertEquals(52.5200, parsed[0].latitude, 0.0001)
+        assertEquals("Hauptstadt", parsed[0].detail)
+
+        assertEquals("München", parsed[1].name)
+        assertEquals(PlaceKind.CITY, parsed[1].kind)
+
+        assertEquals("Nürburgring", parsed[2].name)
+        assertEquals(PlaceKind.POI, parsed[2].kind)
+        assertEquals("Eifel / Nordschleife", parsed[2].detail)
+
+        assertEquals("Bad Pyrmont", parsed[3].name)
+        assertEquals(PlaceKind.TOWN, parsed[3].kind)
+    }
+
+    @Test
+    fun `bundled base index enables immediate search without any downloaded map`() = kotlinx.coroutines.test.runTest {
+        val tempDir = java.nio.file.Files.createTempDirectory("place-search-test").toFile()
+        val basePlaces = listOf(
+            Place("Berlin", PlaceKind.CITY, 52.52, 13.40, "Hauptstadt"),
+            Place("München", PlaceKind.CITY, 48.14, 11.58, "Bayern"),
+            Place("Hamburg", PlaceKind.CITY, 53.55, 9.99, "Hansestadt"),
+        )
+
+        val repo = com.motoroute.data.search.PlaceSearchRepository(
+            mapFiles = { emptyList() },
+            cacheDir = tempDir,
+            scope = this,
+            basePlacesProvider = { basePlaces },
+        )
+
+        repo.ensureIndex()
+
+        val state = repo.state.value
+        assertTrue("State should be Ready even without maps", state is com.motoroute.data.search.IndexState.Ready)
+        assertEquals(3, (state as com.motoroute.data.search.IndexState.Ready).places)
+
+        val results = repo.search("muenchen", near = null)
+        assertEquals(1, results.size)
+        assertEquals("München", results.single().name)
+
+        val startPos = repo.mapStartPosition()
+        org.junit.Assert.assertNotNull(startPos)
+        assertEquals(52.52, startPos!!.latitude, 0.01)
+    }
+
+    @Test
+    fun `places file alongside pmtiles is read directly without mapsforge map`() = kotlinx.coroutines.test.runTest {
+        val tempDir = java.nio.file.Files.createTempDirectory("place-search-pmtiles").toFile()
+        val pmtiles = File(tempDir, "de-by.pmtiles").apply { writeText("dummy pmtiles content") }
+        val placesFile = File(tempDir, "de-by.places").apply {
+            writeText("Garmisch-Partenkirchen\tTOWN\t47.4917\t11.0955\tAlpen\nFüssen\tTOWN\t47.5696\t10.7004\tAllgäu\n")
+        }
+
+        val repo = com.motoroute.data.search.PlaceSearchRepository(
+            mapFiles = { listOf(pmtiles) },
+            cacheDir = File(tempDir, "cache"),
+            scope = this,
+            placesFiles = { listOf(placesFile) },
+        )
+
+        repo.ensureIndex()
+
+        val state = repo.state.value
+        assertTrue(state is com.motoroute.data.search.IndexState.Ready)
+        assertEquals(2, (state as com.motoroute.data.search.IndexState.Ready).places)
+
+        val results = repo.search("garmisch", near = null)
+        assertEquals(1, results.size)
+        assertEquals("Garmisch-Partenkirchen", results.single().name)
     }
 }

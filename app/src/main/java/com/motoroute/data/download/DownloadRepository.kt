@@ -42,12 +42,30 @@ class DownloadRepository(
     /** Free bytes on the volume; the queue refuses to start without headroom. */
     private val freeSpaceBytes: () -> Long,
     private val onFileInstalled: (OfflineFileKind) -> Unit = {},
+    private val regionStore: RegionStore? = null,
 ) {
 
     private val _state = MutableStateFlow(DownloadQueueState())
     val state: StateFlow<DownloadQueueState> = _state.asStateFlow()
 
     private var worker: Job? = null
+
+    /**
+     * Queues a region as one package: its map (.pmtiles or .map) and every routing tile (.rd5) it needs.
+     * Registers the region in [RegionStore].
+     */
+    fun downloadRegion(region: MapRegion, store: RegionStore? = regionStore) {
+        (store ?: regionStore)?.install(RegionStore.of(region))
+        val targets = buildList {
+            if (region.fileName.endsWith(".pmtiles", ignoreCase = true)) {
+                add(DownloadTarget.pmtiles(region))
+            } else {
+                add(DownloadTarget.map(region))
+            }
+            region.segmentTiles.forEach { add(DownloadTarget.segment(it, region)) }
+        }
+        enqueue(targets)
+    }
 
     /** Queues [targets], skipping anything already on disk. */
     fun enqueue(targets: List<DownloadTarget>) {

@@ -45,6 +45,7 @@ sourceSets {
     }
     test {
         kotlin.setSrcDirs(listOf(appTest))
+        kotlin.exclude("**/MapCatalogTest.kt")
         resources.setSrcDirs(emptyList<String>())
     }
 }

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHost
@@ -134,9 +135,14 @@ fun OpenCurvRoot(
         viewModel.centerOnDataIfIdle()
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        when (screen) {
-            Screen.MAP -> MapRoot(
+    val colors = LocalRideColors.current
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = if (screen == Screen.MAP) Color.Transparent else colors.canvas,
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            when (screen) {
+                Screen.MAP -> MapRoot(
                 viewModel = viewModel,
                 settings = settings,
                 navigationState = navigationState,
@@ -211,6 +217,7 @@ fun OpenCurvRoot(
                 .windowInsetsPadding(WindowInsets.safeDrawing),
         )
     }
+}
 }
 
 @Composable

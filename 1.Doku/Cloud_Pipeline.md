@@ -19,6 +19,12 @@ echten Daten.
 Datum: 10.09.2026 · Messrechner: Apple Silicon, Java 17 (Homebrew openjdk@17) ·
 BRouter Upstream 1.7.11-beta · Geofabrik-Stand 10.09.2026
 
+> **Nachtrag, selbes Datum (siehe §11):** Der echte Kurven-Scorer (damals das
+> groesste offene Risiko, §10) lief inzwischen auf echten Daten durch die
+> komplette Kette. Alle Zahlen oben in §1-§10 sind, wo nicht ausdruecklich als
+> erledigt durchgestrichen, weiterhin **Platzhalter-Messungen**. §11 markiert
+> durchgehend, was davon jetzt vom echten Scorer stammt.
+
 ---
 
 ## 1. Die Kette, Stufe fuer Stufe
@@ -699,13 +705,17 @@ Ehrliche Liste.
    nicht** — ein Runner-Kern ist langsamer, und der Speicher ist geteilt.
    Fuer die Frage „passt es" ist das ohne Belang, fuer „wie lange dauert es"
    sehr wohl. Rechnen Sie mit dem Zwei- bis Dreifachen.
-3. **Der echte Kurven-Scorer wurde nie ausgefuehrt** (§6.2). Damit ist offen:
-   seine Laufzeit und sein Speicherbedarf auf einem Bundesland, die Groesse
-   der Score-JSON, und ob `OsmReader.read()` ein 851-MB-PBF ueberhaupt in den
-   Speicher eines Runners bekommt. Das ist das **groesste verbliebene Risiko**
-   der Pipeline. `apply_scores.py` ist gegen die dokumentierte Schnittstelle
-   geschrieben und syntaktisch geprueft, aber **nie gegen echte Ausgaben des
-   echten Scorers gelaufen**.
+3. ~~**Der echte Kurven-Scorer wurde nie ausgefuehrt** (§6.2).~~ **ERLEDIGT
+   am 10.09.2026, siehe §11.** Er lief auf Bremen (echte Geofabrik-Daten)
+   durch die komplette Kette bis zur `.rd5` und durch `verify_region.sh`.
+   `apply_scores.py` mussten dafuer keine Anpassungen gemacht werden — die
+   Schnittstelle passte auf Anhieb. Der Speicherbedarf war das eigentliche
+   Problem: der urspruengliche `HashMap<Long,OsmNode>`-Reader war auf
+   Bundeslandgroesse hochgerechnet klar zu teuer fuer einen Runner; §11 zeigt
+   Messung und Umbau. An seine Stelle tritt jetzt: ein gemessener, aber immer
+   noch **hochgerechneter** (nicht auf Bayern/NRW selbst gemessener)
+   Speicherbedarf von rund 10 GB fuer die groesste Region — knapper als der
+   Rest der Kette, siehe §11.4.
 4. **Vektorkacheln nur fuer Bremen gemessen.** Bayerns `.pmtiles`-Groesse und
    Planetilers Zwischenablage sind Hochrechnung, nicht Messung. Der Schritt
    ist deshalb fehlertolerant gebaut: scheitert er, gehen die Routing-Kacheln
@@ -715,10 +725,17 @@ Ehrliche Liste.
    Bayern ist mit 7 % aber so klein, dass die Bayern-Zahlen tragen.
 6. **Nichts davon lief auf einem Android-Geraet.** Ob die App die
    `.rd5`-Kacheln mit erweiterter `lookups.dat` und die `.pmtiles` wirklich
-   verarbeitet, ist Sache der Welle-3-Agenten. Die Produktionsprofile unter
+   verarbeitet, ist Sache der Welle-3-Agenten. ~~Die Produktionsprofile unter
    `app/src/main/assets/profiles/` habe ich **nicht** angefasst — sie tragen
    die Existenzpruefung aus §5.1 noch **nicht** und wuerden mit
-   `v:opencurv:curve` heute in die NaN-Falle laufen.
+   `v:opencurv:curve` heute in die NaN-Falle laufen.~~ **ERLEDIGT am
+   10.09.2026, siehe §11.3.** Alle drei Profile (`motorcycle_curvy.brf`,
+   `motorcycle_fast.brf`, `motorcycle_enduro.brf`) lesen jetzt
+   `v:opencurv:curve`, hinter derselben Existenzpruefung wie
+   `opencurv_check.brf`, gesteuert vom vorhandenen `curviness`-Regler. Bewiesen
+   auf den echten Bremen-Kacheln aus §11 mit dem einvendorten `brouter/`-Modul
+   (dem Code auf dem Handy). Nach wie vor offen: ein Lauf auf einem
+   Android-Geraet selbst.
 7. **Die H3-Hotspots gibt es nicht.** Sie waren ausdruecklich optional („nur
    wenn Zeit bleibt"). Die Zeit ging in Stufe 1 und in die Anbindung des
    echten Scorers. Der Katalog ist darauf vorbereitet: ein neuer `kind`-Wert
@@ -751,14 +768,29 @@ Ausgaben dieser Pipeline ergaenzt (`*.osm.pbf`, `*.pmtiles`, `*.bef`, `*.hgt`,
 
 ## 10. Die zwei groessten Risiken
 
-**1. Der echte Kurven-Scorer ist die einzige nie ausgefuehrte Stufe.** Er hat
-die passende Schnittstelle, aber er liess sich am 10.09.2026 nicht
+**1.** ~~**Der echte Kurven-Scorer ist die einzige nie ausgefuehrte Stufe.**
+Er hat die passende Schnittstelle, aber er liess sich am 10.09.2026 nicht
 uebersetzen, und `OsmReader.read()` laedt eine ganze Datei in den Speicher.
 Ob ein 851-MB-Bayern-PBF so in einen Runner passt, ist offen. Faellt das um,
 faellt der Kern des Produkts um — die rd5-Kette selbst ist dann zwar in
-Ordnung, aber sie transportiert nur Platzhalterwerte.
+Ordnung, aber sie transportiert nur Platzhalterwerte.~~
+**ERLEDIGT am 10.09.2026 — siehe §11.** Das Modul uebersetzt jetzt, 50 Tests
+gruen, und der echte Scorer lief auf Bremen durch die komplette Kette. Der
+Speicherbedarf war real ein Problem (siehe §11.2); der Reader wurde deshalb
+auf ein primitive-array-basiertes Zweidurchgang-Verfahren umgebaut.
+**An die Stelle des alten Risikos tritt ein neues, kleineres:** die
+Hochrechnung auf Bayern/Nordrhein-Westfalen (~10 GB Heap fuer die groesste
+Region, §11.4) beruht auf zwei gemessenen, aber gegenueber einem ganzen
+Bundesland kleinen Regionen (Bremen 21 MB, Saarland 55 MB) und ist nicht an
+einer der beiden groessten Regionen selbst nachgemessen. Es passt nach dieser
+Hochrechnung auf einen 16-GB-Runner, aber mit spuerbar weniger Abstand als der
+Rest der Kette (2,9 GB fuer die rd5-Kette selbst, siehe §3).
 *Was hilft:* `run_scorer.sh` bricht sichtbar ab statt heimlich zurueckzufallen;
-erster echter Lauf mit `region: de-hb`, nicht mit `all`.
+`OPENCURV_CURVESCORE_XMX` setzt jetzt explizit einen 12-GB-Heap statt sich auf
+die 1/4-RAM-Standardheuristik der JVM zu verlassen (auf einem 16-GB-Runner nur
+~4 GB, klar zu wenig); erster echter Lauf mit `region: de-hb`, dann
+`de-nw` oder `de-by` als naechstgroesserer Testfall **vor** `all`, um die
+Hochrechnung an einer echten grossen Region zu pruefen.
 
 **2. Kein einziger Actions-Lauf.** Die Pipeline ist lokal Stufe fuer Stufe
 gemessen, aber als Ganzes nie in der Umgebung gelaufen, fuer die sie gebaut
@@ -767,3 +799,299 @@ Matrix-Serialisierung, Cache-Schluessel, Rechte des `GITHUB_TOKEN`, die
 Ablageorte der beiden JDKs.
 *Was hilft:* `dry_run` ist standardmaessig an; die erste Ausfuehrung mit der
 kleinsten Region kostet Minuten und faengt genau diese Klasse Fehler.
+
+---
+
+## 11. Nachtrag 10.09.2026: der echte Kurven-Scorer durch die Pipeline
+
+Dieser Abschnitt schliesst das in §10 (alte Fassung) benannte groesste Risiko:
+`tools/curvescore/` uebersetzt jetzt, 50 Tests gruen, und wurde hier zum
+**ersten Mal ueberhaupt** gegen echte Geofabrik-Daten und durch die volle
+Kette bis zur `.rd5` gefahren.
+
+**Kennzeichnung, wie in Auftrag:** Alle Zahlen in diesem Abschnitt (§11)
+stammen vom **echten Scorer**. Alle Zahlen in §1-§10 oben, wo nicht durch
+Durchstreichung vermerkt, stammen weiterhin vom **Platzhalter**
+(`placeholder_scorer.py`) — insbesondere die komplette Bayern-Tabelle in §2.1,
+die Score-Anbring-Laufzeiten dort, und die 150-km-Probefahrt in §2.5. Diese
+Zahlen wurden **nicht** erneut mit dem echten Scorer nachgemessen (das haette
+einen echten Bayern-/NRW-Lauf gebraucht, siehe §11.4) und bleiben als
+Platzhalter-Messung stehen, bis das nachgeholt ist.
+
+Nachinstallierte Werkzeuge fuer diese Arbeit: **keine neuen** — GDAL und
+pyosmium waren bereits vorhanden (§9), zusaetzlich wurde nur ein
+`pip install osmium` in ein Venv unter dem Scratchpad wiederholt (dieselbe
+Version 4.3.1). `gh` blieb unangemeldet, es wurde kein Release erzeugt und
+kein Workflow gestartet.
+
+### 11.1 Die Schnittstelle passte auf Anhieb
+
+Bremen (`de-hb`, 21 168 400 B PBF von Geofabrik, Stand 10.09.2026) einmal
+komplett durch `run_scorer.sh` → `apply_scores.py` → `build_rd5.sh` →
+`verify_region.sh` gefahren, mit dem echten Scorer (`curvescore-gradle`-Pfad,
+kein `OPENCURV_SCORER_CMD`-Override):
+
+```
+== Kurven-Scorer: curvescore-gradle
+gelesen: 527461 Knoten, 328677 Ways -> 42723 bewertet in 4.13 s
+Stufenverteilung: 0:24616 1:5606 2:4456 3:1740 4:2265 5:1179 6:737 7:595
+                  8:497 9:364 10:298 11:204 12:134 13:32 14:0 15:0
+bewertete Gesamtlaenge: 4752.1 km
+Scores gelesen: 42723 Ways in 1.8 s
+apply_scores: ... -> bremen-scored-final.osm.pbf
+  vom Scorer bewertet : 42723
+  auf Standardwert    : 0
+```
+
+**Entgegen der Erwartung im Auftrag musste an der Schnittstelle nichts
+repariert werden.** `WayScore` (Kotlin) serialisiert ueber Gson als
+`{"wayId": ..., "level": ..., "raw01": ..., ...}` in einem Wurzel-Array, genau
+das Format, das `apply_scores.py.stream_scores()` erwartet und schon vorher
+Feld-fuer-Feld richtig geraten hatte. Way-IDs sind echte OSM-IDs (stichprobenartig
+gegen die Roh-PBF geprueft, z. B. Way 312989145 „Zur Vegesacker Faehre").
+`auf Standardwert: 0` zeigt: **jeder** der 42 693 nach `apply_scores.py`s
+eigener `ROUTABLE`-Definition routbaren Ways bekam einen echten Score vom
+Scorer, keiner musste auf den NaN-Sicherheitsdefault 0 zurueckfallen. Die
+zusaetzlichen 30 vom Scorer bewerteten Ways (42 723 gegen 42 693) liegen an
+Klassen, die der Scorer, aber nicht `apply_scores.py`s `ROUTABLE`-Menge kennt
+(z. B. `bridleway`); das ist folgenlos, weil beide Mengen ohnehin nur je
+`opencurv:curve` schreiben oder nicht.
+
+**Was tatsaechlich repariert wurde, lag nicht an der JSON-Schnittstelle,
+sondern eine Ebene tiefer** — siehe §11.2 und §11.3.
+
+Score-JSON: **30 095 476 B (28,7 MiB)** fuer 42 723 Eintraege (rund 704 B je
+Eintrag — die Terme/Strafen/Statistik-Unterobjekte machen die Datei groesser
+als ein blosses `wayId`+`level`-Paar bräuchte; fuer ein Bundesland relevant,
+siehe §11.4).
+
+`.rd5` mit dem echten Score, ohne Hoehen (`E5_N50.rd5`):
+
+| Variante | Bytes | Zuwachs ggue. ohne Tag (1 288 725 B) |
+| --- | ---: | ---: |
+| **echter Scorer** | **1 406 811** | **+9,16 %** |
+| Platzhalter (aus §2.2) | 1 438 871 | +11,65 % |
+
+Der echte Scorer waechst **weniger** als der Platzhalter — plausibel, weil
+seine Stufenverteilung staerker zu 0 hin verschoben ist (24 616 von 42 723
+Ways, 57,6 %, auf Stufe 0 — ein gut gemapptes Stadtgebiet mit vielen geraden
+Wohnstrassen), was das `wayTagDictionary` des `WayLinker` weniger stark
+auffaechert als die Platzhalter-Verteilung.
+
+`verify_region.sh` (Abnahme, Standard-Wegpunkte aus der bbox): **bestanden.**
+
+```
+ok: 1 .rd5-Kachel(n)
+ok: lookups.dat enthaelt opencurv:curve (4 Steuerzeilen)
+Probefahrt: 8.65961 53.22040 8.78718 53.37048
+PROFILE=vfy_seek  DIST=7064m COST=6429 SCORED=100,0% MEANSCORE=1,69
+PROFILE=vfy_avoid DIST=7156m COST=8267 SCORED=100,0% MEANSCORE=1,53
+ok: Score wirkt. kurvensuchend=1.69 gegen kurvenmeidend=1.53
+    (Faktor 1.10), Abdeckung 100.0 %
+ABNAHME BESTANDEN: de-hb
+```
+
+100 % Abdeckung, Score wirkt (Faktor 1,10 auf dieser kurzen 7-km-Probefahrt —
+kleiner als die mit dem Platzhalter gemessenen Faktoren in §2.5, weil Route
+und Scorer hier beide andere sind; §11.3 zeigt den Effekt auf einer laengeren
+Strecke mit dem echten Produktionsprofil deutlicher).
+
+### 11.2 Speicher: von "passt sicher nicht" zu "passt knapp"
+
+`1.Doku/Kurven_Score.md` §9 schaetzte den `HashMap<Long,OsmNode>`-Reader auf
+"grob 5-7 GB" fuer Bayern. **Gemessen statt geschaetzt** ergab sich ein
+deutlich pessimistischeres Bild.
+
+**Bremen, alter Reader** (jeder der 1 663 302 Knoten der Datei als
+`OsmNode`-Objekt in einer `HashMap`): mit Default-Heap (kein `-Xmx`, JVM nimmt
+1/4 des Maschinenspeichers) 1,667 GB Spitzen-RSS. Per Bisektion mit
+explizitem `-Xmx`: **laeuft noch bei 500 MB, scheitert bei 400 MB** (`Out of
+Memory: Java heap space`).
+
+Hochgerechnet ueber die Gesamt-Knotenzahl (Bremen 1 663 302 Knoten → rund
+270 B/Knoten kombiniert) auf Bayern (~69,4 Mio. Knoten, hochgerechnet aus dem
+Verhaeltnis Knoten/MB-PBF, siehe §11.4) und NRW (~71,0 Mio.): **rund 19-20 GB
+Heap** — das haette auf einem 16-GB-Runner mit Sicherheit nicht gepasst, auch
+nicht mit grosszuegigem Aufraeumen anderswo.
+
+**Der Umbau:** `tools/curvescore/.../io/OsmPbfReader.kt` liest jetzt in zwei
+Durchgaengen (genau der in `Kurven_Score.md` §9 vorgezeichnete Plan, mit einer
+Praezisierung — siehe unten):
+
+1. **Durchgang 1** (nur Ways): jeder Way wird wie bisher vollstaendig
+   behalten. Zusaetzlich werden die Knoten-IDs der Ways, deren Koordinaten der
+   Scorer tatsaechlich braucht, in einem primitiven `LongHashSet`
+   (`io/LongHashSet.kt`, offenes Adressieren, kein Boxing) gesammelt.
+2. **Durchgang 2** (nur Knoten): nur referenzierte Knoten werden gespeichert —
+   in sortierten Parallel-Arrays (`long[] id`, `int[] lat`, `int[] lon` als
+   1e7-Festkomma, `float[] ele`), Zugriff per Binaersuche. Knoten-Tags (fuer
+   die "Unterbrechungen"-Strafe: Ampeln, Barrieren, Bahnuebergaenge) landen
+   nur fuer die kleine Minderheit tatsaechlich getaggter Knoten in einer
+   duennen `Map<Long, Map<String,String>>`.
+3. Ein `PrimitiveNodeStore` (`io/PrimitiveNodeStore.kt`) baut daraus
+   `OsmNode`-Objekte **verzoegert** bei jedem Zugriff und implementiert dafuer
+   nur `Map<Long, OsmNode>` — `CurveScorer`, `Corridor` und `Environment`
+   sehen keinen Unterschied. Der Umbau bleibt damit vollstaendig auf `io/`
+   beschraenkt, wie gefordert.
+
+**Die Praezisierung gegenueber `Kurven_Score.md` §9:** Der dort skizzierte
+Plan wollte nur Knoten der `highway`-Ways behalten. Das haette
+`Environment.kt:135-140` kaputt gemacht — der Umgebungs-/Ortslage-Term loest
+Landuse-/Natural-/Leisure-Polygone und Gewaesserlinien ueber genau dieselbe
+`data.nodes`-Map auf, und deren Knoten sind ganz ueberwiegend **nicht** Teil
+eines `highway`-Ways. Gemessen an Bremen: nur 260 585 von 1 663 302 Knoten
+(15,7 %) sind ueber `highway`-Ways erreichbar, aber 527 461 (31,7 %) sind ueber
+`highway`- **und** Umgebungs-relevante Ways (`landuse`/`natural`/`leisure`,
+`boundary=national_park|protected_area`, `waterway=river|stream|canal|
+riverbank`) erreichbar — und genau diese 527 461 werden jetzt gespeichert. Zum
+Vergleich: **alle** Ways zusammen (inklusive Gebaeude) haetten 1 595 408
+Knoten referenziert (95,9 % — Gebaeude dominieren in einem gut gemappten
+Stadtgebiet), also kaum eine Ersparnis. Der gezielte Filter auf
+"Scorer-relevante" Ways spart real, ohne den Umgebungsterm zu brechen; das ist
+durch `TagWriteBackTest > the pbf reader agrees with the xml reader on the
+arena` (die einzige Regressionsprobe, die PBF- gegen XML-Lesen auf identische
+Ergebnisse prueft) mit abgesichert.
+
+**Nebenwirkung, ehrlich benannt:** Das 1e7-Festkomma rundet auf rund 1,1 cm —
+weit unter der Douglas-Peucker-Toleranz von 0,5 m, aber nicht null. Auf Bremen
+verschob das 6 von 42 723 Ways um eine Stufe und die bewertete Gesamtlaenge um
+0,17 % (4744,0 km → 4752,1 km). Das ist unterhalb dessen, was fuer die
+Routenwahl je zaehlt, aber es ist ein echter, kleiner Unterschied zum alten
+Verhalten und wird hier deshalb genannt statt verschwiegen.
+
+**Gemessen, neuer Reader, Bremen:** Default-Heap-Spitze 933,9 MB (-44 % ggue.
+1,667 GB), Bisektion: **laeuft bei 250 MB, scheitert bei 200 MB.**
+
+**Zweite Messregion zur Kalibrierung der Hochrechnung: Saarland**
+(54 716 612 B PBF, 4 630 835 Knoten gesamt, 844 171 Ways). Neuer Reader:
+
+```
+gelesen: 1667392 Knoten, 844171 Ways -> 109714 bewertet in 6.91 s
+bewertete Gesamtlaenge: 19773.3 km
+```
+
+1 667 392 von 4 630 835 Knoten behalten (36,0 % — nahe an Bremens 31,7 %,
+beide um die dreissig Prozent, was fuer eine stabile Hochrechnung spricht).
+Bisektion: **laeuft bei 700 MB, scheitert bei 550 MB** (und bei 500/450 MB).
+
+### 11.3 Die NaN-Falle in den Produktionsprofilen — geschlossen
+
+`motorcycle_curvy.brf`, `motorcycle_fast.brf` und `motorcycle_enduro.brf`
+lesen jetzt `v:opencurv:curve`, exakt hinter derselben Existenzpruefung wie
+`tools/pipeline/profiles/opencurv_check.brf` (RD5_Pipeline.md §5.4b), gesteuert
+vom bereits vorhandenen `curviness`-Regler:
+
+```
+assign curvescale =
+  switch not opencurv:curve=
+    max 0.2 sub 1.0 multiply ( multiply curviness 0.053 ) v:opencurv:curve
+    1.0
+```
+
+Bei `curviness=0` ist der Koeffizient exakt 0, `curvescale` also immer 1,0 —
+der Score wird komplett ignoriert, passend zu "0 = direkt". Der Koeffizient
+0,053 ist derselbe, der in `opencurv_check.brf` schon gegen echte Daten
+gemessen wurde. `curvescale` geht multiplikativ in `costfactor` ein.
+
+**Voraussetzung dafuer, dass die Profile ueberhaupt parsen:** Die App liefert
+ihre eigene `app/src/main/assets/profiles/lookups.dat` mit aus. Die kannte
+`opencurv:curve` bisher nicht — ein Profil, das den Tag referenziert, waere
+beim Laden mit einem harten Parse-Fehler abgestuerzt (RD5_Pipeline.md §2.3,
+letzte Zeile), unabhaengig von jeder Kachel. Sie wurde deshalb mit demselben
+Werkzeug wie die Pipeline gepatcht (`tools/rd5build/patch_lookups.py
+--mode num`): Major-Version bleibt 11, Minor 2→3, Wildcard-Deklaration
+angehaengt. **Dabei wurde ein latenter Fehler in `patch_lookups.py` gefunden
+und behoben:** Es haengte den Tag bedingungslos an, auch wenn er schon da war
+— `build_rd5.sh` haette also, sobald die App-`lookups.dat` den Tag einmal
+traegt, bei jedem Lauf einen **zweiten**, ueberzaehligen
+`opencurv:curve`-Eintrag angehaengt (reproduziert und wieder entfernt; das
+Skript ist jetzt idempotent und kopiert unveraendert durch, wenn der Tag schon
+vorhanden ist).
+
+**Beweis auf den echten Bremen-Kacheln aus §11.1, mit dem einvendorten
+`brouter/`-Modul** (dem Code, der auf dem Handy laeuft; nicht dem
+Upstream-Jar), `motorcycle_curvy.brf` unveraendert bis auf `curviness`,
+Strecke 8,807/53,075 → 8,620/53,170 (dieselben Koordinaten wie die
+Bremen-Gegenprobe in §2.5):
+
+| `curviness` | Distanz | Kosten | mittlerer Score |
+| --- | ---: | ---: | ---: |
+| 0,0 (direkt) | 19 855 m | 23 410 | 3,22 |
+| 1,0 (Standard) | 20 366 m | 23 960 | 3,70 |
+| 2,0 (maximal) | 20 366 m | 23 350 | 3,70 |
+
+**Die Route unterscheidet sich messbar:** von `curviness=0` auf `1,0` waehlt
+der Router einen 511 m laengeren Weg mit 15 % hoeherem mittlerem Score. Von
+`1,0` auf `2,0` bleibt der Pfad auf dieser Strecke gleich (nur die Kosten
+sinken weiter) — der Router hat hier bereits die kurvenreichste plausible
+Alternative gefunden; das ist echtes Routing-Verhalten, keine Fehlfunktion des
+Codes. Zum Vergleich der Groessenordnung: `opencurv_check.brf` mit seinen
+extremeren Testkoeffizienten kommt in §2.5 auf Faktor 3,75 auf einer 150-km-
+Bayern-Strecke — laenger, kurvenreicheres Zielgebiet, groesserer Effekt.
+
+**Kacheln ohne den Tag brechen nicht:** dieselbe Strecke auf einer aus dem
+unveraenderten Bremen-Extrakt gebauten `.rd5` (kein `opencurv:curve` an
+irgendeinem Way), `motorcycle_curvy.brf` mit Standard-`curviness=1.0`:
+
+```
+PROFILE=curvy_default DIST=19934m COST=28322 SECTIONS=275
+```
+
+Route gefunden, keine `from-position not mapped in existing datafile`-
+Meldung — genau der Fehler, den die Existenzpruefung verhindern soll (und den
+das *ungeschuetzte* Profil auf denselben Kacheln tatsaechlich zeigt, siehe
+§5.1). Die Produktionsprofile laufen also weder auf ungetaggten Bestandskacheln
+noch auf zukuenftigen Fremd-/Testkacheln in die Falle.
+
+### 11.4 Passt das auf einen Runner? Die ehrliche Antwort: knapp, ja — aber nur hochgerechnet
+
+**Modell.** Aus den zwei gemessenen Bisektionen (Bremen: laeuft bei 250 MB,
+scheitert bei 200 MB; Saarland: laeuft bei 700 MB, scheitert bei 550 MB) ergibt
+sich per linearer Differenzbildung (die "laeuft"-Werte, damit die Rechnung auf
+der sicheren Seite bleibt) ein marginaler Speicherbedarf von rund **414 B je
+gespeichertem Knoten**, plus rund 42 MB Fixkosten (JVM, Way-Speicher,
+Umgebungsindex) fuer eine Region in der Groessenordnung dieser beiden Proben.
+
+**Hochrechnung der Knotenzahl.** Bremen: 1 663 302 Knoten gesamt / 20,19 MiB
+PBF ≈ 78 600 Knoten/MB; Saarland: 4 630 835 / 52,18 MiB ≈ 84 600 Knoten/MB —
+im Mittel rund **81 600 Knoten/MB**, nahe an der unabhaengigen Schaetzung aus
+`Kurven_Score.md` §9 (dort: 65-70 Mio. Knoten fuer 805-851 MB Bayern, also
+76 500-83 900 Knoten/MB). Davon sind bei beiden Proben rund **32-36 %**
+("Scorer-relevant", siehe §11.2) tatsaechlich zu speichern.
+
+| Region | PBF (gemessen, aus §2.1/§8) | Knoten gesamt (hochgerechnet) | davon relevant (hochgerechnet, ~34 %) | Heap-Bedarf (hochgerechnet) |
+| --- | ---: | ---: | ---: | ---: |
+| Bayern | 851 MB | ~69,4 Mio. | ~23,5 Mio. | **~9,8 GB** |
+| Nordrhein-Westfalen | 870 MB | ~71,0 Mio. | ~24,1 Mio. | **~10,0 GB** |
+
+**Antwort: Ja, es passt — mit dem neuen Reader, auf dieser Hochrechnung, aber
+knapper als der Rest der Kette.** Rund 10 GB auf einem 16-GB-Runner laesst
+etwa 6 GB fuer Betriebssystem und JVM-Nebenspeicher (Metaspace, Thread-Stacks,
+GC-Buchhaltung) — deutlich weniger komfortabel als die 2,9 GB Spitze, die die
+gesamte rd5-Kette fuer Bayern braucht (§3). **Mit dem alten Reader waere die
+Antwort klar Nein** gewesen (~19-20 GB, siehe §11.2).
+
+Diese Hochrechnung ist eine **Rechnung, keine Messung** — sie beruht auf zwei
+Regionen, die 15- bis 40-mal kleiner sind als Bayern/NRW, und auf der Annahme,
+dass sich Knotendichte und "relevanter Anteil" linear fortsetzen. Ein
+gut gemapptes Stadtgebiet wie Bremen und ein kleines, aber gemischtes
+Bundesland wie Saarland muessen kein zuverlaessiger Massstab fuer die groesste
+Region sein. Deshalb: **`run_scorer.sh` setzt jetzt explizit
+`-Xmx${OPENCURV_CURVESCORE_XMX:-12g}`** statt sich auf die
+1/4-RAM-Standardheuristik der JVM zu verlassen (die waere auf einem
+16-GB-Runner nur ~4 GB und haette mit Sicherheit nicht gereicht, mit *keinem*
+der beiden Reader). 12 GB liegt ueber der Hochrechnung mit etwas Puffer fuer
+GC-Mehrbedarf, aber unter den 16 GB des Runners. **Empfehlung, bevor `all`
+oder ein Nicht-Dry-Run auf `de-by`/`de-nw` laeuft: einmal `de-nw` (die
+groesste Region) einzeln mit `dry_run: true` fahren und den echten
+Speicherbedarf gegen diese Hochrechnung pruefen** — genau die Vorsicht, die
+`dry_run` und die regionsweise Matrix in §3 schon vorsehen.
+
+Laufzeit (nur zur Einordnung, ebenfalls hochgerechnet, nicht gemessen): der
+Scorer allein braucht fuer Saarland (55 MB) 6,9-8,9 s, das sind rund 6-8 MB/s
+Durchsatz; auf 851-870 MB hochgerechnet also rund **110-140 s** fuer die reine
+Bewertung, plus die Laufzeit von `apply_scores.py` (bei Bremen 6,4-6,7 s fuer
+20 MB, linear hochgerechnet auf Bayern/NRW rund **270-300 s**). Deutlich
+weniger als die im Platzhalter gemessenen 379 s (§2.1) fuer Bayern — der
+echte Scorer scheint nicht der Laufzeit-Engpass zu sein, den man haette
+erwarten koennen; das ist aber Hochrechnung, keine Messung.

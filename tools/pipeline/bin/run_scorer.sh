@@ -23,6 +23,18 @@
 #     apply_scores.py  <pbf> <scores.json> <out.pbf>
 #
 # Aufruf: run_scorer.sh <in.osm.pbf> <out.osm.pbf> [levels]
+#
+# OPENCURV_CURVESCORE_XMX -- JVM-Heap fuer den echten Scorer (Default 12g).
+#   Ohne ausdrueckliches -Xmx nimmt die JVM 1/4 des Maschinenspeichers -- auf
+#   einem 16-GB-Runner also nur ~4 GB. Seit dem Umbau auf den zweistufigen,
+#   primitive-array-basierten Reader (tools/curvescore/.../io/OsmPbfReader.kt,
+#   siehe 1.Doku/Kurven_Score.md 9) braucht Bremen dafuer nur noch 200-250 MB
+#   und Saarland 550-700 MB (real gemessen per Bisektion). Hochgerechnet auf
+#   Nordrhein-Westfalen (die groesste Region) sind das rund 10 GB -- das
+#   default 1/4-Heuristik-Xmx eines 16-GB-Runners waere also zu knapp, ein
+#   expliziter Wert ist deshalb Pflicht, kein "nice to have". Siehe
+#   1.Doku/Cloud_Pipeline.md, Abschnitt 11 ("Nachtrag: der echte Kurven-Scorer
+#   durch die Pipeline"), insbesondere 11.4.
 # ===========================================================================
 set -euo pipefail
 
@@ -33,6 +45,7 @@ LEVELS="${3:-16}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/../../.." && pwd)"
 PY="${OPENCURV_PYTHON:-python3}"
+CURVESCORE_XMX="${OPENCURV_CURVESCORE_XMX:-12g}"
 
 [ -f "$IN" ] || { echo "FEHLER: Eingabedatei nicht gefunden: $IN" >&2; exit 1; }
 
@@ -75,7 +88,7 @@ case "$KIND" in
       }
     fi
     SCORES="${OUT%.osm.pbf}.scores.json"
-    "$BIN" score --in "$IN" --json "$SCORES" --levels "$LEVELS"
+    JAVA_OPTS="-Xmx$CURVESCORE_XMX ${JAVA_OPTS:-}" "$BIN" score --in "$IN" --json "$SCORES" --levels "$LEVELS"
     [ -s "$SCORES" ] || { echo "FEHLER: curvescore hat keine Score-Datei geschrieben: $SCORES" >&2; exit 1; }
     "$PY" "$HERE/apply_scores.py" "$IN" "$SCORES" "$OUT"
     # PLATTENPLATZ: die Score-Liste kann fuer ein grosses Bundesland selbst

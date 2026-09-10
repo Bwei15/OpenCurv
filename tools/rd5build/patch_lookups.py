@@ -26,6 +26,18 @@ def patch(src, dst, mode, maxval):
     with open(src, "r") as fh:
         lines = fh.read().split("\n")
 
+    # Idempotent: the shipped app/src/main/assets/profiles/lookups.dat now
+    # carries opencurv:curve itself (the production .brf profiles need it to
+    # parse at all -- see 1.Doku/Cloud_Pipeline.md, section 3). If that file
+    # is used as the --in here (build_rd5.sh does exactly that), patching it
+    # a second time would append a second, conflicting opencurv:curve entry.
+    # Detect that and copy through unchanged instead.
+    if any(line.startswith(TAG_NAME + ";") for line in lines):
+        with open(dst, "w") as fh:
+            fh.write("\n".join(lines))
+        print("%s bereits vorhanden in %s -- unveraendert nach %s kopiert" % (TAG_NAME, src, dst))
+        return
+
     if mode == "enum":
         block = ["", "# OpenCurv: vorberechneter Kurven-/Fahrspass-Score, 0..%d" % maxval]
         block += ["%s;0000000001 %d" % (TAG_NAME, v) for v in range(0, maxval + 1)]

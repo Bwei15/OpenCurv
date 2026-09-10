@@ -140,12 +140,43 @@ assign widthbonus = if lanes=1 then 0.92 else 1.0
 assign is_slow_road = maxspeed=30|20|10
 assign speedbonus = if is_slow_road then 0.97 else 1.0
 
+# ---- the precomputed curve score --------------------------------------
+# `opencurv:curve` (0..15, higher = more fun) is baked into the .rd5 tiles by
+# the cloud pipeline (1.Doku/RD5_Pipeline.md, 1.Doku/Cloud_Pipeline.md). It is
+# declared in lookups.dat with the wildcard value ('*'), so `v:opencurv:curve`
+# reads it as a real number, not a category - see RD5_Pipeline.md 6, Weg A.
+#
+# THE NaN TRAP (RD5_Pipeline.md 5.4b, confirmed on real Bremen tiles in
+# Cloud_Pipeline.md 5.1): `v:opencurv:curve` returns NaN on any way that does
+# NOT carry the tag - an untagged way, an older tile built before the score
+# existed, or a foreign/hand-made tile. NaN then poisons `costfactor` and
+# BRouter treats the ENTIRE graph as unroutable ("from-position not mapped in
+# existing datafile"). So this is guarded exactly like
+# tools/pipeline/profiles/opencurv_check.brf: `not opencurv:curve=` is true
+# only when the tag is actually set (the empty value means "unset", and is
+# NOT the same thing as the real value 0 - opencurv:curve=0 matches the
+# genuine score zero, not "no score").
+#
+# `curviness` (the existing rider-tunable slider, 0 = direct .. 2 = maximum
+# curves) scales how hard the score pulls: at curviness=0 the coefficient
+# below is exactly 0, so curvescale is always 1.0 and the score is ignored
+# entirely, matching "0 = direct" for a rider who never wants the detour.
+# Coefficient 0.053 matches the one already measured end-to-end on real data
+# in tools/pipeline/profiles/opencurv_check.brf / Cloud_Pipeline.md 5.1: it
+# takes a way from score 0 to score 15 through roughly a 0.2x-1.0x cost span
+# at curviness=1, without ever letting the factor collapse to zero (floored
+# at 0.2, same floor the pipeline's own check profile uses).
+assign curvescale =
+  switch not opencurv:curve=
+    max 0.2 sub 1.0 multiply ( multiply curviness 0.053 ) v:opencurv:curve
+    1.0
+
 assign costfactor =
   max onewaypenalty
   max accesspenalty
   max tollpenalty
   max ferrypenalty
-  multiply classcost multiply surfacecost multiply widthbonus speedbonus
+  multiply classcost multiply surfacecost multiply widthbonus multiply speedbonus curvescale
 
 # Every change of road costs this much. It stops the router from shredding a
 # route into a patchwork of short links just to save a few metres.

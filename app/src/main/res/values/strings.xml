@@ -105,7 +105,7 @@
     <string name="download_waiting">%1$d of %2$d files done</string>
     <string name="download_done">Complete</string>
     <string name="download_blocked_navigating">Stop navigation before downloading.</string>
-    <string name="download_sources">Maps come from download.mapsforge.org, routing tiles from brouter.de. Both are public OpenStreetMap-based databases; the app talks to nothing else.</string>
+    <string name="download_sources">Maps and pre-calculated curve routing tiles are downloaded directly from official OpenCurv GitHub releases based on OpenStreetMap. Navigation runs 100% offline.</string>
 
     <!-- onboarding -->
     <string name="onboarding_skip">Skip</string>

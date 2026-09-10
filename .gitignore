@@ -33,5 +33,6 @@ local.properties
 *.bef
 *.hgt
 catalog.json
+!/app/src/main/assets/catalog/catalog.json
 SHA256SUMS
 __pycache__/

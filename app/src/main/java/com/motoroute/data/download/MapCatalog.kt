@@ -18,6 +18,7 @@ import org.json.JSONObject
 class MapCatalog(private val context: Context) {
 
     private var cached: List<MapRegion>? = null
+    private val localCatalogFile = java.io.File(context.filesDir, "catalog.json")
 
     suspend fun regions(): List<MapRegion> = withContext(Dispatchers.IO) {
         cached ?: load().also { cached = it }
@@ -27,7 +28,36 @@ class MapCatalog(private val context: Context) {
     suspend fun grouped(): Map<String, List<MapRegion>> =
         regions().groupBy { it.country }
 
+    /**
+     * Checks GitHub Releases for the latest catalog.json and persists it locally.
+     * Returns true if a newer catalog was successfully loaded.
+     */
+    suspend fun refreshFromNetwork(repo: String = "Bwei15/OpenCurv"): Boolean = withContext(Dispatchers.IO) {
+        runCatching {
+            val url = java.net.URI("https://github.com/$repo/releases/latest/download/catalog.json").toURL()
+            val conn = url.openConnection() as java.net.HttpURLConnection
+            conn.connectTimeout = 6000
+            conn.readTimeout = 8000
+            conn.instanceFollowRedirects = true
+            if (conn.responseCode in 200..299) {
+                val text = conn.inputStream.bufferedReader().use { it.readText() }
+                val parsed = parse(text)
+                if (parsed.isNotEmpty()) {
+                    localCatalogFile.writeText(text, Charsets.UTF_8)
+                    cached = parsed
+                    return@withContext true
+                }
+            }
+            false
+        }.getOrElse { false }
+    }
+
     private fun load(): List<MapRegion> = runCatching {
+        if (localCatalogFile.isFile) {
+            val localText = localCatalogFile.readText(Charsets.UTF_8)
+            val localParsed = parse(localText)
+            if (localParsed.isNotEmpty()) return@runCatching localParsed
+        }
         val text = try {
             context.assets.open(CATALOG_ASSET).bufferedReader().use { it.readText() }
         } catch (_: Exception) {

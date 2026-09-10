@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "generated": "2026-09-10T20:29:47Z",
+  "release": {
+    "tag": "data-20260910",
+    "repo": "Bwei15/OpenCurv",
+    "baseUrl": "https://github.com/Bwei15/OpenCurv/releases/download/data-20260910"
+  },
+  "producer": {
+    "pipeline": "opencurv/tools/pipeline",
+    "curveTag": "opencurv:curve",
+    "curveEncoding": "wildcard",
+    "curveLevels": 16,
+    "scorer": "b2405a0583aa36b02a3905c4bbaa5f2ec3bc3634",
+    "brouterUpstream": "2f4bcb8",
+    "lookupsVersion": "11.3",
+    "demSource": "copernicus-glo30"
+  },
+  "notes": {
+    "rd5": "Unkomprimiert ausgeliefert. .rd5 ist bereits bitgepackt (gemessen: gzip spart 3,7 %). Die App legt die Datei direkt ins Segmentverzeichnis, kein Entpacken.",
+    "lookups": "lookups.dat gehoert ZWINGEND zu den Profilen und muss zusammen mit ihnen aktualisiert werden. Ein Profil, das einen Tag nennt, den sein lookups.dat nicht kennt, laesst sich nicht parsen.",
+    "nan": "Jedes Profil, das v:opencurv:curve benutzt, MUSS vorher 'switch not opencurv:curve=' pruefen. Fehlt der Tag, liefert v: NaN und das gesamte Netz gilt als unbefahrbar."
+  },
+  "shared": [
+    {
+      "name": "lookups.dat",
+      "kind": "lookups",
+      "bytes": 31696,
+      "sha256": "463799cdaf513a9132731b5efa5c89df9b4ce12b04796338885c5aa28e0f870b",
+      "url": "https://github.com/Bwei15/OpenCurv/releases/download/data-20260910/lookups.dat"
+    },
+    {
+      "name": "testarena-demo.zip",
+      "kind": "bundle",
+      "bytes": 41601,
+      "sha256": "35af0457a7ac1e6f8dac67eee73a864b05627a1a70e2d43b836d7083df5dfea3",
+      "url": "https://github.com/Bwei15/OpenCurv/releases/download/data-20260910/testarena-demo.zip"
+    }
+  ],
+  "regions": [
+    {
+      "id": "de-ni",
+      "name": "Niedersachsen",
+      "source": {
+        "provider": "geofabrik",
+        "path": "europe/germany/niedersachsen"
+      },
+      "totalBytes": 427006557,
+      "files": [
+        {
+          "name": "de-ni.pmtiles",
+          "kind": "maptiles",
+          "bytes": 386924920,
+          "sha256": "8854f22d333186c84f18a8b05bc81bc73f27485d30061873654499d72e18326d",
+          "url": "https://github.com/Bwei15/OpenCurv/releases/download/data-20260910/de-ni.pmtiles"
+        },
+        {
+          "name": "de-ni_E10_N50.rd5",
+          "kind": "routing",
+          "bytes": 10698710,
+          "sha256": "62e70941faddb7a0fb5df89024ef7e33f4097d223647dc0cb8d1001ca5394023",
+          "url": "https://github.com/Bwei15/OpenCurv/releases/download/data-20260910/de-ni_E10_N50.rd5"
+        },
+        {
+          "name": "de-ni_E5_N50.rd5",
+          "kind": "routing",
+          "bytes": 29382927,
+          "sha256": "0ec6ec7ae657f3a3d39990d4fb2750dd4a990246e902a6b8e59aa552823e00e1",
+          "url": "https://github.com/Bwei15/OpenCurv/releases/download/data-20260910/de-ni_E5_N50.rd5"
+        }
+      ],
+      "bbox": [
+        6.2953,
+        51.2935,
+        11.6073,
+        54.2396
+      ]
+    }
+  ],
+  "totalBytes": 427079854
+}

@@ -301,14 +301,22 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     val regions: StateFlow<Map<String, List<MapRegion>>> = _regions.asStateFlow()
 
     fun loadRegions() {
-        if (_regions.value.isNotEmpty()) return
         viewModelScope.launch {
-            val catalog = container.mapCatalog.regions()
-            // Files from an older install, or a map imported by hand, become
-            // the region they actually are instead of a bare file name.
-            container.regions.adopt(catalog)
-            _regions.value = catalog.groupBy { it.country }
-            _dataVersion.value++
+            if (_regions.value.isEmpty()) {
+                val catalog = container.mapCatalog.regions()
+                if (catalog.isNotEmpty()) {
+                    container.regions.adopt(catalog)
+                    _regions.value = catalog.groupBy { it.country }
+                    _dataVersion.value++
+                }
+            }
+            val updated = container.mapCatalog.refreshFromNetwork()
+            if (updated) {
+                val fresh = container.mapCatalog.regions()
+                container.regions.adopt(fresh)
+                _regions.value = fresh.groupBy { it.country }
+                _dataVersion.value++
+            }
         }
     }
 

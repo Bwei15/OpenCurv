@@ -103,7 +103,7 @@
     <string name="download_waiting">%1$d von %2$d Dateien fertig</string>
     <string name="download_done">Fertig</string>
     <string name="download_blocked_navigating">Bitte erst die Navigation beenden.</string>
-    <string name="download_sources">Karten kommen von download.mapsforge.org, Routing-Kacheln von brouter.de. Beides sind öffentliche Datenbanken auf OpenStreetMap-Basis; mit etwas anderem spricht die App nicht.</string>
+    <string name="download_sources">Karten und vorberechnete Kurven-Routing-Kacheln stammen aus offiziellen OpenCurv GitHub-Releases auf OpenStreetMap-Basis. Die Navigation läuft 100 % offline.</string>
 
     <!-- Einstieg -->
     <string name="onboarding_skip">Überspringen</string>

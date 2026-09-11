@@ -40,6 +40,7 @@ KIND_BY_EXT = {
     ".brf": "profile",
     ".json": "metadata",
     ".zip": "bundle",
+    ".tsv": "cameras",  # <region-id>.cameras.tsv - see kind_of() for the exact match
 }
 
 DEFAULT_MAX = 2 * 1024 ** 3  # GitHub-Limit je Release-Asset
@@ -57,9 +58,14 @@ def sha256_of(path, bufsize=1 << 20):
 
 
 def kind_of(name):
-    ext = os.path.splitext(name)[1].lower()
     if name == "lookups.dat":
         return "lookups"
+    # Checked before the plain extension map: ".tsv" is only ever a speed
+    # camera file today (build_cameras.py's <region-id>.cameras.tsv), but the
+    # explicit suffix check keeps that true instead of just assuming it.
+    if name.endswith(".cameras.tsv"):
+        return "cameras"
+    ext = os.path.splitext(name)[1].lower()
     return KIND_BY_EXT.get(ext, "other")
 
 

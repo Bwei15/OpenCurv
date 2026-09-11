@@ -34,6 +34,14 @@ data class Settings(
     val mapStyle: MapStyle = MapStyle.COLOUR,
     /** False until the rider has been walked through getting their first map. */
     val onboardingDone: Boolean = false,
+    /**
+     * Opt-in for the on-screen/spoken stationary speed-camera warning
+     * (`domain/cameras/SpeedCameraWarner.kt`). Defaults to **off**: in
+     * Germany, using a device to warn of speed camera locations while driving
+     * is prohibited under StVO §23 Abs. 1c, so this has to be a choice the
+     * rider makes, not a default - see `1.Doku/Blitzer.md`.
+     */
+    val speedCameraWarnings: Boolean = false,
 )
 
 /**
@@ -65,6 +73,7 @@ class SettingsRepository(context: Context) {
         mapStyle = runCatching { MapStyle.valueOf(prefs.getString(KEY_MAP_STYLE, null) ?: "COLOUR") }
             .getOrDefault(MapStyle.COLOUR),
         onboardingDone = prefs.getBoolean(KEY_ONBOARDING, false),
+        speedCameraWarnings = prefs.getBoolean(KEY_SPEED_CAMERA_WARNINGS, false),
     )
 
     fun update(transform: (Settings) -> Settings) {
@@ -81,6 +90,7 @@ class SettingsRepository(context: Context) {
             .putBoolean(KEY_ALTERNATIVES, updated.searchAlternatives)
             .putString(KEY_MAP_STYLE, updated.mapStyle.name)
             .putBoolean(KEY_ONBOARDING, updated.onboardingDone)
+            .putBoolean(KEY_SPEED_CAMERA_WARNINGS, updated.speedCameraWarnings)
             .apply()
         _settings.value = updated
     }
@@ -97,5 +107,6 @@ class SettingsRepository(context: Context) {
         const val KEY_ALTERNATIVES = "alternatives"
         const val KEY_MAP_STYLE = "map_style"
         const val KEY_ONBOARDING = "onboarding_done"
+        const val KEY_SPEED_CAMERA_WARNINGS = "speed_camera_warnings"
     }
 }

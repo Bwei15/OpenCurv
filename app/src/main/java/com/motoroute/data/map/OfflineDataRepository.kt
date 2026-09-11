@@ -27,6 +27,15 @@ class OfflineDataRepository(private val context: Context) {
     /** Where PMTiles archives live - what MapLibre actually renders from. */
     val mapTilesDir: File get() = directoryFor(OfflineFileKind.MAPTILES)
 
+    /**
+     * Where downloaded `<region-id>.cameras.tsv` speed-camera files live - see
+     * `data/cameras/SpeedCameraRepository.kt`. The download pipeline this
+     * directory is meant for is being built separately (Welle 6.1); once a
+     * region download recognises `kind == "cameras"` from `catalog.json`, it
+     * belongs here, next to [mapDir] and [segmentDir].
+     */
+    val camerasDir: File get() = directoryFor(OfflineFileKind.CAMERAS)
+
     /** Where derived data lives - the place-search index, and nothing precious. */
     val indexDir: File get() = File(context.cacheDir, "search").apply { mkdirs() }
 

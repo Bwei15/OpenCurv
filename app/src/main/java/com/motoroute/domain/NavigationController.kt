@@ -10,6 +10,7 @@ import com.motoroute.data.model.GeoPoint
 import com.motoroute.data.model.Route
 import com.motoroute.data.settings.SettingsRepository
 import com.motoroute.data.traffic.TrafficRepository
+import com.motoroute.domain.cameras.SpeedCameraWarner
 import com.motoroute.voice.VoiceGuidance
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -48,6 +49,12 @@ class NavigationController(
     private val settings: SettingsRepository,
     private val voice: VoiceGuidance,
     private val trafficRepository: TrafficRepository? = null,
+    /**
+     * Optional so nothing else that builds a [NavigationController] (there is
+     * currently only [com.motoroute.di.AppContainer]) has to change; null just
+     * means the feature is silently off.
+     */
+    private val speedCameraWarner: SpeedCameraWarner? = null,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob()),
 ) {
 
@@ -84,6 +91,22 @@ class NavigationController(
         manager.announcements
             .onEach { voice.speak(it) }
             .launchIn(scope)
+
+        // A camera's one-shot signal turns into exactly one VoiceAnnouncement,
+        // same pattern as manager.announcements above. isFinal is deliberately
+        // false: QUEUE_ADD (see VoiceGuidance.speak()) never cuts off a call
+        // already speaking or queued, it only appends - a warning must not
+        // swallow a manoeuvre announcement.
+        speedCameraWarner?.announcements
+            ?.onEach {
+                voice.speak(
+                    VoiceAnnouncement(
+                        kind = AnnouncementKind.SPEED_CAMERA,
+                        speedCameraLimitKmh = it.maxSpeedKmh,
+                    ),
+                )
+            }
+            ?.launchIn(scope)
     }
 
     /** Starts the location stream. Safe to call repeatedly. */
@@ -103,6 +126,22 @@ class NavigationController(
     private fun onFix(fix: FilteredFix, allowReroute: Boolean = true) {
         _lastFix.value = fix
         _zoom.value = camera.zoomFor(fix.speedMps * 3.6)
+
+        // Runs on every fix regardless of navigation state - the whole point
+        // of the feature is to warn even when just riding around with the map
+        // open (see domain/cameras/SpeedCameraWarner.kt's doc comment for why
+        // that is possible: this method already fires without a route).
+        // Called before manager.onLocation() so that when both a camera
+        // warning and a manoeuvre call become due on the same fix, the
+        // camera's voice.speak() (in the init block above) reaches the TTS
+        // queue first - see 1.Doku/Blitzer.md.
+        speedCameraWarner?.onFix(
+            point = fix.point,
+            headingDegrees = fix.headingDegrees,
+            speedMps = fix.speedMps,
+            enabled = settings.current.speedCameraWarnings,
+            nowMillis = System.currentTimeMillis(),
+        )
 
         val needsReroute = manager.onLocation(fix)
         if (!needsReroute || !allowReroute) return

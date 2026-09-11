@@ -54,6 +54,7 @@ fun SettingsScreen(
     onVoice: (Boolean) -> Unit,
     onTestVoice: () -> Unit,
     onOpenData: () -> Unit,
+    onSpeedCameraWarnings: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalRideColors.current
@@ -168,6 +169,16 @@ fun SettingsScreen(
                     label = stringResource(R.string.settings_open_data),
                     onClick = onOpenData,
                     height = 52.dp,
+                )
+            }
+
+            PanelCard {
+                CardTitle(stringResource(R.string.settings_speed_camera_section))
+                SwitchRow(
+                    title = stringResource(R.string.settings_speed_camera_warnings),
+                    subtitle = stringResource(R.string.settings_speed_camera_warnings_hint),
+                    checked = settings.speedCameraWarnings,
+                    onChange = onSpeedCameraWarnings,
                 )
             }
 

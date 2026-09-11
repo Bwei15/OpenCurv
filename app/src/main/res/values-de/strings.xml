@@ -92,6 +92,7 @@
     <string name="kind_map">Karte</string>
     <string name="kind_segment">Routing-Kachel</string>
     <string name="kind_profile">Profil</string>
+    <string name="kind_cameras">Blitzer</string>
 
     <!-- Downloads -->
     <string name="download_title">Karten herunterladen</string>
@@ -150,6 +151,13 @@
     <string name="settings_data_hint">Karten und Routing-Kacheln, Region für Region.</string>
     <string name="settings_open_data">Offline-Daten verwalten</string>
     <string name="settings_about">OpenCurv · Offline-Motorradnavigation · Kartendaten © OpenStreetMap-Mitwirkende</string>
+
+    <!-- Blitzerwarnung -->
+    <string name="settings_speed_camera_section">Blitzerwarnung</string>
+    <string name="settings_speed_camera_warnings">Vor Blitzern warnen</string>
+    <string name="settings_speed_camera_warnings_hint">In Deutschland ist die Nutzung von Geräten, die während der Fahrt vor Blitzern warnen, nach §23 Abs. 1c StVO untersagt. Standardmäßig aus — nur aktivieren, wo das für dich zulässig ist.</string>
+    <string name="speed_camera_alert_title">Blitzer</string>
+    <string name="speed_camera_alert_distance">in %1$s</string>
 
     <!-- Meldungen -->
     <string name="start_set">Startpunkt gesetzt</string>

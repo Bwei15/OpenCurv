@@ -27,6 +27,14 @@ enum class OfflineFileKind(val extension: String, val directory: String) {
      * .pmtiles file built by tools/pipeline gets onto a device for testing.
      */
     MAPTILES("pmtiles", "maptiles"),
+
+    /**
+     * A `<region-id>.cameras.tsv` speed-camera file - see
+     * `tools/pipeline/bin/build_cameras.py` and `1.Doku/Blitzer.md`. The
+     * catalog kind is `"cameras"`; [com.motoroute.data.cameras.SpeedCameraRepository]
+     * reads every file matching this extension out of this directory.
+     */
+    CAMERAS("tsv", "cameras"),
     ;
 
     companion object {

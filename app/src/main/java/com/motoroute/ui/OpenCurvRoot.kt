@@ -1,5 +1,6 @@
 package com.motoroute.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -51,6 +52,8 @@ import com.motoroute.ui.data.MapDownloadScreen
 import com.motoroute.ui.data.OfflineDataScreen
 import com.motoroute.ui.map.MapScreen
 import com.motoroute.ui.map.MapViewModel
+import com.motoroute.ui.map.PoiHit
+import com.motoroute.ui.map.PoiKind
 import com.motoroute.ui.navigation.ActiveNavigationScreen
 import com.motoroute.ui.navigation.GloveButton
 import com.motoroute.ui.navigation.SpeedCameraBanner
@@ -276,11 +279,14 @@ private fun MapRoot(
             onUserGesture = viewModel::onUserGesture,
             onMapTap = if (navigating) null else viewModel::onMapTap,
             onMapLongPress = if (navigating) null else viewModel::onMapLongPress,
+            onPoiTap = if (navigating) null else viewModel::selectPoi,
         )
     }
 
     val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val sheetPeek = if (selection.isComplete) 132.dp else 60.dp
+    // Only shown at rest - navigating clears the tap handler above, so nothing sets this while riding.
+    val selectedPoi by viewModel.selectedPoi.collectAsState()
 
     Box(modifier = Modifier.fillMaxSize()) {
         map()
@@ -382,6 +388,24 @@ private fun MapRoot(
             Spacer(Modifier.height(sheetPeek + navBarBottom + 16.dp))
         }
 
+        if (!navigating && selectedPoi != null) {
+            // Anchored below the search row instead of above the sheet: the sheet's real
+            // height swings from a one-liner to a full route summary with buttons, which made
+            // a bottom-anchored card land right underneath it (drawn later in this Box, so on
+            // top) and disappear. The search row's own height is fixed, so this is stable.
+            PoiCard(
+                hit = selectedPoi!!,
+                onDestination = viewModel::choosePoiAsDestination,
+                onVia = viewModel::choosePoiAsVia,
+                onClose = viewModel::clearPoi,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
+                    .padding(horizontal = 12.dp)
+                    .padding(top = 100.dp),
+            )
+        }
+
         RoutePlanSheet(
             settings = settings,
             profiles = viewModel.profiles(),
@@ -431,6 +455,122 @@ private fun SearchBar(text: String?, onClick: () -> Unit, modifier: Modifier = M
                 fontWeight = if (text == null) FontWeight.Normal else FontWeight.Bold,
                 maxLines = 1,
             )
+        }
+    }
+}
+
+/**
+ * The floating card shown over the sheet when the rider taps a fuel/food pin or a barrier icon.
+ * POI hits get "Als Ziel"/"Zwischenziel"; a barrier is informational only (title + road), since
+ * you cannot route to a closure.
+ */
+@Composable
+private fun PoiCard(
+    hit: PoiHit,
+    onDestination: (PoiHit) -> Unit,
+    onVia: (PoiHit) -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = LocalRideColors.current
+    val isBarrier = hit.kind == PoiKind.BARRIER
+    val iconRes = when (hit.kind) {
+        PoiKind.FUEL -> R.drawable.ic_poi_fuel
+        PoiKind.RESTAURANT -> R.drawable.ic_poi_restaurant
+        PoiKind.BARRIER -> R.drawable.ic_poi_barrier
+    }
+    val kindLabel = when (hit.kind) {
+        PoiKind.FUEL -> stringResource(R.string.place_fuel)
+        PoiKind.RESTAURANT -> stringResource(R.string.poi_kind_restaurant)
+        PoiKind.BARRIER -> null
+    }
+    val title = hit.name.ifBlank {
+        kindLabel ?: stringResource(R.string.poi_barrier_fallback)
+    }
+
+    Surface(
+        color = colors.panel,
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, colors.panelRim),
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Surface(
+                    color = if (isBarrier) colors.danger else colors.primary,
+                    shape = RoundedCornerShape(10.dp),
+                ) {
+                    Icon(
+                        painter = painterResource(iconRes),
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier
+                            .padding(7.dp)
+                            .size(20.dp),
+                    )
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(title, color = colors.onPanel, fontWeight = FontWeight.Bold, maxLines = 1)
+                    // Barrier: the road it blocks, when known. POI: what kind of place this is.
+                    val subtitle = if (isBarrier) hit.road else kindLabel
+                    if (!subtitle.isNullOrBlank()) {
+                        Text(subtitle, color = colors.muted, fontSize = 13.sp, maxLines = 1)
+                    }
+                }
+                GloveButton(
+                    iconRes = R.drawable.ic_action_close,
+                    contentDescription = stringResource(R.string.poi_close),
+                    onClick = onClose,
+                    background = colors.panelSunken,
+                    tint = colors.onPanel,
+                    size = 36.dp,
+                )
+            }
+
+            if (!isBarrier) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Surface(
+                        color = colors.primary,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onDestination(hit) },
+                    ) {
+                        Text(
+                            text = stringResource(R.string.poi_action_destination),
+                            color = colors.onPrimary,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 10.dp),
+                        )
+                    }
+                    Surface(
+                        color = colors.panelSunken,
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, colors.panelRim),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onVia(hit) },
+                    ) {
+                        Text(
+                            text = stringResource(R.string.poi_action_via),
+                            color = colors.onPanel,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 10.dp),
+                        )
+                    }
+                }
+            }
         }
     }
 }

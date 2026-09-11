@@ -69,14 +69,18 @@ class CameraController(
         const val MAX_ZOOM = 19
 
         /**
-         * Map tilt in degrees. The spec asks for roughly 50 degrees of
-         * perspective while riding; standing still the map goes flat so the
-         * rider can read the whole junction at once.
+         * Map tilt in degrees while navigating (0 outside navigation - see `OpenCurvRoot.kt`'s
+         * `MapRoot`). The product decision, after seeing the demo mode: a flat map at a standstill
+         * read as "broken" rather than "stopped", so navigation now keeps at least [MIN_TILT_DEG]
+         * of perspective at any speed, the same look the demo already had, and ramps up to the
+         * full 50 degrees by 25 km/h.
          */
         fun tiltFor(speedKmh: Double): Float = when {
-            speedKmh < 5 -> 0f
-            speedKmh < 25 -> (speedKmh / 25.0 * 50.0).roundToInt().toFloat()
-            else -> 50f
+            speedKmh >= 25 -> 50f
+            else -> (MIN_TILT_DEG + speedKmh / 25.0 * (50.0 - MIN_TILT_DEG)).roundToInt().toFloat()
         }
+
+        /** The floor of [tiltFor] - "always slightly tilted while riding", per the product spec. */
+        private const val MIN_TILT_DEG = 45.0
     }
 }

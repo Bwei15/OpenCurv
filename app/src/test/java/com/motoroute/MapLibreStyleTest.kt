@@ -214,4 +214,53 @@ class MapLibreStyleTest {
             }
         }
     }
+
+    @Test
+    fun `fuel and food POI layers are icon-image symbol layers, not circles`() {
+        // Welle 7: MapController.attachOverlayLayers() bakes bitmaps and registers them under
+        // these exact ids via style.addImage() - a style.json/MapController mismatch here would
+        // leave the pins invisible (unknown icon-image) with no build-time signal otherwise.
+        val expectedIconImage = mapOf(
+            "poi_fuel_pin" to "opencurv-poi-fuel-icon",
+            "poi_food_pin" to "opencurv-poi-food-icon",
+        )
+
+        for (styleName in styles) {
+            val root = loadStyle(styleName)
+            val layers = root.getJSONArray("layers")
+            val layerMap = mutableMapOf<String, JSONObject>()
+            for (i in 0 until layers.length()) {
+                val layer = layers.getJSONObject(i)
+                layerMap[layer.getString("id")] = layer
+            }
+
+            for ((layerId, iconImage) in expectedIconImage) {
+                val layer = layerMap[layerId]
+                assertNotNull("$styleName is missing POI layer $layerId", layer)
+                assertEquals(
+                    "$styleName: $layerId must be a symbol layer (Welle 7 replaced the circle pins with icons)",
+                    "symbol",
+                    layer!!.getString("type"),
+                )
+                val layout = layer.getJSONObject("layout")
+                assertEquals(
+                    "$styleName: $layerId must reference its baked icon image",
+                    iconImage,
+                    layout.getString("icon-image"),
+                )
+                assertTrue(
+                    "$styleName: $layerId must have a filter",
+                    layer.has("filter"),
+                )
+            }
+
+            // Tankstelle vor Restaurant: fuel must win the collision priority.
+            val fuelSortKey = layerMap.getValue("poi_fuel_pin").getJSONObject("layout").getDouble("symbol-sort-key")
+            val foodSortKey = layerMap.getValue("poi_food_pin").getJSONObject("layout").getDouble("symbol-sort-key")
+            assertTrue(
+                "$styleName: fuel's symbol-sort-key ($fuelSortKey) must be lower than food's ($foodSortKey) so fuel wins on overlap",
+                fuelSortKey < foodSortKey,
+            )
+        }
+    }
 }

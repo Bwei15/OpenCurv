@@ -65,6 +65,35 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
 
+    /** The POI or barrier icon the rider last tapped, shown as a floating card over the sheet. */
+    private val _selectedPoi = MutableStateFlow<PoiHit?>(null)
+    val selectedPoi: StateFlow<PoiHit?> = _selectedPoi.asStateFlow()
+
+    fun selectPoi(hit: PoiHit) {
+        _selectedPoi.value = hit
+    }
+
+    fun clearPoi() {
+        _selectedPoi.value = null
+    }
+
+    /** "Als Ziel" on the POI card - same move as picking a search result. */
+    fun choosePoiAsDestination(hit: PoiHit) {
+        _selection.value = _selection.value.copy(
+            destination = hit.point,
+            destinationName = hit.name.ifBlank { null },
+        )
+        _followMode.value = false
+        mapController.centerOn(hit.point, DESTINATION_ZOOM)
+        _selectedPoi.value = null
+    }
+
+    /** "Zwischenziel" on the POI card. */
+    fun choosePoiAsVia(hit: PoiHit) {
+        addVia(hit.point)
+        _selectedPoi.value = null
+    }
+
     /**
      * Whether the map follows the rider.
      *

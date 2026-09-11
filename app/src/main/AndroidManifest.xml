@@ -9,10 +9,13 @@
 
       INTERNET is here for exactly one job - downloading offline maps and
       routing tiles inside the app, so a rider does not have to move files from
-      a PC. That traffic is confined by @xml/network_security_config to the two
-      servers those files come from (download.mapsforge.org and brouter.de),
-      enforced by the platform rather than by our own code, and no download can
-      run while navigation is active.
+      a PC (plus one read-only call to the GitHub API to find the newest data
+      release). That traffic is confined by @xml/network_security_config to the
+      servers those files come from - GitHub releases (github.com,
+      api.github.com, *.githubusercontent.com) and the legacy mapsforge/BRouter
+      servers (download.mapsforge.org, brouter.de) - enforced by the platform
+      rather than by our own code, and no download can run while navigation is
+      active.
     -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />

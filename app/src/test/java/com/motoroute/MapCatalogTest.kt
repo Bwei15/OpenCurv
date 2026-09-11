@@ -85,6 +85,89 @@ class MapCatalogTest {
         assertEquals("de-by_E10_N45.rd5", segTarget.fileName)
         assertEquals(OfflineFileKind.SEGMENT, segTarget.kind)
         assertEquals("https://github.com/Bwei15/OpenCurv/releases/download/data-20260910/de-by_E10_N45.rd5", segTarget.url)
+
+        // The catalog's per-file sha256/bytes must reach the download target,
+        // not just the raw JSON - FileDownloader verifies against these.
+        assertEquals("789ghi", mapTarget.sha256)
+        assertEquals(6105397L, mapTarget.expectedBytes)
+        assertEquals("abc123", segTarget.sha256)
+        assertEquals(72897030L, segTarget.expectedBytes)
+    }
+
+    @Test
+    fun `a file entry without a checksum leaves the target unverified`() {
+        val json = """
+        {
+          "regions": [
+            {
+              "id": "de-hb",
+              "name": "Bremen",
+              "bbox": [8.4, 52.9, 9.0, 53.6],
+              "files": [
+                { "name": "de-hb.pmtiles", "kind": "maptiles", "bytes": 1000,
+                  "url": "https://github.com/Bwei15/OpenCurv/releases/download/data-20260910/de-hb.pmtiles" }
+              ]
+            }
+          ]
+        }
+        """.trimIndent()
+
+        val bremen = MapCatalog.parse(json).single()
+        val target = DownloadTarget.map(bremen)
+        assertEquals(null, target.sha256)
+    }
+
+    @Test
+    fun `the newest data release wins over older ones and the apk release`() {
+        // Shaped like GET /repos/.../releases: newest first is how GitHub
+        // actually orders it, but the selection must not depend on that -
+        // it is deliberately out of order here.
+        val releasesJson = """
+        [
+          { "tag_name": "v1.0.0", "assets": [
+            { "name": "app-release.apk", "browser_download_url": "https://example.invalid/app-release.apk" }
+          ] },
+          { "tag_name": "data-20260901", "assets": [
+            { "name": "catalog.json", "browser_download_url": "https://github.com/Bwei15/OpenCurv/releases/download/data-20260901/catalog.json" }
+          ] },
+          { "tag_name": "data-20260910", "assets": [
+            { "name": "catalog.json", "browser_download_url": "https://github.com/Bwei15/OpenCurv/releases/download/data-20260910/catalog.json" }
+          ] }
+        ]
+        """.trimIndent()
+
+        val url = MapCatalog.selectLatestDataCatalogUrl(releasesJson)
+        assertEquals(
+            "https://github.com/Bwei15/OpenCurv/releases/download/data-20260910/catalog.json",
+            url,
+        )
+    }
+
+    @Test
+    fun `a data release without a catalog json asset is skipped`() {
+        val releasesJson = """
+        [
+          { "tag_name": "data-20260910", "assets": [
+            { "name": "de-ni.pmtiles", "browser_download_url": "https://github.com/Bwei15/OpenCurv/releases/download/data-20260910/de-ni.pmtiles" }
+          ] },
+          { "tag_name": "data-20260901", "assets": [
+            { "name": "catalog.json", "browser_download_url": "https://github.com/Bwei15/OpenCurv/releases/download/data-20260901/catalog.json" }
+          ] }
+        ]
+        """.trimIndent()
+
+        val url = MapCatalog.selectLatestDataCatalogUrl(releasesJson)
+        assertEquals(
+            "https://github.com/Bwei15/OpenCurv/releases/download/data-20260901/catalog.json",
+            url,
+        )
+    }
+
+    @Test
+    fun `no data release at all yields no url rather than a crash`() {
+        val releasesJson = """[ { "tag_name": "v1.0.0", "assets": [] } ]"""
+        assertEquals(null, MapCatalog.selectLatestDataCatalogUrl(releasesJson))
+        assertEquals(null, MapCatalog.selectLatestDataCatalogUrl("not json"))
     }
 
     @Test

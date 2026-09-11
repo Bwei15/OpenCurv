@@ -4,6 +4,14 @@ import com.motoroute.data.map.OfflineFileKind
 import com.motoroute.data.model.BoundingBox
 
 /**
+ * What the catalog promised about one file, so a download can be checked
+ * rather than merely trusted. Either field can be missing - a catalog entry
+ * without a checksum simply skips verification for that file, the same as
+ * today.
+ */
+data class FileChecksum(val sha256: String? = null, val bytes: Long? = null)
+
+/**
  * A region the rider can download: one Mapsforge map plus the BRouter tiles
  * that cover it.
  *
@@ -21,6 +29,8 @@ data class MapRegion(
     val mapUrl: String? = null,
     val customSegmentTiles: List<String>? = null,
     val segmentUrls: Map<String, String> = emptyMap(),
+    /** Keyed by file name (the same keys as [segmentUrls] plus the map file). */
+    val checksums: Map<String, FileChecksum> = emptyMap(),
 ) {
     val fileName: String get() = mapFile ?: (path.substringAfterLast('/') + ".map")
 
@@ -41,6 +51,10 @@ data class DownloadTarget(
     val label: String,
     val regionPath: String? = null,
     val regionName: String? = null,
+    /** Expected SHA-256 (hex, lowercase) from the catalog, or null to skip verification. */
+    val sha256: String? = null,
+    /** Expected size from the catalog, or null when the catalog did not say. */
+    val expectedBytes: Long? = null,
 ) {
     companion object {
         /**
@@ -51,16 +65,43 @@ data class DownloadTarget(
         const val MAP_HOST = "download.mapsforge.org"
         const val SEGMENT_HOST = "brouter.de"
         const val GITHUB_HOST = "github.com"
-        const val GITHUB_OBJECTS_HOST = "objects.githubusercontent.com"
+
+        /** Lists GitHub releases so [MapCatalog] can find the newest data-* tag. */
+        const val GITHUB_API_HOST = "api.github.com"
+
+        /**
+         * The domain GitHub serves release assets from, plus every subdomain.
+         * GitHub has moved this before without notice - assets served from
+         * `objects.githubusercontent.com` now redirect to
+         * `release-assets.githubusercontent.com` - so the allowlist matches the
+         * whole domain rather than one fixed subdomain, exactly like the
+         * `includeSubdomains="true"` rule already in network_security_config.xml.
+         */
+        const val GITHUB_ASSET_DOMAIN = "githubusercontent.com"
 
         const val MAP_BASE = "https://$MAP_HOST/maps/v5/"
         const val SEGMENT_BASE = "https://$SEGMENT_HOST/brouter/segments4/"
 
-        val ALLOWED_HOSTS = setOf(MAP_HOST, SEGMENT_HOST, GITHUB_HOST, GITHUB_OBJECTS_HOST)
+        /** Hosts allowed by exact match only (no subdomains). */
+        val ALLOWED_HOSTS = setOf(MAP_HOST, SEGMENT_HOST, GITHUB_HOST, GITHUB_API_HOST)
+
+        /**
+         * True for [ALLOWED_HOSTS] and for [GITHUB_ASSET_DOMAIN] or any of its
+         * subdomains. Public so [FileDownloader.validate] and its tests use the
+         * exact same rule the network security config enforces at the platform
+         * level.
+         */
+        fun isAllowedHost(host: String): Boolean {
+            val lower = host.lowercase()
+            return lower in ALLOWED_HOSTS ||
+                lower == GITHUB_ASSET_DOMAIN ||
+                lower.endsWith(".$GITHUB_ASSET_DOMAIN")
+        }
 
         fun map(region: MapRegion): DownloadTarget {
             val isPm = region.fileName.endsWith(".pmtiles", ignoreCase = true)
             val defaultUrl = MAP_BASE + region.path + (if (isPm) ".pmtiles" else ".map")
+            val checksum = region.checksums[region.fileName]
             return DownloadTarget(
                 url = region.mapUrl ?: defaultUrl,
                 fileName = region.fileName,
@@ -68,6 +109,8 @@ data class DownloadTarget(
                 label = region.name,
                 regionPath = region.path,
                 regionName = region.name,
+                sha256 = checksum?.sha256,
+                expectedBytes = checksum?.bytes,
             )
         }
 
@@ -76,14 +119,19 @@ data class DownloadTarget(
             fileName: String,
             region: MapRegion? = null,
             label: String? = null,
-        ): DownloadTarget = DownloadTarget(
-            url = url,
-            fileName = fileName,
-            kind = OfflineFileKind.MAP,
-            label = label ?: region?.name ?: fileName,
-            regionPath = region?.path,
-            regionName = region?.name,
-        )
+        ): DownloadTarget {
+            val checksum = region?.checksums?.get(fileName)
+            return DownloadTarget(
+                url = url,
+                fileName = fileName,
+                kind = OfflineFileKind.MAP,
+                label = label ?: region?.name ?: fileName,
+                regionPath = region?.path,
+                regionName = region?.name,
+                sha256 = checksum?.sha256,
+                expectedBytes = checksum?.bytes,
+            )
+        }
 
         fun pmtiles(region: MapRegion): DownloadTarget {
             val fileName = if (region.fileName.endsWith(".pmtiles", ignoreCase = true)) {
@@ -92,6 +140,7 @@ data class DownloadTarget(
                 region.path.substringAfterLast('/') + ".pmtiles"
             }
             val url = region.mapUrl ?: (MAP_BASE + region.path + ".pmtiles")
+            val checksum = region.checksums[fileName]
             return DownloadTarget(
                 url = url,
                 fileName = fileName,
@@ -99,17 +148,24 @@ data class DownloadTarget(
                 label = region.name,
                 regionPath = region.path,
                 regionName = region.name,
+                sha256 = checksum?.sha256,
+                expectedBytes = checksum?.bytes,
             )
         }
 
-        fun segment(tile: String, region: MapRegion? = null): DownloadTarget = DownloadTarget(
-            url = region?.segmentUrls?.get(tile) ?: (SEGMENT_BASE + tile),
-            fileName = tile,
-            kind = OfflineFileKind.SEGMENT,
-            label = tile,
-            regionPath = region?.path,
-            regionName = region?.name,
-        )
+        fun segment(tile: String, region: MapRegion? = null): DownloadTarget {
+            val checksum = region?.checksums?.get(tile)
+            return DownloadTarget(
+                url = region?.segmentUrls?.get(tile) ?: (SEGMENT_BASE + tile),
+                fileName = tile,
+                kind = OfflineFileKind.SEGMENT,
+                label = tile,
+                regionPath = region?.path,
+                regionName = region?.name,
+                sha256 = checksum?.sha256,
+                expectedBytes = checksum?.bytes,
+            )
+        }
     }
 }
 

@@ -194,6 +194,34 @@ class DownloadRepositoryTest {
         assertEquals(OfflineFileKind.SEGMENT, seg2.kind)
     }
 
+    @Test
+    fun `a checksum mismatch surfaces through the repository as a clear failure`() = runTest {
+        val content = "hello world".toByteArray()
+        val target = DownloadTarget(
+            url = "https://github.com/Bwei15/OpenCurv/releases/download/data-20260910/tiny.rd5",
+            fileName = "tiny.rd5",
+            kind = OfflineFileKind.SEGMENT,
+            label = "tiny",
+            // Deliberately wrong, as if the catalog and the server disagreed.
+            sha256 = "0000000000000000000000000000000000000000000000000000000000000",
+        )
+        val repository = DownloadRepository(
+            scope = TestScope(UnconfinedTestDispatcher(testScheduler)),
+            downloader = FileDownloader(
+                dispatcher = UnconfinedTestDispatcher(testScheduler),
+                openConnection = { url -> ServingConnection(url, content) },
+            ),
+            directoryFor = directories(),
+            freeSpaceBytes = { Long.MAX_VALUE },
+        )
+
+        repository.enqueue(listOf(target))
+
+        val item = repository.state.value.items.single()
+        assertEquals(DownloadState.FAILED, item.state)
+        assertTrue(item.error!!.contains("checksum"))
+    }
+
     /**
      * A downloader whose connections always refuse, so nothing touches a
      * network. It runs on the test dispatcher, otherwise the real IO
@@ -209,5 +237,15 @@ class DownloadRepositoryTest {
         override fun getResponseCode(): Int = throw IOException("no network in tests")
         override fun disconnect() = Unit
         override fun usingProxy(): Boolean = false
+    }
+
+    /** A fake HTTPS server that always serves the whole of [body] with a 200. */
+    private class ServingConnection(url: URL, private val body: ByteArray) : HttpURLConnection(url) {
+        override fun connect() = Unit
+        override fun disconnect() = Unit
+        override fun usingProxy(): Boolean = false
+        override fun getResponseCode(): Int = 200
+        override fun getInputStream() = java.io.ByteArrayInputStream(body)
+        override fun getContentLengthLong(): Long = body.size.toLong()
     }
 }

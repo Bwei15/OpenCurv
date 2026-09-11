@@ -1,11 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  OpenCurv talks to exactly two servers, and only to fetch offline data the
-  rider explicitly asked for. Navigation itself never uses the network.
+  OpenCurv talks to a handful of servers, and only to fetch offline data the
+  rider explicitly asked for (plus one read-only GitHub API call to find that
+  data). Navigation itself never uses the network.
 
   Everything else is denied by the platform, not merely avoided by our code:
   cleartext is off everywhere, and no other domain is listed. A bug, a bad
   catalog entry or a redirect cannot widen this.
+
+  github.com issues a 302 for a release download, and GitHub has moved where
+  that redirect lands before without notice - objects.githubusercontent.com
+  became release-assets.githubusercontent.com in 2025. includeSubdomains
+  covers the whole domain rather than one fixed subdomain so the next move
+  does not need a config change; DownloadTarget.isAllowedHost mirrors this
+  same rule in app code, and FileDownloader re-checks every redirect hop
+  against it.
 
   Map rendering (MapLibre) needs no entry here at all: the style JSON, the
   glyph PBFs and the PMTiles vector-tile archive are all read from the
@@ -16,12 +25,15 @@
     <base-config cleartextTrafficPermitted="false" />
 
     <domain-config cleartextTrafficPermitted="false">
-        <!-- Mapsforge vector maps (.map) -->
+        <!-- Mapsforge vector maps (.map), kept for regions not yet migrated to GitHub releases -->
         <domain includeSubdomains="false">download.mapsforge.org</domain>
-        <!-- BRouter routing tiles (.rd5) -->
+        <!-- BRouter routing tiles (.rd5), same legacy path -->
         <domain includeSubdomains="false">brouter.de</domain>
-        <!-- GitHub release downloads (.pmtiles, .rd5, catalog.json) -->
+        <!-- GitHub release pages, which redirect to the asset host below -->
         <domain includeSubdomains="false">github.com</domain>
+        <!-- GitHub API: lists releases so the app can find the newest data-* tag -->
+        <domain includeSubdomains="false">api.github.com</domain>
+        <!-- Where the redirect actually serves the file (objects.*, release-assets.*, ...) -->
         <domain includeSubdomains="true">githubusercontent.com</domain>
     </domain-config>
 </network-security-config>

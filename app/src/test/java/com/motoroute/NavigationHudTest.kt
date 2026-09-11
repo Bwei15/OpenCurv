@@ -76,8 +76,8 @@ class NavigationHudTest {
 
     @Test
     fun `camera distance reuses the maneuver bar's own rounding`() {
-        assertEquals("600 m", formatCameraDistance(600))
-        assertEquals("1.0 km", formatCameraDistance(1000))
-        assertEquals("now", formatCameraDistance(5))
+        assertEquals("600 m", formatCameraDistance(600.0))
+        assertEquals("1.0 km", formatCameraDistance(1000.0))
+        assertEquals("now", formatCameraDistance(5.0))
     }
 }

@@ -284,7 +284,7 @@ class NavigationController(
             segmentDir = offlineData.segmentDir,
             profileParams = mapOf("curviness" to current.curviness.toString()),
             memoryClassMb = MEMORY_CLASS_MB,
-            noGos = trafficRepository?.activeNoGoAreas() ?: emptyList(),
+            noGos = NoGoFilter.near(trafficRepository?.activeNoGoAreas() ?: emptyList(), waypoints),
         )
         return if (current.searchAlternatives) {
             routingEngine.routeCurviest(request)

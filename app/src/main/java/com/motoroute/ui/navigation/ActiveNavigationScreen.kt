@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.motoroute.R
 import com.motoroute.domain.NavigationState
+import com.motoroute.domain.cameras.SpeedCameraWarning
 import com.motoroute.ui.theme.LocalRideColors
 import com.motoroute.ui.theme.Motion
 import com.motoroute.ui.theme.RideTargetGap

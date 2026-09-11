@@ -295,3 +295,63 @@ Design-System umstellt:
 
 
 
+
+---
+
+## Welle 6 bis 8 — Auftrag vom 11.09.2026 (Orchestrierung: Opus)
+
+### Befunde vor dem Start
+
+1. **Welle 4 war nicht abgeschlossen**: Der Download aus GitHub-Releases scheitert
+   mit "release-assets.githubusercontent.com" — GitHub leitet Release-Assets
+   inzwischen auf diesen Host um, der in `DownloadTarget.ALLOWED_HOSTS` fehlt.
+   Zweiter Fehler: `releases/latest/download/catalog.json` löst auf das
+   APK-Release `v1.0.0` auf, das keinen Katalog enthält (404). Die Daten liegen
+   unter dem Tag `data-20260910`.
+2. **Welle 5 ist ein Gerüst ohne Datenquelle**: Parser, Modell und Cache
+   existieren, aber nichts lädt je Verkehrsdaten und nichts zeigt sie an.
+   Als frei nutzbare, schlüssellose Quelle geprüft: die Autobahn-API des BMDV
+   (`https://verkehr.autobahn.de/o/autobahn/`, JSON, Sperrungen/Baustellen/
+   Warnungen). Landesstraßen-Meldungen (Mobilithek, DATEX II) brauchen eine
+   Registrierung — als Erweiterungspunkt vorsehen, nicht jetzt.
+3. **Ortssuche hängt noch an Mapsforge-`.map`-Dateien**, die es seit dem
+   MapLibre-Umbau nicht mehr gibt. Effektiv sucht die App nur in 129
+   handgepflegten Orten; Straßen und Hausnummern fehlen ganz. Dafür muss die
+   Pipeline einen Adress-Index je Region liefern.
+4. Lokale Testdaten für Niedersachsen liegen unter `~/Downloads/region-de-ni/`
+   (`de-ni.pmtiles`, `E5_N50.rd5`, `E10_N50.rd5`) und auf dem Emulator.
+
+### Arbeitsweise
+
+Jeder Agent arbeitet in einem **eigenen git-Worktree** (Branch), damit
+parallele Gradle-Builds und Dateiänderungen sich nicht in die Quere kommen.
+Kein Agent committet auf `main`; die Orchestrierung führt die Branches
+nacheinander zusammen, löst Konflikte und fährt die Abnahme (Tests, Build,
+Emulator). Dateibesitz ist je Agent festgelegt; fremde Dateien nur additiv.
+
+### Welle 6 — Daten (parallel)
+
+| Nr. | Agent | Modell | Auftrag | Eigene Dateien |
+| --- | --- | --- | --- | --- |
+| 6.1 | Download-Reparatur | Sonnet | `release-assets.githubusercontent.com` freischalten, neuesten `data-*`-Release statt `latest` ermitteln, SHA-256 aus dem Katalog nach dem Download prüfen, auf dem Emulator echten Download nachweisen. Schließt Welle 4 ab. | `data/download/*`, `res/xml/network_security_config.xml`, zugehörige Tests |
+| 6.2 | Verkehrsdaten-Live | Sonnet | Fetcher für die Autobahn-API, Verbindungsprüfung (online → laden, offline → Cache), Aktualisierungs-Takt, Ablauf alter Meldungen, Verdrahtung in `AppContainer`. | `data/traffic/*`, neue `TrafficFeed`-Dateien, Tests |
+| 6.3 | Blitzer | Sonnet | Stationäre Blitzer aus OSM (`highway=speed_camera`): Pipeline-Schritt je Region + Starter-Datei für Niedersachsen, `SpeedCameraRepository`, Warnlogik (≤ 1 km, Fahrtrichtung auf den Blitzer zu), Sprachansage, eigenständiges Warn-Composable (rot, Kamera-Icon, "Blitzer"). Einbau ins HUD erst in 7.3. | `data/cameras/*`, `domain/cameras/*`, `ui/navigation/SpeedCameraAlert.kt`, `tools/pipeline/bin/build_cameras.py`, Workflow-Schritt |
+| 6.4 | Adress-Index | Opus | Pipeline erzeugt je Region eine SQLite-Datei mit Orten, Straßen und Hausnummern; Katalog-Art `places`; App lädt sie mit der Region und sucht darin (inkl. "Straße 12, Ort"). Startet nach 6.1, weil beide den Download-Code anfassen. | `tools/pipeline/bin/build_places.py`, `data/search/*`, Download-Anbindung |
+
+*Warum diese Modelle:* 6.1 bis 6.3 sind klar spezifizierte, gut prüfbare
+Aufgaben. 6.4 verlangt Entwurfsentscheidungen (Datenformat, Größe, Ranking
+von Hausnummern gegen Orte) — dafür das große Modell.
+
+### Welle 7 — Oberfläche (parallel, nach Welle 6)
+
+| Nr. | Agent | Modell | Auftrag | Eigene Dateien |
+| --- | --- | --- | --- | --- |
+| 7.1 | Karten-Overlays | Opus | Positionsmarke als reines, großes Dreieck; POI-Icons (Tankstelle, Restaurant) statt Farbpunkte, größer, antippbar → als Ziel/Zwischenziel wählbar; Barriere-Icon für Sperrungen; Kamera-Icon für Blitzer; Karte in der Navigation gekippt wie im Demo-Modus. | `ui/map/MapController.kt`, `ui/map/MapScreen.kt`, `assets/maplibre/*.json`, Drawables |
+| 7.2 | Planung & Touren | Opus | Sheet von überall ziehbar mit Einrasten; eingeklappt nur Play-Knopf + Kernzahlen; Mehrpunkt-Touren und Rundtour; letzte Ziele und letzte Routen; automatische Neuberechnung bei Profil-/Kurvenhunger-Wechsel; Nachweis, dass Profile und Kurvenhunger die Route messbar ändern. | `ui/components/DraggableSheet.kt`, `ui/plan/*`, `ui/search/*`, `ui/map/MapViewModel.kt`, neue `data/history/*` |
+| 7.3 | Navigations-HUD | Opus | Kurvigkeits-Anzeige raus; Ankunft/Restkilometer klein in die Ecke; Verkehrszeichen + gefahrene Geschwindigkeit als ein Element rechts; Lautstärke/Neuladen/Beenden zu einem aufklappbaren Menü; Zentrieren bleibt eigenständig; Blitzer-Warnung aus 6.3 einbauen. | `ui/navigation/*` |
+
+### Welle 8 — Abnahme (Orchestrierung)
+
+Tests (`testDebugUnitTest`, Verifier), Debug-APK, Emulator-Lauf mit
+Bildschirmfotos, Download-Nachweis, Projektplan und Workspace-Overview
+nachziehen.

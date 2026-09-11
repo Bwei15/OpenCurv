@@ -40,6 +40,10 @@ sourceSets {
             "**/data/location/LocationProvider.kt",
             "**/data/brouter/ProfileManager.kt",
             "**/domain/NavigationController.kt",
+            // ConnectivityManager/SharedPreferences - Android only, unlike the
+            // rest of data/traffic (AutobahnTrafficSource, TrafficRepository,
+            // the parser and models are all Android-free and stay included).
+            "**/data/traffic/TrafficUpdater.kt",
         )
         resources.setSrcDirs(emptyList<String>())
     }

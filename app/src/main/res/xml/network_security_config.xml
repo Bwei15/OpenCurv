@@ -23,5 +23,7 @@
         <!-- GitHub release downloads (.pmtiles, .rd5, catalog.json) -->
         <domain includeSubdomains="false">github.com</domain>
         <domain includeSubdomains="true">githubusercontent.com</domain>
+        <!-- BMDV/Autobahn GmbH open traffic API (closures, roadworks, warnings) -->
+        <domain includeSubdomains="false">verkehr.autobahn.de</domain>
     </domain-config>
 </network-security-config>

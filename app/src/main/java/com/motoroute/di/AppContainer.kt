@@ -78,6 +78,13 @@ class AppContainer(context: Context) {
         cacheFile = java.io.File(appContext.filesDir, "traffic_cache.json"),
     )
 
+    /** Fetches from the BMDV/Autobahn GmbH API when online and the cache is stale; see TrafficUpdater. */
+    val trafficUpdater = com.motoroute.data.traffic.TrafficUpdater(
+        context = appContext,
+        repository = traffic,
+        scope = scope,
+    )
+
     val navigation = NavigationController(
         locationProvider = locationProvider,
         routingEngine = routingEngine,

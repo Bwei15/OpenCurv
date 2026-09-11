@@ -21,6 +21,8 @@
     <string name="action_unmute">Ansagen an</string>
     <string name="action_reroute">Route neu berechnen</string>
     <string name="action_stop">Navigation beenden</string>
+    <string name="action_menu">Weitere Bedienelemente</string>
+    <string name="action_close_menu">Bedienelemente schließen</string>
 
     <!-- Fahren -->
     <string name="eta">Ankunft</string>
@@ -32,6 +34,8 @@
     <string name="nav_waiting_gps">Warte auf GPS</string>
     <string name="nav_exit">%1$d. Ausfahrt</string>
     <string name="nav_demo_running">Demofahrt — kein echtes GPS</string>
+    <string name="speed_camera_alert">Blitzer</string>
+    <string name="speed_camera_banner">Blitzer · %1$s</string>
 
     <!-- Planung -->
     <string name="plan_no_destination">Kein Ziel</string>

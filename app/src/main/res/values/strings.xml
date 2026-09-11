@@ -22,6 +22,8 @@
     <string name="action_unmute">Unmute voice</string>
     <string name="action_reroute">Recalculate route</string>
     <string name="action_stop">Stop navigation</string>
+    <string name="action_menu">More controls</string>
+    <string name="action_close_menu">Close controls</string>
 
     <!-- riding -->
     <string name="eta">arrival</string>
@@ -33,6 +35,8 @@
     <string name="nav_waiting_gps">Waiting for GPS</string>
     <string name="nav_exit">exit %1$d</string>
     <string name="nav_demo_running">Demo ride — no real GPS</string>
+    <string name="speed_camera_alert">Speed camera</string>
+    <string name="speed_camera_banner">Speed camera · %1$s</string>
 
     <!-- planning -->
     <string name="plan_no_destination">No destination</string>

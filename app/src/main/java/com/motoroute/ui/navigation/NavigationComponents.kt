@@ -32,6 +32,11 @@ import com.motoroute.R
 import com.motoroute.data.model.Maneuver
 import com.motoroute.ui.theme.GloveTargetSize
 import com.motoroute.ui.theme.LocalRideColors
+import com.motoroute.ui.theme.Radius
+import com.motoroute.ui.theme.Scrim
+import com.motoroute.ui.theme.Space
+import com.motoroute.ui.theme.TypeScale
+import java.util.Locale
 import kotlin.math.roundToInt
 
 /** Maps a maneuver onto its vector icon. */
@@ -101,9 +106,37 @@ fun formatDistance(meters: Double): Pair<String, String> = when {
     meters < 10 -> "now" to ""
     meters < 100 -> "${(meters / 10.0).roundToInt() * 10}" to "m"
     meters < 1000 -> "${(meters / 50.0).roundToInt() * 50}" to "m"
-    meters < 10_000 -> String.format("%.1f", meters / 1000.0) to "km"
+    // Locale.US, like the other HUD readouts in this file - a rider's speed
+    // and distance should not flip to a comma decimal on a German phone.
+    meters < 10_000 -> String.format(Locale.US, "%.1f", meters / 1000.0) to "km"
     else -> "${(meters / 1000.0).roundToInt()}" to "km"
 }
+
+/** Remaining ride distance, e.g. "38 km" or "450 m". */
+fun formatRemaining(meters: Double): String = when {
+    meters < 1000 -> "${meters.toInt()} m"
+    meters < 100_000 -> String.format(Locale.US, "%.1f km", meters / 1000.0)
+    else -> "${(meters / 1000).toInt()} km"
+}
+
+/** Clock-style arrival time, e.g. "14:32". */
+fun formatEta(epochMillis: Long): String {
+    if (epochMillis <= 0L) return "--:--"
+    val calendar = java.util.Calendar.getInstance().apply { timeInMillis = epochMillis }
+    return String.format(
+        Locale.US,
+        "%02d:%02d",
+        calendar.get(java.util.Calendar.HOUR_OF_DAY),
+        calendar.get(java.util.Calendar.MINUTE),
+    )
+}
+
+/**
+ * Arrival and remaining distance as the one compact readout the bottom-left
+ * chip shows, e.g. "14:32 · 38 km".
+ */
+fun formatEtaAndRemaining(epochMillis: Long, remainingMeters: Double): String =
+    "${formatEta(epochMillis)} · ${formatRemaining(remainingMeters)}"
 
 @Composable
 fun DistanceReadout(
@@ -132,41 +165,60 @@ fun DistanceReadout(
     }
 }
 
+/** Arrival chip: a small plate, "14:32 · 38 km" in one line, bottom-left of the HUD. */
+@Composable
+fun EtaDistanceChip(
+    etaEpochMillis: Long,
+    remainingMeters: Double,
+    modifier: Modifier = Modifier,
+) {
+    val colors = LocalRideColors.current
+    Surface(
+        color = colors.hudBackground,
+        shape = RoundedCornerShape(Radius.Md),
+        modifier = modifier,
+    ) {
+        Text(
+            text = formatEtaAndRemaining(etaEpochMillis, remainingMeters),
+            color = colors.hudForeground,
+            // Secondary now that curviness and the four-value footer are gone -
+            // read once on a glance down, not in motion like the speed or the
+            // next-turn distance, so it sits under the 34 sp HUD floor on
+            // purpose. Still bold: it is a value, not a caption.
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = Space.Lg, vertical = Space.Sm),
+        )
+    }
+}
+
+/** Red once clearly over the limit, the HUD's own ink otherwise. */
+fun speedColor(speeding: Boolean, danger: Color, normal: Color): Color =
+    if (speeding) danger else normal
+
 /**
- * Current speed against the posted limit.
+ * Current speed against the posted limit, stacked so the pair can live as one
+ * element at the right edge instead of stretching a bottom bar.
  *
- * The limit is drawn as a European speed-limit sign because that is the shape
- * a rider's eye already knows; the number turns red only when clearly over,
- * so a GPS speed that reads 2 km/h high does not nag.
+ * The limit sign is the one place the app draws a literal traffic sign, so its
+ * colours are the real red/white/black rather than a token - a rider's eye
+ * reads that shape by its real-world colours. Without a limit only the speed
+ * square remains.
  */
 @Composable
-fun SpeedBadge(
+fun SpeedLimitStack(
     speedKmh: Int,
     limitKmh: Int?,
     speeding: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalRideColors.current
-    Row(
+    Column(
         modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(Space.Sm),
     ) {
-        Column(horizontalAlignment = Alignment.Start) {
-            Text(
-                text = "$speedKmh",
-                color = if (speeding) colors.danger else colors.hudForeground,
-                fontSize = 52.sp,
-                fontWeight = FontWeight.Black,
-                maxLines = 1,
-            )
-            Text(
-                text = "km/h",
-                color = colors.muted,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-            )
-        }
         if (limitKmh != null) {
             Box(
                 modifier = Modifier
@@ -192,6 +244,32 @@ fun SpeedBadge(
                 }
             }
         }
+        Box(
+            modifier = Modifier
+                .defaultMinSize(minWidth = 72.dp)
+                .clip(RoundedCornerShape(Radius.Md))
+                .background(colors.hudBackground.copy(alpha = Scrim.FloatingControl)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(horizontal = Space.Md, vertical = Space.Sm),
+            ) {
+                Text(
+                    text = "$speedKmh",
+                    color = speedColor(speeding, colors.danger, colors.hudForeground),
+                    fontSize = TypeScale.HudPrimary,
+                    fontWeight = FontWeight.Black,
+                    maxLines = 1,
+                )
+                Text(
+                    text = "km/h",
+                    color = colors.muted,
+                    fontSize = TypeScale.HudCaption,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+        }
     }
 }
 
@@ -200,6 +278,8 @@ fun SpeedBadge(
  *
  * 84 dp square is the floor set by the cockpit spec - more than 1.7x Android's
  * usual 48 dp minimum - and the whole square is the target, not just the icon.
+ * [size] lets a caller ask for something smaller for controls that are not on
+ * the always-visible riding path (e.g. the ones tucked behind the HUD menu).
  */
 @Composable
 fun GloveButton(
@@ -210,6 +290,7 @@ fun GloveButton(
     background: Color = LocalRideColors.current.hudBackground,
     tint: Color = LocalRideColors.current.hudForeground,
     enabled: Boolean = true,
+    size: Dp = GloveTargetSize,
 ) {
     Surface(
         onClick = onClick,
@@ -217,8 +298,8 @@ fun GloveButton(
         shape = RoundedCornerShape(16.dp),
         color = background.copy(alpha = 0.86f),
         modifier = modifier
-            .defaultMinSize(minWidth = GloveTargetSize, minHeight = GloveTargetSize)
-            .size(GloveTargetSize)
+            .defaultMinSize(minWidth = size, minHeight = size)
+            .size(size)
             .semantics { this.contentDescription = contentDescription },
     ) {
         Box(contentAlignment = Alignment.Center) {
@@ -226,36 +307,17 @@ fun GloveButton(
                 painter = painterResource(iconRes),
                 contentDescription = null,
                 tint = if (enabled) tint else tint.copy(alpha = 0.4f),
-                modifier = Modifier.size(40.dp),
+                // Icon fills roughly half of whatever square it sits in, the
+                // same proportion the 84 dp / 40 dp riding button already uses.
+                modifier = Modifier.size(size * 0.48f),
             )
         }
     }
 }
 
-/** A compact readout used in the bottom bar: a big value with a small caption. */
-@Composable
-fun MetricReadout(
-    value: String,
-    caption: String,
-    modifier: Modifier = Modifier,
-    valueColor: Color = LocalRideColors.current.hudForeground,
-) {
-    Column(modifier = modifier, horizontalAlignment = Alignment.Start) {
-        Text(
-            text = value,
-            color = valueColor,
-            fontSize = 34.sp,
-            fontWeight = FontWeight.Black,
-            maxLines = 1,
-        )
-        Text(
-            text = caption,
-            color = LocalRideColors.current.muted,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-        )
-    }
-}
+/** Hamburger while closed, an X once the three tucked-away buttons are open. */
+fun menuToggleIcon(expanded: Boolean): Int =
+    if (expanded) R.drawable.ic_action_close else R.drawable.ic_action_menu
 
 /** Full-width status strip, e.g. "Rerouting" or "Off route". */
 @Composable

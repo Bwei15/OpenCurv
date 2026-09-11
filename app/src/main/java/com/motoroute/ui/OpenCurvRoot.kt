@@ -53,7 +53,7 @@ import com.motoroute.ui.map.MapScreen
 import com.motoroute.ui.map.MapViewModel
 import com.motoroute.ui.navigation.ActiveNavigationScreen
 import com.motoroute.ui.navigation.GloveButton
-import com.motoroute.ui.navigation.SpeedCameraAlert
+import com.motoroute.ui.navigation.SpeedCameraBanner
 import com.motoroute.ui.onboarding.OnboardingScreen
 import com.motoroute.ui.plan.MissingDataCard
 import com.motoroute.ui.plan.RoutePlanSheet
@@ -159,6 +159,7 @@ fun OpenCurvRoot(
                 follow = follow,
                 manualZoom = manualZoom,
                 demoRunning = demoRunning,
+                speedCameraWarning = speedCameraWarning,
                 zoom = zoom,
                 onOpenData = { screen = Screen.DATA },
                 onOpenSettings = { screen = Screen.SETTINGS },
@@ -228,14 +229,6 @@ fun OpenCurvRoot(
                 .windowInsetsPadding(WindowInsets.safeDrawing),
         )
 
-        // Topmost, on purpose: a camera is relevant on any screen, not only
-        // the map (see SpeedCameraAlert's own doc comment). Welle 7 wires the
-        // richer HUD version of this into the navigation screen itself; this
-        // is the global fallback so the feature is not dead code until then.
-        SpeedCameraAlert(
-            warning = speedCameraWarning,
-            modifier = Modifier.fillMaxSize(),
-        )
     }
 }
 }
@@ -250,6 +243,7 @@ private fun MapRoot(
     follow: Boolean,
     manualZoom: Boolean,
     demoRunning: Boolean,
+    speedCameraWarning: com.motoroute.domain.cameras.SpeedCameraWarning?,
     zoom: Int,
     onOpenData: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -301,6 +295,7 @@ private fun MapRoot(
                 voiceEnabled = settings.voiceEnabled,
                 following = follow,
                 isDemo = demoRunning,
+                cameraWarning = speedCameraWarning,
             )
         } else {
             Column(
@@ -308,6 +303,14 @@ private fun MapRoot(
                     .fillMaxSize()
                     .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)),
             ) {
+            // A camera matters while standing still too; the banner renders
+            // nothing until there is a warning.
+            SpeedCameraBanner(
+                warning = speedCameraWarning,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+            )
             Row(
                 modifier = Modifier
                     .fillMaxWidth()

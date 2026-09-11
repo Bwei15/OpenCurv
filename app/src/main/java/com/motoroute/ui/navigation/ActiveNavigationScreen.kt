@@ -1,22 +1,31 @@
 package com.motoroute.ui.navigation
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -25,20 +34,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.motoroute.R
-import com.motoroute.data.model.Curviness
 import com.motoroute.domain.NavigationState
 import com.motoroute.ui.theme.LocalRideColors
-import java.util.Locale
-import java.util.concurrent.TimeUnit
+import com.motoroute.ui.theme.Motion
+import com.motoroute.ui.theme.RideTargetGap
+import com.motoroute.ui.theme.Space
+import com.motoroute.ui.theme.TapTargetSize
 
 /**
  * The riding HUD.
  *
- * Layout follows the cockpit spec exactly:
- *
- *   top bar    >= 140 dp   maneuver arrow | distance | the one after it
- *   centre                 the map, heading-up, owned by the caller
- *   bottom bar >= 90 dp    speed vs limit | distance left | ETA
+ *   maneuver bar   top, compact - arrow, distance, the one after it
+ *   centre         the map, heading-up, owned by the caller
+ *   right edge     speed + limit, between the maneuver bar and the button stack
+ *   bottom left    arrival + remaining distance, one compact chip
+ *   bottom right   Centre, a menu button, and the three buttons it tucks away
  *
  * Everything is drawn over the map rather than beside it, because on a phone
  * clamped to a handlebar the map is what the rider looks at and the numbers are
@@ -55,9 +65,14 @@ fun ActiveNavigationScreen(
     following: Boolean,
     isDemo: Boolean,
     modifier: Modifier = Modifier,
+    // No camera-detection source is wired up yet (see SpeedCameraAlert.kt);
+    // this stays null until AppContainer exposes one, so the HUD already knows
+    // how to render a warning the day it does.
+    cameraWarning: SpeedCameraWarning? = null,
     map: @Composable (() -> Unit)? = null,
 ) {
     val colors = LocalRideColors.current
+    var menuExpanded by remember { mutableStateOf(false) }
 
     Box(modifier = modifier.fillMaxSize()) {
         map?.invoke()
@@ -67,6 +82,9 @@ fun ActiveNavigationScreen(
                 .fillMaxSize()
                 .windowInsetsPadding(WindowInsets.safeDrawing),
         ) {
+            // The one thing that must never disappear mid-ride, so it is a
+            // sibling of the camera-alert overlay below rather than something
+            // the overlay could ever cover.
             ManeuverBar(state)
 
             if (isDemo) {
@@ -80,31 +98,94 @@ fun ActiveNavigationScreen(
                 StatusBanner(stringResource(R.string.arrived), colors.ok)
             }
 
-            Spacer(Modifier.weight(1f))
+            Box(modifier = Modifier.weight(1f).fillMaxSize()) {
+                // Arrival + remaining distance: bottom-left, out of the thumb's way.
+                EtaDistanceChip(
+                    etaEpochMillis = state.etaEpochMillis,
+                    remainingMeters = state.remainingDistanceMeters,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(Space.Lg),
+                )
 
-            // Side controls sit above the bottom bar, on the right, where a
-            // thumb reaches without letting go of the grip.
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.Bottom,
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                // Speed + limit: right edge, between the maneuver bar above
+                // (outside this box) and the button stack pinned to the
+                // bottom of this same box.
+                SpeedLimitStack(
+                    speedKmh = state.speedKmh,
+                    limitKmh = state.speedLimitKmh,
+                    speeding = state.isSpeeding,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = Space.Lg, end = Space.Md),
+                )
+
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(horizontal = Space.Md),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(RideTargetGap),
+                ) {
+                    // Mute, recalculate and stop, tucked behind the menu
+                    // button so only Centre - the one control reached for
+                    // every time the map has drifted off the rider - is
+                    // always on screen. Grows upward, toward the thumb.
+                    AnimatedVisibility(
+                        visible = menuExpanded,
+                        enter = expandVertically(
+                            animationSpec = tween(Motion.Fast, easing = Motion.Standard_),
+                            expandFrom = Alignment.Bottom,
+                        ) + fadeIn(tween(Motion.Fast)),
+                        exit = shrinkVertically(
+                            animationSpec = tween(Motion.Fast, easing = Motion.Exit),
+                            shrinkTowards = Alignment.Bottom,
+                        ) + fadeOut(tween(Motion.Fast)),
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(RideTargetGap)) {
+                            GloveButton(
+                                iconRes = if (voiceEnabled) {
+                                    R.drawable.ic_action_sound_on
+                                } else {
+                                    R.drawable.ic_action_sound_off
+                                },
+                                contentDescription = stringResource(
+                                    if (voiceEnabled) R.string.action_mute else R.string.action_unmute,
+                                ),
+                                onClick = onToggleVoice,
+                                size = TapTargetSize,
+                            )
+                            GloveButton(
+                                iconRes = R.drawable.ic_action_reroute,
+                                contentDescription = stringResource(R.string.action_reroute),
+                                onClick = onForceReroute,
+                                size = TapTargetSize,
+                            )
+                            GloveButton(
+                                iconRes = R.drawable.ic_action_stop,
+                                contentDescription = stringResource(R.string.action_stop),
+                                onClick = onStop,
+                                background = colors.danger,
+                                tint = Color.Black,
+                                size = TapTargetSize,
+                            )
+                        }
+                    }
+
                     GloveButton(
-                        iconRes = if (voiceEnabled) {
-                            R.drawable.ic_action_sound_on
-                        } else {
-                            R.drawable.ic_action_sound_off
-                        },
+                        iconRes = menuToggleIcon(menuExpanded),
                         contentDescription = stringResource(
-                            if (voiceEnabled) R.string.action_mute else R.string.action_unmute,
+                            if (menuExpanded) R.string.action_close_menu else R.string.action_menu,
                         ),
-                        onClick = onToggleVoice,
+                        onClick = { menuExpanded = !menuExpanded },
+                        size = TapTargetSize,
                     )
-                    // Lit up while the map is not following, so the way back to
-                    // the rider is obvious after a look ahead down the route.
+
+                    // Lit up while the map is not following, so the way back
+                    // to the rider is obvious after a look ahead down the
+                    // route. Stays at its own, larger size and never moves
+                    // behind the menu - this is the control found by shape
+                    // alone, without reading its icon.
                     GloveButton(
                         iconRes = R.drawable.ic_action_center,
                         contentDescription = stringResource(R.string.action_center),
@@ -112,23 +193,13 @@ fun ActiveNavigationScreen(
                         background = if (following) colors.hudBackground else colors.route,
                         tint = if (following) colors.hudForeground else Color.Black,
                     )
-                    GloveButton(
-                        iconRes = R.drawable.ic_action_reroute,
-                        contentDescription = stringResource(R.string.action_reroute),
-                        onClick = onForceReroute,
-                    )
-                    GloveButton(
-                        iconRes = R.drawable.ic_action_stop,
-                        contentDescription = stringResource(R.string.action_stop),
-                        onClick = onStop,
-                        background = colors.danger,
-                        tint = Color.Black,
-                    )
                 }
-            }
 
-            Spacer(Modifier.size(12.dp))
-            BottomBar(state)
+                SpeedCameraAlert(
+                    warning = cameraWarning,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
         }
     }
 }
@@ -151,7 +222,7 @@ private fun ManeuverBar(state: NavigationState) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = Space.Lg, vertical = Space.Sm),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (current != null) {
@@ -193,73 +264,4 @@ private fun ManeuverBar(state: NavigationState) {
             }
         }
     }
-}
-
-/** Bottom bar: speed against the limit, distance left, arrival time. */
-@Composable
-private fun BottomBar(state: NavigationState) {
-    val colors = LocalRideColors.current
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 90.dp)
-            .background(colors.hudBackground.copy(alpha = 0.92f)),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            SpeedBadge(
-                speedKmh = state.speedKmh,
-                limitKmh = state.speedLimitKmh,
-                speeding = state.isSpeeding,
-            )
-
-            MetricReadout(
-                value = formatRemaining(state.remainingDistanceMeters),
-                caption = stringResource(R.string.remaining),
-            )
-
-            MetricReadout(
-                value = formatEta(state.etaEpochMillis),
-                caption = stringResource(R.string.eta),
-            )
-
-            state.route?.let { route ->
-                MetricReadout(
-                    value = Curviness.label(route.curvinessScore),
-                    caption = "${route.curvinessScore.toInt()} deg/km",
-                    valueColor = colors.route,
-                )
-            }
-        }
-    }
-}
-
-private fun formatRemaining(meters: Double): String = when {
-    meters < 1000 -> "${meters.toInt()} m"
-    meters < 100_000 -> String.format(Locale.US, "%.1f km", meters / 1000.0)
-    else -> "${(meters / 1000).toInt()} km"
-}
-
-private fun formatEta(epochMillis: Long): String {
-    if (epochMillis <= 0L) return "--:--"
-    val calendar = java.util.Calendar.getInstance().apply { timeInMillis = epochMillis }
-    return String.format(
-        Locale.US,
-        "%02d:%02d",
-        calendar.get(java.util.Calendar.HOUR_OF_DAY),
-        calendar.get(java.util.Calendar.MINUTE),
-    )
-}
-
-@Suppress("unused")
-private fun formatDuration(seconds: Int): String {
-    val hours = TimeUnit.SECONDS.toHours(seconds.toLong())
-    val minutes = TimeUnit.SECONDS.toMinutes(seconds.toLong()) % 60
-    return if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
 }

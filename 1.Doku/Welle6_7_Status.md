@@ -168,11 +168,18 @@ in kleinere Schritte geteilt, höchstens 2–3 Screenshots je Agent.
 
 | Reihenfolge | Schritt | Modell | Inhalt |
 | --- | --- | --- | --- |
-| 1 | 7.3 HUD | Sonnet | wie oben beschrieben |
+| 1 | 7.3 HUD | Sonnet | **erledigt**, gemergt in `bef52d6` (Kurvigkeit raus, Schild+Tacho, Klappmenü, Blitzer im HUD + Banner; 231 Tests grün). Visuelle Abnahme steht noch aus (Welle 8). |
 | 2 | 7.1 Karte | Sonnet | wie oben beschrieben |
 | 3 | 7.2a Sheet | Sonnet | Sheet von überall ziehbar, Einrasten, Peek mit Play-Knopf, Auto-Neuberechnung, NoGo-Bbox-Filter |
 | 4 | 7.2b Touren | Sonnet | Stoppliste, Rundtour, Verlauf (letzte Ziele/Touren) |
-| 5 | 7.2c Profile | Sonnet | JVM-Messung curvy/fast/enduro auf Niedersachsen, Profile nachschärfen |
+| 5 | 7.2c Profile & Routing-Tempo | Sonnet | JVM-Messung curvy/fast/enduro auf Niedersachsen, Profile nachschärfen. **Neu:** Routing dauert auf dem Emulator 47 s für 2 km ohne NoGos, 82 s mit; 8 km laufen in den 60-s-Timeout (`pass0 timeout`). Ursachen prüfen: `routeCurviest` rechnet 4 Routen, `pass1coefficient = 2.0`, 48 MB Node-Cache, altes 182-MB-`E5_N50.rd5` neben dem neuen `de-ni_E5_N50.rd5` im Segmentordner. |
 | 6 | 6.4a Pipeline | Sonnet | `build_places.py`, Workflow, Katalog-Art `places` |
 | 7 | 6.4b Suche | Sonnet | Download `places`/`cameras`, `SqlitePlaceIndex`, `QueryParser`, Mapsforge-Reste raus |
 | 8 | Welle 8 | Orchestrierung | Abnahme |
+
+### Befunde der Orchestrierung (11.09.2026, spät)
+- `NoGoFilter` (Bounding-Box der Wegpunkte + 30 km) ist in `main` (`bef52d6`), mit Test.
+- Worktrees über `isolation: worktree` starten auf einem veralteten Commit — ab jetzt `git worktree add .claude/worktrees/<name> -b <name> main` von Hand und dem Agenten das Verzeichnis nennen.
+- Agenten enden manchmal mit "warte auf Hintergrundprozess" ohne Bericht — im Briefing steht deshalb: mit Bericht abschließen, nicht warten.
+- Kartenkacheln waren vom Emulator verschwunden (Neuinstallation); `de-ni.pmtiles` aus `~/Downloads/region-de-ni/` per adb wieder eingespielt.
+- Nach der Demo-Fahrt bleibt die Karte im Ruhezustand gekippt → Auftrag an 7.1.

@@ -40,10 +40,12 @@ class CameraControllerTest {
     }
 
     @Test
-    fun `tilt ramps in from standstill and caps at fifty degrees`() {
-        assertEquals(0f, CameraController.tiltFor(0.0))
+    fun `tilt never drops below the standstill floor and caps at fifty degrees`() {
+        // The map stays slightly tilted throughout a ride, even stopped at a light -
+        // a flat map used to read as "navigation stopped" rather than "you stopped".
+        assertEquals(45f, CameraController.tiltFor(0.0))
         assertEquals(50f, CameraController.tiltFor(90.0))
         val mid = CameraController.tiltFor(12.0)
-        assertTrue("mid tilt was $mid", mid > 0f && mid < 50f)
+        assertTrue("mid tilt was $mid", mid > 45f && mid < 50f)
     }
 }

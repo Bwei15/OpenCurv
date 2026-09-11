@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
@@ -14,6 +16,7 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.motoroute.OpenCurvApp
 import com.motoroute.data.model.GeoPoint
 import com.motoroute.data.model.Route
 import com.motoroute.data.settings.MapStyle
@@ -50,11 +53,19 @@ fun MapScreen(
     onUserGesture: () -> Unit = {},
     onMapTap: ((GeoPoint) -> Unit)? = null,
     onMapLongPress: ((GeoPoint) -> Unit)? = null,
+    onPoiTap: ((PoiHit) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val rideColors = LocalRideColors.current
     val gesture = rememberUpdatedState(onUserGesture)
+
+    // Sperrungen and Blitzer come straight from the container, not the (POI-only) view model -
+    // container.traffic.incidents already updates on every TrafficUpdater refresh, and the
+    // speed-camera set only changes after a region download, so both are cheap to recompute here.
+    val container = remember(context) { (context.applicationContext as OpenCurvApp).container }
+    val incidents by container.traffic.incidents.collectAsState()
+    val settings by container.settings.settings.collectAsState()
 
     // Seeding the theme the map is attached with matters: see the doc comment
     // on MapController.attach for why loading day and then immediately
@@ -104,11 +115,25 @@ fun MapScreen(
     }
 
     LaunchedEffect(position, headingDegrees, zoom, headingUp, follow, perspectiveTilt) {
-        if (follow) {
+        if (follow && position != null) {
             controller.follow(position, headingDegrees, zoom, headingUp, perspectiveTilt)
         } else if (!headingUp) {
+            // Also covers the moment a ride (or the demo) ends: NavigationController.stop()
+            // resets to a fresh NavigationState, so position drops to null while follow can
+            // still be true - controller.follow() would then no-op above and leave the camera
+            // exactly as tilted/rotated as the ride left it. Falling through here puts it back
+            // flat and north-up instead of waiting for the rider to pan by hand.
             controller.resetRotation()
         }
+    }
+
+    LaunchedEffect(incidents) {
+        controller.setTrafficGeoJson(container.traffic.getIncidentsGeoJson())
+    }
+
+    LaunchedEffect(settings.speedCameraWarnings) {
+        controller.setCameraGeoJson(container.speedCameraRepository.toGeoJson())
+        controller.setCameraVisible(settings.speedCameraWarnings)
     }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -118,7 +143,7 @@ fun MapScreen(
                 mapView
             },
             modifier = Modifier.fillMaxSize(),
-            update = { controller.setTapHandlers(onMapTap, onMapLongPress) },
+            update = { controller.setTapHandlers(onMapTap, onMapLongPress, onPoiTap) },
         )
     }
 }

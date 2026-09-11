@@ -2,8 +2,11 @@ package com.motoroute.ui.map
 
 import android.content.Context
 import android.graphics.Canvas as AndroidCanvas
+import android.graphics.LinearGradient
 import android.graphics.Paint as NativePaint
 import android.graphics.Path as NativePath
+import android.graphics.Shader
+import com.motoroute.R
 import com.motoroute.data.map.OfflineDataRepository
 import com.motoroute.data.map.OfflineFileKind
 import com.motoroute.data.model.GeoPoint
@@ -19,6 +22,7 @@ import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory
@@ -27,6 +31,39 @@ import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.FeatureCollection
 import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
+
+/** What kind of thing on the map [PoiHit] refers to - drives the floating card's copy and buttons. */
+enum class PoiKind { FUEL, RESTAURANT, BARRIER }
+
+/**
+ * A POI pin or a traffic-barrier icon the rider tapped.
+ *
+ * [road] is only ever set for [PoiKind.BARRIER] (the incident's road, e.g. "A7") - fuel and
+ * restaurant hits have no equivalent field, the floating card just shows [name] and [kind].
+ */
+data class PoiHit(
+    val name: String,
+    val kind: PoiKind,
+    val point: GeoPoint,
+    val road: String? = null,
+)
+
+/**
+ * Picks the POI's display name: OpenMapTiles' `name:latin` when present (readable regardless of
+ * the rider's font support), the raw `name` otherwise, or blank if the point has neither - the
+ * floating card falls back to the kind label ("Tankstelle"/"Restaurant") in that case.
+ *
+ * Pulled out of [MapController.poiFeatureToHit] as a plain function of strings, not a
+ * [org.maplibre.geojson.Feature], so this one bit of parsing logic is testable without Android.
+ */
+fun poiHitFrom(kind: PoiKind, point: GeoPoint, name: String?, nameLatin: String?): PoiHit {
+    val resolved = nameLatin?.takeIf { it.isNotBlank() } ?: name.orEmpty()
+    return PoiHit(name = resolved, kind = kind, point = point)
+}
+
+/** Same idea as [poiHitFrom] for a traffic-barrier tap: the incident's `title` and `road`. */
+fun barrierHitFrom(point: GeoPoint, title: String?, road: String?): PoiHit =
+    PoiHit(name = title.orEmpty(), kind = PoiKind.BARRIER, point = point, road = road)
 
 /**
  * Owns the MapLibre object graph.
@@ -78,6 +115,12 @@ class MapController(private val offlineData: OfflineDataRepository) {
     private var lastHeading = 0.0
     private var lastPuckColor = DEFAULT_PIN_ARGB
 
+    // Sperrungen/Blitzer - same "last state survives a style reload" story as the overlays
+    // above, just fed from app data instead of user interaction.
+    private var lastTrafficGeoJson: String? = null
+    private var lastCameraGeoJson: String? = null
+    private var lastCameraVisible = false
+
     // Which colour is currently baked into each registered style image - so a
     // style reload always re-registers them, but a same-colour redraw within
     // a session does not re-encode a bitmap for no reason.
@@ -97,6 +140,7 @@ class MapController(private val offlineData: OfflineDataRepository) {
 
     private var tapCallback: ((GeoPoint) -> Unit)? = null
     private var longPressCallback: ((GeoPoint) -> Unit)? = null
+    private var poiTapCallback: ((PoiHit) -> Unit)? = null
     private var gestureCallback: () -> Unit = {}
 
     /** Whether there is a vector-tile archive to actually draw. Without one the map is a flat canvas. */
@@ -173,8 +217,17 @@ class MapController(private val offlineData: OfflineDataRepository) {
                 override fun onShoveEnd(detector: org.maplibre.android.gestures.ShoveGestureDetector) = Unit
             })
             map.addOnMapClickListener { latLng ->
-                tapCallback?.invoke(latLng.toGeoPoint())
-                tapCallback != null
+                // A POI or barrier icon under the finger wins over placing a new
+                // destination - queried first, cheaply, only when something wants
+                // to hear about it (never while navigating, see MapScreen).
+                val poiHit = poiTapCallback?.let { queryPoiAt(map, latLng) }
+                if (poiHit != null) {
+                    poiTapCallback?.invoke(poiHit)
+                    true
+                } else {
+                    tapCallback?.invoke(latLng.toGeoPoint())
+                    tapCallback != null
+                }
             }
             map.addOnMapLongClickListener { latLng ->
                 longPressCallback?.invoke(latLng.toGeoPoint())
@@ -296,6 +349,79 @@ class MapController(private val offlineData: OfflineDataRepository) {
     }
 
     private fun attachOverlayLayers(style: Style, context: Context) {
+        // POI icons for the vector-tile "poi" layer (style_day/night.json symbol layers
+        // reference these ids via icon-image) - re-registered on every style load same as
+        // the other style images below, since a reload wipes every image.
+        style.addImage(FUEL_ICON, poiBitmap(context, R.drawable.ic_poi_fuel, android.graphics.Color.WHITE, FUEL_GLYPH_ARGB, POI_RIM_ARGB, POI_DP))
+        style.addImage(FOOD_ICON, poiBitmap(context, R.drawable.ic_poi_restaurant, android.graphics.Color.WHITE, FOOD_GLYPH_ARGB, POI_RIM_ARGB, POI_DP))
+
+        if (style.getSource(TRAFFIC_SOURCE) == null) {
+            style.addImage(BARRIER_ICON, poiBitmap(context, R.drawable.ic_poi_barrier, HAZARD_PLATE_ARGB, android.graphics.Color.WHITE, android.graphics.Color.WHITE, BARRIER_DP))
+            style.addSource(GeoJsonSource(TRAFFIC_SOURCE))
+            // White contour under the red core - only for impassable stretches, per
+            // Design_System.md's two-tone treatment for anything drawn on the map.
+            style.addLayer(
+                LineLayer(TRAFFIC_CASING_LAYER, TRAFFIC_SOURCE).apply {
+                    setFilter(Expression.eq(Expression.get(PROP_IMPASSABLE), Expression.literal(true)))
+                    setProperties(
+                        PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+                        PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+                        PropertyFactory.lineWidth(TRAFFIC_CASING_WIDTH_DP),
+                        PropertyFactory.lineColor(android.graphics.Color.WHITE),
+                    )
+                },
+            )
+            style.addLayer(
+                LineLayer(TRAFFIC_CORE_LAYER, TRAFFIC_SOURCE).apply {
+                    setProperties(
+                        PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+                        PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+                        PropertyFactory.lineWidth(
+                            Expression.switchCase(
+                                Expression.eq(Expression.get(PROP_IMPASSABLE), Expression.literal(true)),
+                                Expression.literal(TRAFFIC_CORE_WIDTH_IMPASSABLE_DP),
+                                Expression.literal(TRAFFIC_CORE_WIDTH_MINOR_DP),
+                            ),
+                        ),
+                        PropertyFactory.lineColor(
+                            Expression.switchCase(
+                                Expression.eq(Expression.get(PROP_IMPASSABLE), Expression.literal(true)),
+                                Expression.color(TRAFFIC_IMPASSABLE_ARGB),
+                                Expression.color(TRAFFIC_MINOR_ARGB),
+                            ),
+                        ),
+                    )
+                },
+            )
+            style.addLayer(
+                SymbolLayer(TRAFFIC_ICON_LAYER, TRAFFIC_SOURCE).apply {
+                    minZoom = TRAFFIC_ICON_MIN_ZOOM
+                    setFilter(Expression.eq(Expression.get(PROP_ROLE), Expression.literal(PROP_ROLE_ICON)))
+                    setProperties(
+                        PropertyFactory.iconImage(BARRIER_ICON),
+                        PropertyFactory.iconAllowOverlap(true),
+                        PropertyFactory.iconIgnorePlacement(true),
+                    )
+                },
+            )
+        }
+
+        if (style.getSource(CAMERA_SOURCE) == null) {
+            style.addImage(CAMERA_ICON_IMAGE, poiBitmap(context, R.drawable.ic_poi_camera, HAZARD_PLATE_ARGB, android.graphics.Color.WHITE, android.graphics.Color.WHITE, CAMERA_DP))
+            style.addSource(GeoJsonSource(CAMERA_SOURCE))
+            style.addLayer(
+                SymbolLayer(CAMERA_LAYER, CAMERA_SOURCE).apply {
+                    minZoom = CAMERA_ICON_MIN_ZOOM
+                    setProperties(
+                        PropertyFactory.iconImage(CAMERA_ICON_IMAGE),
+                        PropertyFactory.iconAllowOverlap(true),
+                        PropertyFactory.iconIgnorePlacement(true),
+                        PropertyFactory.visibility(if (lastCameraVisible) Property.VISIBLE else Property.NONE),
+                    )
+                },
+            )
+        }
+
         if (style.getSource(ROUTE_SOURCE) == null) {
             style.addSource(GeoJsonSource(ROUTE_SOURCE))
             style.addLayer(
@@ -374,6 +500,9 @@ class MapController(private val offlineData: OfflineDataRepository) {
         showDestination(lastDestination, lastDestinationColor)
         showStart(lastStart, lastStartColor)
         showPosition(lastPosition, lastHeading, lastPuckColor)
+        lastTrafficGeoJson?.let { style?.getSourceAs<GeoJsonSource>(TRAFFIC_SOURCE)?.setGeoJson(it) }
+        lastCameraGeoJson?.let { style?.getSourceAs<GeoJsonSource>(CAMERA_SOURCE)?.setGeoJson(it) }
+        setCameraVisible(lastCameraVisible)
     }
 
     // ---- overlays -----------------------------------------------------------
@@ -462,6 +591,28 @@ class MapController(private val offlineData: OfflineDataRepository) {
             source.setGeoJson(Point.fromLngLat(point.longitude, point.latitude))
         }
         return reRegistered
+    }
+
+    // ---- traffic / speed cameras ---------------------------------------
+
+    /** Feeds `TrafficRepository.getIncidentsGeoJson()` straight into the map - see the schema in `1.Doku/Verkehrsdaten.md`. */
+    fun setTrafficGeoJson(geoJson: String) {
+        lastTrafficGeoJson = geoJson
+        style?.getSourceAs<GeoJsonSource>(TRAFFIC_SOURCE)?.setGeoJson(geoJson)
+    }
+
+    /** Feeds `SpeedCameraRepository.toGeoJson()` straight into the map. */
+    fun setCameraGeoJson(geoJson: String) {
+        lastCameraGeoJson = geoJson
+        style?.getSourceAs<GeoJsonSource>(CAMERA_SOURCE)?.setGeoJson(geoJson)
+    }
+
+    /** Shows or hides the whole speed-camera icon layer, gated on `settings.speedCameraWarnings`. */
+    fun setCameraVisible(visible: Boolean) {
+        lastCameraVisible = visible
+        style?.getLayerAs<SymbolLayer>(CAMERA_LAYER)?.setProperties(
+            PropertyFactory.visibility(if (visible) Property.VISIBLE else Property.NONE),
+        )
     }
 
     // ---- camera ---------------------------------------------------------
@@ -569,44 +720,113 @@ class MapController(private val offlineData: OfflineDataRepository) {
     // ---- tap / long-press -----------------------------------------------
 
     /** `null` disables that gesture entirely (e.g. while navigating). */
-    fun setTapHandlers(onTap: ((GeoPoint) -> Unit)?, onLongPress: ((GeoPoint) -> Unit)?) {
+    fun setTapHandlers(
+        onTap: ((GeoPoint) -> Unit)?,
+        onLongPress: ((GeoPoint) -> Unit)?,
+        onPoiTap: ((PoiHit) -> Unit)? = null,
+    ) {
         tapCallback = onTap
         longPressCallback = onLongPress
+        poiTapCallback = onPoiTap
+    }
+
+    /**
+     * Checks the fuel, food and traffic-barrier icon layers under the tap, in that order, before
+     * the map click listener falls back to placing a destination. Three small queries rather than
+     * one combined one because a [org.maplibre.geojson.Feature] carries no layer id of its own -
+     * this is the only way to know which kind was hit.
+     */
+    private fun queryPoiAt(map: MapLibreMap, latLng: LatLng): PoiHit? {
+        val screenPoint = map.projection.toScreenLocation(latLng)
+        map.queryRenderedFeatures(screenPoint, FUEL_LAYER).firstOrNull()?.let {
+            return poiFeatureToHit(it, PoiKind.FUEL)
+        }
+        map.queryRenderedFeatures(screenPoint, FOOD_LAYER).firstOrNull()?.let {
+            return poiFeatureToHit(it, PoiKind.RESTAURANT)
+        }
+        map.queryRenderedFeatures(screenPoint, TRAFFIC_ICON_LAYER).firstOrNull()?.let {
+            return barrierFeatureToHit(it)
+        }
+        return null
+    }
+
+    private fun poiFeatureToHit(feature: org.maplibre.geojson.Feature, kind: PoiKind): PoiHit? {
+        val point = feature.geometry() as? Point ?: return null
+        return poiHitFrom(
+            kind = kind,
+            point = GeoPoint(point.latitude(), point.longitude()),
+            name = feature.getStringProperty("name"),
+            nameLatin = feature.getStringProperty("name:latin"),
+        )
+    }
+
+    private fun barrierFeatureToHit(feature: org.maplibre.geojson.Feature): PoiHit? {
+        val point = feature.geometry() as? Point ?: return null
+        return barrierHitFrom(
+            point = GeoPoint(point.latitude(), point.longitude()),
+            title = feature.getStringProperty("title"),
+            road = feature.getStringProperty("road"),
+        )
     }
 
     // ---- bitmaps ------------------------------------------------------------
 
     /**
-     * The rider: a heading cone (pointing north/up) under a white-ringed dot.
-     * Drawn once per colour - the heading itself is applied on the GPU via
-     * the symbol layer's `icon-rotate`, not by redrawing this bitmap.
+     * The rider: one arrowhead, nothing else - a triangle pointing north with a hairline light
+     * rim, filled with a vertical gradient (pale at the tip, saturated at the base). The old
+     * cone-under-a-dot read as two overlapping shapes at a glance; a single big triangle is
+     * unambiguous, and the rim keeps it visible on both the pale day style and the near-black
+     * night one. `icon-rotate` (heading) and `icon-rotation-alignment: map` do the turning on the
+     * GPU - this bitmap is only ever drawn pointing up, once per colour.
      */
     private fun puckBitmap(context: Context, argbColor: Int): android.graphics.Bitmap {
         val density = context.resources.displayMetrics.density
-        val size = (PUCK_DP * density).toInt().coerceAtLeast(24)
+        val size = (PUCK_DP * density).toInt().coerceAtLeast(28)
         val bitmap = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
         val canvas = AndroidCanvas(bitmap)
         val centre = size / 2f
-        val paint = NativePaint(NativePaint.ANTI_ALIAS_FLAG)
+        val tipY = size * 0.05f
+        val baseY = size * 0.92f
+        val halfWidth = size * 0.30f
 
-        val cone = NativePath().apply {
-            moveTo(centre, centre - size * 0.46f)
-            lineTo(centre - size * 0.22f, centre + size * 0.06f)
-            lineTo(centre + size * 0.22f, centre + size * 0.06f)
+        val arrow = NativePath().apply {
+            moveTo(centre, tipY)
+            lineTo(centre - halfWidth, baseY)
+            lineTo(centre, baseY - halfWidth * 0.42f) // a shallow notch, so the tail doesn't read as a flat bar
+            lineTo(centre + halfWidth, baseY)
             close()
         }
-        paint.style = NativePaint.Style.FILL
-        paint.color = argbColor
-        paint.alpha = 210
-        canvas.drawPath(cone, paint)
 
-        paint.alpha = 255
-        paint.color = android.graphics.Color.WHITE
-        canvas.drawCircle(centre, centre, size * 0.19f, paint)
-        paint.color = argbColor
-        canvas.drawCircle(centre, centre, size * 0.13f, paint)
+        val paint = NativePaint(NativePaint.ANTI_ALIAS_FLAG)
+        paint.style = NativePaint.Style.FILL
+        paint.shader = LinearGradient(
+            centre, tipY, centre, baseY,
+            lighten(argbColor, 0.6f),
+            argbColor,
+            Shader.TileMode.CLAMP,
+        )
+        canvas.drawPath(arrow, paint)
+
+        val rim = NativePaint(NativePaint.ANTI_ALIAS_FLAG).apply {
+            style = NativePaint.Style.STROKE
+            strokeWidth = size * 0.05f
+            strokeJoin = NativePaint.Join.ROUND
+            color = android.graphics.Color.WHITE
+        }
+        canvas.drawPath(arrow, rim)
 
         return bitmap
+    }
+
+    /** Blends [argb] toward white by [amount] (0..1) - the puck gradient's pale tip. */
+    private fun lighten(argb: Int, amount: Float): Int {
+        fun mix(component: Int) = (component + (255 - component) * amount).toInt().coerceIn(0, 255)
+        return android.graphics.Color.argb(
+            android.graphics.Color.alpha(argb),
+            mix(android.graphics.Color.red(argb)),
+            mix(android.graphics.Color.green(argb)),
+            mix(android.graphics.Color.blue(argb)),
+        )
     }
 
     /** A destination or start pin whose tip sits on the point (icon-anchor: bottom). */
@@ -639,6 +859,48 @@ class MapController(private val offlineData: OfflineDataRepository) {
         return bitmap
     }
 
+    /**
+     * A round POI/hazard plate: a filled circle with a thin rim, and [iconRes] (a monochrome
+     * vector drawable, tinted at draw time) centred on top. Used for the fuel, restaurant,
+     * traffic-barrier and speed-camera symbols alike - only the colours and the glyph differ.
+     */
+    private fun poiBitmap(
+        context: Context,
+        iconRes: Int,
+        plateArgb: Int,
+        glyphArgb: Int,
+        rimArgb: Int,
+        sizeDp: Float,
+    ): android.graphics.Bitmap {
+        val density = context.resources.displayMetrics.density
+        val size = (sizeDp * density).toInt().coerceAtLeast(20)
+        val bitmap = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
+        val canvas = AndroidCanvas(bitmap)
+        val centre = size / 2f
+        val rimWidth = size * 0.06f
+        val plateRadius = centre - rimWidth / 2f
+
+        val paint = NativePaint(NativePaint.ANTI_ALIAS_FLAG)
+        paint.style = NativePaint.Style.FILL
+        paint.color = plateArgb
+        canvas.drawCircle(centre, centre, plateRadius, paint)
+
+        paint.style = NativePaint.Style.STROKE
+        paint.strokeWidth = rimWidth
+        paint.color = rimArgb
+        canvas.drawCircle(centre, centre, plateRadius, paint)
+
+        context.getDrawable(iconRes)?.mutate()?.let { glyph ->
+            glyph.setTint(glyphArgb)
+            val glyphSize = (size * POI_GLYPH_SCALE).toInt()
+            val offset = (size - glyphSize) / 2
+            glyph.setBounds(offset, offset, offset + glyphSize, offset + glyphSize)
+            glyph.draw(canvas)
+        }
+
+        return bitmap
+    }
+
     private companion object {
         const val PMTILES_PLACEHOLDER = "__PMTILES_URL__"
 
@@ -658,6 +920,30 @@ class MapController(private val offlineData: OfflineDataRepository) {
         const val PUCK_LAYER = "opencurv-puck-layer"
         const val PUCK_ICON = "opencurv-puck-icon"
 
+        // POI icons baked for the vector-tile "poi" layers in style_day/night.json - the layer
+        // ids below must match the "id" fields there exactly, since queryPoiAt() looks them up
+        // by id and there is no other place that owns them.
+        const val FUEL_LAYER = "poi_fuel_pin"
+        const val FOOD_LAYER = "poi_food_pin"
+        const val FUEL_ICON = "opencurv-poi-fuel-icon"
+        const val FOOD_ICON = "opencurv-poi-food-icon"
+
+        const val TRAFFIC_SOURCE = "opencurv-traffic"
+        const val TRAFFIC_CASING_LAYER = "opencurv-traffic-casing"
+        const val TRAFFIC_CORE_LAYER = "opencurv-traffic-core"
+        const val TRAFFIC_ICON_LAYER = "opencurv-traffic-icon"
+        const val BARRIER_ICON = "opencurv-poi-barrier-icon"
+
+        const val CAMERA_SOURCE = "opencurv-cameras"
+        const val CAMERA_LAYER = "opencurv-camera-layer"
+        const val CAMERA_ICON_IMAGE = "opencurv-poi-camera-icon"
+
+        // Property names from the GeoJSON schemas in `1.Doku/Verkehrsdaten.md` §"GeoJSON-Schema"
+        // and `1.Doku/Blitzer.md` §5.
+        const val PROP_IMPASSABLE = "impassable"
+        const val PROP_ROLE = "role"
+        const val PROP_ROLE_ICON = "icon"
+
         /** Route line widths in dp - a dark casing under a bright core (Design_System.md §2.6). */
         const val ROUTE_CASING_WIDTH_DP = 10f
         const val ROUTE_CORE_WIDTH_DP = 6f
@@ -666,7 +952,31 @@ class MapController(private val offlineData: OfflineDataRepository) {
         const val DEFAULT_CASING_ARGB = android.graphics.Color.BLACK
         const val DEFAULT_PIN_ARGB = android.graphics.Color.RED
 
-        const val PUCK_DP = 46f
+        /** Fuel = Kurvenblau; restaurant = the same warm amber `Design_System.md` uses for warnings - both from `ui/theme/Color.kt`. */
+        const val FUEL_GLYPH_ARGB = 0xFF2440D9.toInt()
+        const val FOOD_GLYPH_ARGB = 0xFF8A5200.toInt()
+
+        /** The red the full-screen speed-camera alert already uses (`OpenCurvColors.DayDanger`) - shared by both hazard icons so "red plate" reads as one language. */
+        const val HAZARD_PLATE_ARGB = 0xFFC0172B.toInt()
+
+        /** `OpenCurvColors.DayPlateRim` - calibrated to hold >= 3:1 against every map colour, day or night. */
+        const val POI_RIM_ARGB = 0xFF6B6558.toInt()
+
+        const val TRAFFIC_IMPASSABLE_ARGB = 0xFFC0172B.toInt()
+        const val TRAFFIC_MINOR_ARGB = 0xFFE8710A.toInt()
+        const val TRAFFIC_CASING_WIDTH_DP = 9f
+        const val TRAFFIC_CORE_WIDTH_IMPASSABLE_DP = 6f
+        const val TRAFFIC_CORE_WIDTH_MINOR_DP = 3f
+        const val TRAFFIC_ICON_MIN_ZOOM = 8f
+        const val CAMERA_ICON_MIN_ZOOM = 11f
+
+        const val POI_GLYPH_SCALE = 0.56f
+        const val POI_DP = 30f
+        const val BARRIER_DP = 30f
+        const val CAMERA_DP = 26f
+
+        /** 44-52 dp per Design_System.md; the triangle itself fills ~90% of the bitmap. */
+        const val PUCK_DP = 50f
         const val PIN_DP = 30f
 
         /** Where the camera lands once it knows where the rider is. */

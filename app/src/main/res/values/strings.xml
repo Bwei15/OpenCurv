@@ -165,6 +165,13 @@
     <string name="speed_camera_alert_title">Speed camera</string>
     <string name="speed_camera_alert_distance">in %1$s</string>
 
+    <!-- POI / hazard card (tapping a fuel, food or closure icon on the map) -->
+    <string name="poi_kind_restaurant">Restaurant</string>
+    <string name="poi_barrier_fallback">Closure</string>
+    <string name="poi_action_destination">As destination</string>
+    <string name="poi_action_via">Via point</string>
+    <string name="poi_close">Close</string>
+
     <!-- messages -->
     <string name="start_set">Start point set</string>
     <string name="msg_pick_destination">Search for a destination or tap the map</string>

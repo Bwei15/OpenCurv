@@ -163,6 +163,13 @@
     <string name="speed_camera_alert_title">Blitzer</string>
     <string name="speed_camera_alert_distance">in %1$s</string>
 
+    <!-- POI-/Gefahren-Karte (Tipp auf Tankstelle, Restaurant oder Sperrungs-Icon) -->
+    <string name="poi_kind_restaurant">Restaurant</string>
+    <string name="poi_barrier_fallback">Sperrung</string>
+    <string name="poi_action_destination">Als Ziel</string>
+    <string name="poi_action_via">Zwischenziel</string>
+    <string name="poi_close">Schließen</string>
+
     <!-- Meldungen -->
     <string name="start_set">Startpunkt gesetzt</string>
     <string name="msg_pick_destination">Ziel suchen oder auf die Karte tippen</string>

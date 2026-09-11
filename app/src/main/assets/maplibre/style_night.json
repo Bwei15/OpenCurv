@@ -376,37 +376,37 @@
     },
     {
       "id": "poi_fuel_pin",
-      "type": "circle",
+      "type": "symbol",
       "source": "openmaptiles",
       "source-layer": "poi",
-      "minzoom": 11,
+      "minzoom": 12,
       "filter": [
         "in",
         "class",
         "fuel",
         "petrol"
       ],
-      "paint": {
-        "circle-radius": {
-          "base": 1.4,
+      "layout": {
+        "icon-image": "opencurv-poi-fuel-icon",
+        "icon-size": {
           "stops": [
             [
-              11,
-              4.5
+              12,
+              0.5
             ],
             [
-              14,
-              7
+              15,
+              0.75
             ],
             [
-              17,
-              10
+              18,
+              1.0
             ]
           ]
         },
-        "circle-color": "#1770E5",
-        "circle-stroke-color": "#000000",
-        "circle-stroke-width": 2
+        "icon-allow-overlap": false,
+        "icon-ignore-placement": false,
+        "symbol-sort-key": 0
       }
     },
     {
@@ -422,17 +422,18 @@
         "petrol"
       ],
       "layout": {
-        "text-anchor": "left",
+        "text-anchor": "top",
         "text-field": "{name:latin}",
         "text-font": [
           "Noto Sans Bold"
         ],
         "text-size": 11,
         "text-offset": [
-          0.9,
-          0
+          0,
+          0.9
         ],
-        "text-allow-overlap": false
+        "text-allow-overlap": false,
+        "text-optional": true
       },
       "paint": {
         "text-color": "#4385E7",
@@ -442,7 +443,7 @@
     },
     {
       "id": "poi_food_pin",
-      "type": "circle",
+      "type": "symbol",
       "source": "openmaptiles",
       "source-layer": "poi",
       "minzoom": 13,
@@ -453,11 +454,27 @@
         "cafe",
         "fast_food"
       ],
-      "paint": {
-        "circle-radius": 5,
-        "circle-color": "#CA2315",
-        "circle-stroke-color": "#000000",
-        "circle-stroke-width": 1.5
+      "layout": {
+        "icon-image": "opencurv-poi-food-icon",
+        "icon-size": {
+          "stops": [
+            [
+              13,
+              0.5
+            ],
+            [
+              16,
+              0.75
+            ],
+            [
+              18,
+              1.0
+            ]
+          ]
+        },
+        "icon-allow-overlap": false,
+        "icon-ignore-placement": false,
+        "symbol-sort-key": 1
       }
     },
     {
@@ -465,7 +482,7 @@
       "type": "symbol",
       "source": "openmaptiles",
       "source-layer": "poi",
-      "minzoom": 14,
+      "minzoom": 13,
       "filter": [
         "in",
         "class",
@@ -474,16 +491,17 @@
         "fast_food"
       ],
       "layout": {
-        "text-anchor": "left",
+        "text-anchor": "top",
         "text-field": "{name:latin}",
         "text-font": [
           "Noto Sans Regular"
         ],
         "text-size": 10,
         "text-offset": [
-          0.8,
-          0
-        ]
+          0,
+          0.9
+        ],
+        "text-optional": true
       },
       "paint": {
         "text-color": "#E03D3A",

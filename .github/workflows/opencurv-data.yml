@@ -251,6 +251,16 @@ jobs:
           rm -f raw/src.osm.pbf.md5
           ls -lh raw/
 
+      # Unabhaengig vom Kurven-Score: liest nur highway=speed_camera-Nodes und
+      # enforcement=maxspeed-Relationen, deshalb vor der Score-Stufe (die
+      # raw/src.osm.pbf anschliessend loescht) statt danach.
+      - name: Blitzer extrahieren
+        run: |
+          mkdir -p "out/$REGION_ID"
+          python3 tools/pipeline/bin/build_cameras.py \
+            raw/src.osm.pbf "out/$REGION_ID/$REGION_ID.cameras.tsv"
+          wc -l "out/$REGION_ID/$REGION_ID.cameras.tsv"
+
       - name: Kurven-Score anbringen
         run: |
           tools/pipeline/bin/run_scorer.sh raw/src.osm.pbf raw/scored.osm.pbf "$CURVE_LEVELS"

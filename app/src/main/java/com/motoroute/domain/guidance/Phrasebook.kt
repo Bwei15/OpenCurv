@@ -42,7 +42,11 @@ object EnglishPhrasebook : Phrasebook {
         AnnouncementKind.FREE_RIDE -> "Follow the road for ${a.freeRideKm} kilometres"
         AnnouncementKind.CURVE_WARNING -> curveWarning(a)
         AnnouncementKind.MANEUVER -> maneuverSentence(a)
+        AnnouncementKind.SPEED_CAMERA -> speedCameraPhrase(a)
     }
+
+    private fun speedCameraPhrase(a: VoiceAnnouncement): String =
+        a.speedCameraLimitKmh?.let { "Speed camera ahead, ${it}" } ?: "Speed camera ahead"
 
     private fun curveWarning(a: VoiceAnnouncement): String =
         if (a.comboCount >= 3) "Attention, sequence of bends" else "Attention, ${sharpName(a.maneuver)}"
@@ -109,7 +113,11 @@ object GermanPhrasebook : Phrasebook {
         AnnouncementKind.FREE_RIDE -> "Dem Straßenverlauf ${a.freeRideKm} Kilometer folgen"
         AnnouncementKind.CURVE_WARNING -> curveWarning(a)
         AnnouncementKind.MANEUVER -> maneuverSentence(a)
+        AnnouncementKind.SPEED_CAMERA -> speedCameraPhrase(a)
     }
+
+    private fun speedCameraPhrase(a: VoiceAnnouncement): String =
+        a.speedCameraLimitKmh?.let { "Achtung, Blitzer, $it" } ?: "Achtung, Blitzer"
 
     private fun curveWarning(a: VoiceAnnouncement): String =
         if (a.comboCount >= 3) "Achtung, mehrere Kurven" else "Achtung, ${sharpName(a.maneuver)}"

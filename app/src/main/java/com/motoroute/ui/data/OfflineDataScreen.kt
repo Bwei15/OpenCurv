@@ -272,5 +272,6 @@ private fun kindLabel(kind: OfflineFileKind): String = stringResource(
         OfflineFileKind.SEGMENT -> R.string.kind_segment
         OfflineFileKind.PROFILE -> R.string.kind_profile
         OfflineFileKind.MAPTILES -> R.string.kind_maptiles
+        OfflineFileKind.CAMERAS -> R.string.kind_cameras
     },
 )

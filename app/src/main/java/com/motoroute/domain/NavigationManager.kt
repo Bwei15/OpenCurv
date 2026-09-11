@@ -62,6 +62,14 @@ enum class AnnouncementKind {
     FREE_RIDE,
     ARRIVAL,
     OFF_ROUTE,
+
+    /**
+     * A stationary speed camera ahead - see `domain/cameras/SpeedCameraWarner.kt`.
+     * Not part of this state machine: [com.motoroute.domain.NavigationController]
+     * emits it straight from the warner's own one-shot signal, because the
+     * warning has to work outside an active navigation too.
+     */
+    SPEED_CAMERA,
 }
 
 /**
@@ -86,6 +94,8 @@ data class VoiceAnnouncement(
     val secondManeuver: Maneuver? = null,
     /** Set on [AnnouncementKind.FREE_RIDE]: how far the quiet stretch still runs. */
     val freeRideKm: Int = 0,
+    /** Set on [AnnouncementKind.SPEED_CAMERA] when the camera has a known limit. */
+    val speedCameraLimitKmh: Int? = null,
 )
 
 /**

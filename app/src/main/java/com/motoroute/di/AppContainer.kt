@@ -3,6 +3,7 @@ package com.motoroute.di
 import android.content.Context
 import com.motoroute.data.brouter.BRouterEngine
 import com.motoroute.data.brouter.ProfileManager
+import com.motoroute.data.cameras.SpeedCameraRepository
 import com.motoroute.data.download.DownloadRepository
 import com.motoroute.data.download.FileDownloader
 import com.motoroute.data.download.MapCatalog
@@ -12,10 +13,12 @@ import com.motoroute.data.map.OfflineDataRepository
 import com.motoroute.data.search.PlaceSearchRepository
 import com.motoroute.data.settings.SettingsRepository
 import com.motoroute.domain.NavigationController
+import com.motoroute.domain.cameras.SpeedCameraWarner
 import com.motoroute.voice.VoiceGuidance
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * Manual dependency wiring.
@@ -84,6 +87,9 @@ class AppContainer(context: Context) {
         repository = traffic,
         scope = scope,
     )
+    /** Stationary speed cameras: bundled starter data plus whatever a region download adds. */
+    val speedCameraRepository = SpeedCameraRepository(appContext, offlineData.camerasDir)
+    val speedCameraWarner = SpeedCameraWarner()
 
     val navigation = NavigationController(
         locationProvider = locationProvider,
@@ -93,6 +99,18 @@ class AppContainer(context: Context) {
         settings = settings,
         voice = voice,
         trafficRepository = traffic,
+        speedCameraWarner = speedCameraWarner,
         scope = scope,
     )
+
+    init {
+        // Off the main thread and off the startup path, same reason
+        // ProfileManager.ensureInstalled() runs in a launched coroutine rather
+        // than AppContainer's constructor: parsing a region's worth of TSV
+        // rows (Niedersachsen alone is low thousands) is not something a cold
+        // start should wait on.
+        scope.launch(Dispatchers.IO) {
+            speedCameraWarner.updateCameras(speedCameraRepository.grid())
+        }
+    }
 }

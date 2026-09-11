@@ -40,6 +40,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.motoroute.OpenCurvApp
 import com.motoroute.R
 import com.motoroute.data.settings.MapTheme
 import com.motoroute.domain.CameraController
@@ -52,6 +53,7 @@ import com.motoroute.ui.map.MapScreen
 import com.motoroute.ui.map.MapViewModel
 import com.motoroute.ui.navigation.ActiveNavigationScreen
 import com.motoroute.ui.navigation.GloveButton
+import com.motoroute.ui.navigation.SpeedCameraAlert
 import com.motoroute.ui.onboarding.OnboardingScreen
 import com.motoroute.ui.plan.MissingDataCard
 import com.motoroute.ui.plan.RoutePlanSheet
@@ -75,6 +77,12 @@ fun OpenCurvRoot(
     onRequestPermission: () -> Unit,
 ) {
     val context = LocalContext.current
+    // Read directly off the AppContainer rather than through MapViewModel: the
+    // camera warning fires with or without a ride (see
+    // domain/cameras/SpeedCameraWarner.kt), so it cannot depend on a
+    // ride-scoped ViewModel that Welle 7 owns and this task must not touch.
+    val speedCameraContainer = remember { (context.applicationContext as OpenCurvApp).container }
+    val speedCameraWarning by speedCameraContainer.speedCameraWarner.warning.collectAsState()
     val settings by viewModel.settings.collectAsState()
     val navigationState by viewModel.navigationState.collectAsState()
     val planning by viewModel.planningState.collectAsState()
@@ -190,6 +198,9 @@ fun OpenCurvRoot(
                 onVoice = { viewModel.toggleVoice() },
                 onTestVoice = viewModel::testVoice,
                 onOpenData = { screen = Screen.DATA },
+                onSpeedCameraWarnings = { enabled ->
+                    speedCameraContainer.settings.update { it.copy(speedCameraWarnings = enabled) }
+                },
             )
         }
 
@@ -215,6 +226,15 @@ fun OpenCurvRoot(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .windowInsetsPadding(WindowInsets.safeDrawing),
+        )
+
+        // Topmost, on purpose: a camera is relevant on any screen, not only
+        // the map (see SpeedCameraAlert's own doc comment). Welle 7 wires the
+        // richer HUD version of this into the navigation screen itself; this
+        // is the global fallback so the feature is not dead code until then.
+        SpeedCameraAlert(
+            warning = speedCameraWarning,
+            modifier = Modifier.fillMaxSize(),
         )
     }
 }

@@ -44,12 +44,22 @@ sourceSets {
             // rest of data/traffic (AutobahnTrafficSource, TrafficRepository,
             // the parser and models are all Android-free and stay included).
             "**/data/traffic/TrafficUpdater.kt",
+            // Touches Context for the assets/filesDir load, same reason as the
+            // other data-layer exclusions above; the Android-free parts of the
+            // speed-camera feature (SpeedCamera, SpeedCameraGrid,
+            // SpeedCameraWarner) are not excluded and run here.
+            "**/data/cameras/SpeedCameraRepository.kt",
         )
         resources.setSrcDirs(emptyList<String>())
     }
     test {
         kotlin.setSrcDirs(listOf(appTest))
-        kotlin.exclude("**/MapCatalogTest.kt")
+        kotlin.exclude(
+            "**/MapCatalogTest.kt",
+            // Exercises SpeedCameraRepository, which is excluded above for
+            // the same Context dependency as MapCatalog.
+            "**/SpeedCameraRepositoryTest.kt",
+        )
         resources.setSrcDirs(emptyList<String>())
     }
 }

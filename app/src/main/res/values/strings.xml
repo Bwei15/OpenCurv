@@ -94,6 +94,7 @@
     <string name="kind_segment">Routing tile</string>
     <string name="kind_profile">Profile</string>
     <string name="kind_maptiles">Map tiles</string>
+    <string name="kind_cameras">Speed cameras</string>
 
     <!-- downloads -->
     <string name="download_title">Download maps</string>
@@ -152,6 +153,13 @@
     <string name="settings_data_hint">Maps and routing tiles, region by region.</string>
     <string name="settings_open_data">Manage offline data</string>
     <string name="settings_about">OpenCurv · offline motorcycle navigation · map data © OpenStreetMap contributors</string>
+
+    <!-- speed camera warnings -->
+    <string name="settings_speed_camera_section">Speed camera warnings</string>
+    <string name="settings_speed_camera_warnings">Warn about speed cameras</string>
+    <string name="settings_speed_camera_warnings_hint">In Germany, devices that warn of speed camera locations while driving are prohibited under StVO §23 Abs. 1c. Off by default — enable only where this is legal for you.</string>
+    <string name="speed_camera_alert_title">Speed camera</string>
+    <string name="speed_camera_alert_distance">in %1$s</string>
 
     <!-- messages -->
     <string name="start_set">Start point set</string>

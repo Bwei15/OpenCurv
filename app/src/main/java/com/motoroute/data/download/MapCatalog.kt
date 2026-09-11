@@ -4,6 +4,7 @@ import android.content.Context
 import com.motoroute.data.model.BoundingBox
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 
 /**
@@ -31,11 +32,20 @@ class MapCatalog(private val context: Context) {
     /**
      * Checks GitHub Releases for the latest catalog.json and persists it locally.
      * Returns true if a newer catalog was successfully loaded.
+     *
+     * `.../releases/latest/download/...` is deliberately not used here: "latest"
+     * means the most recently *published* release, which is the APK release
+     * (currently `v1.0.0`) and carries no `catalog.json` at all - a 404, every
+     * time. Map/routing data ships as separate `data-YYYYMMDD` releases, so this
+     * lists releases via the API and picks the newest tag that starts with
+     * `data-` itself. Never blocks app start: [MapViewModel.loadRegions] already
+     * shows the bundled or previously-cached catalog first and calls this
+     * afterwards, on the same background scope.
      */
     suspend fun refreshFromNetwork(repo: String = "Bwei15/OpenCurv"): Boolean = withContext(Dispatchers.IO) {
         runCatching {
-            val url = java.net.URI("https://github.com/$repo/releases/latest/download/catalog.json").toURL()
-            val conn = url.openConnection() as java.net.HttpURLConnection
+            val assetUrl = latestDataCatalogUrl(repo) ?: return@withContext false
+            val conn = java.net.URI(assetUrl).toURL().openConnection() as java.net.HttpURLConnection
             conn.connectTimeout = 6000
             conn.readTimeout = 8000
             conn.instanceFollowRedirects = true
@@ -51,6 +61,26 @@ class MapCatalog(private val context: Context) {
             false
         }.getOrElse { false }
     }
+
+    /**
+     * Fetches `catalog.json`'s `browser_download_url` from the newest
+     * `data-*` release, or null when the API is unreachable, rate-limited, or
+     * no such release/asset exists - any of which just falls back to the
+     * bundled or previously-cached catalog in [load].
+     */
+    private fun latestDataCatalogUrl(repo: String): String? = runCatching {
+        val url = java.net.URI(
+            "https://${DownloadTarget.GITHUB_API_HOST}/repos/$repo/releases?per_page=20",
+        ).toURL()
+        val conn = url.openConnection() as java.net.HttpURLConnection
+        conn.connectTimeout = 6000
+        conn.readTimeout = 8000
+        conn.instanceFollowRedirects = true
+        conn.setRequestProperty("Accept", "application/vnd.github+json")
+        if (conn.responseCode !in 200..299) return@runCatching null
+        val text = conn.inputStream.bufferedReader().use { it.readText() }
+        selectLatestDataCatalogUrl(text)
+    }.getOrNull()
 
     private fun load(): List<MapRegion> = runCatching {
         if (localCatalogFile.isFile) {
@@ -69,6 +99,44 @@ class MapCatalog(private val context: Context) {
     companion object {
         const val CATALOG_ASSET = "catalog/catalog.json"
         const val REGIONS_ASSET = "catalog/regions.json"
+
+        /**
+         * Picks `catalog.json`'s `browser_download_url` out of a GitHub
+         * `GET /repos/.../releases` response: releases with a `tag_name` that
+         * does not start with `data-` are ignored (that includes the APK
+         * release), and among the rest the lexicographically newest tag wins -
+         * `data-YYYYMMDD` sorts chronologically, so string comparison is enough.
+         * A pure function of the response body so the tag-selection logic is
+         * testable without a network call.
+         */
+        fun selectLatestDataCatalogUrl(releasesJson: String): String? = runCatching {
+            val releases = JSONArray(releasesJson)
+            var bestTag: String? = null
+            var bestUrl: String? = null
+            for (i in 0 until releases.length()) {
+                val release = releases.getJSONObject(i)
+                val tag = release.optString("tag_name")
+                if (!tag.startsWith(DATA_TAG_PREFIX)) continue
+                if (bestTag != null && tag <= bestTag) continue
+
+                val assets = release.optJSONArray("assets") ?: continue
+                var catalogUrl: String? = null
+                for (j in 0 until assets.length()) {
+                    val asset = assets.getJSONObject(j)
+                    if (asset.optString("name") == "catalog.json") {
+                        catalogUrl = asset.optString("browser_download_url").ifEmpty { null }
+                        break
+                    }
+                }
+                if (catalogUrl != null) {
+                    bestTag = tag
+                    bestUrl = catalogUrl
+                }
+            }
+            bestUrl
+        }.getOrNull()
+
+        private const val DATA_TAG_PREFIX = "data-"
 
         fun parse(text: String): List<MapRegion> = runCatching {
             val root = JSONObject(text)
@@ -124,6 +192,7 @@ class MapCatalog(private val context: Context) {
                 var mapUrl: String? = null
                 val segmentFiles = mutableListOf<String>()
                 val segmentUrls = mutableMapOf<String, String>()
+                val checksums = mutableMapOf<String, FileChecksum>()
 
                 val files = entry.optJSONArray("files")
                 if (files != null) {
@@ -133,6 +202,11 @@ class MapCatalog(private val context: Context) {
                         val kind = fileObj.optString("kind")
                         val fileUrl = fileObj.optString("url").ifEmpty {
                             if (!releaseBaseUrl.isNullOrBlank()) "$releaseBaseUrl/$fileName" else ""
+                        }
+                        val sha256 = fileObj.optString("sha256").ifEmpty { null }
+                        val bytes = fileObj.optLong("bytes", -1L).takeIf { it >= 0 }
+                        if (sha256 != null || bytes != null) {
+                            checksums[fileName] = FileChecksum(sha256, bytes)
                         }
 
                         if (kind == "maptiles" || fileName.endsWith(".pmtiles", ignoreCase = true) ||
@@ -161,6 +235,7 @@ class MapCatalog(private val context: Context) {
                     mapUrl = mapUrl,
                     customSegmentTiles = segmentFiles.takeIf { it.isNotEmpty() },
                     segmentUrls = segmentUrls,
+                    checksums = checksums,
                 )
             } else {
                 MapRegion(

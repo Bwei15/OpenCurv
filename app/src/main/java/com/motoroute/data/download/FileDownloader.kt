@@ -8,6 +8,7 @@ import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
 
 /** Thrown when a download is refused before a byte is transferred. */
 class DownloadRejected(message: String) : IOException(message)
@@ -15,17 +16,21 @@ class DownloadRejected(message: String) : IOException(message)
 /**
  * Downloads one file over HTTPS, resumably.
  *
- * Three properties matter more than speed here:
+ * Four properties matter more than speed here:
  *
- *  - **Only the two known hosts.** Every hop of a redirect chain is re-checked
- *    against [DownloadTarget.ALLOWED_HOSTS], so a redirect cannot walk the app
+ *  - **Only the known hosts.** Every hop of a redirect chain is re-checked
+ *    against [DownloadTarget.isAllowedHost], so a redirect cannot walk the app
  *    onto another server. The Android network security config enforces the same
- *    list at the platform level; this is the second lock on the same door.
+ *    rule at the platform level; this is the second lock on the same door.
  *  - **Resumable.** Map files run to hundreds of megabytes. A download writes
  *    to `<name>.part` and asks for a byte range when that file already exists,
  *    so a dropped connection costs seconds, not the whole file.
  *  - **Atomic.** The `.part` file is only renamed into place once the transfer
  *    is complete, so a half-written map can never be handed to the renderer.
+ *  - **Checked.** When the catalog names a SHA-256 for the file, it is hashed
+ *    while it is written (and, on a resume, the bytes already on disk are fed
+ *    through the digest first) so a corrupted or tampered download is caught
+ *    before it is ever handed to the renderer or the router.
  */
 class FileDownloader(
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
@@ -96,6 +101,22 @@ class FileDownloader(
             var done = startAt
             onProgress(done, total)
 
+            // Hashed while written, not re-read afterwards: on a plain 400 MB
+            // file that is the difference between one pass over the bytes and
+            // two. On a resume, the bytes already on disk have to go through
+            // the digest too, or the final hash would not match the catalog's.
+            val digest = target.sha256?.let { MessageDigest.getInstance("SHA-256") }
+            if (digest != null && resuming) {
+                partial.inputStream().use { existing ->
+                    val buffer = ByteArray(BUFFER_BYTES)
+                    while (true) {
+                        val read = existing.read(buffer)
+                        if (read < 0) break
+                        digest.update(buffer, 0, read)
+                    }
+                }
+            }
+
             connection.inputStream.use { input ->
                 java.io.FileOutputStream(partial, resuming).use { output ->
                     val buffer = ByteArray(BUFFER_BYTES)
@@ -105,6 +126,7 @@ class FileDownloader(
                         val read = input.read(buffer)
                         if (read < 0) break
                         output.write(buffer, 0, read)
+                        digest?.update(buffer, 0, read)
                         done += read
                         // Reporting every chunk would spam the UI thread on a
                         // 400 MB file; a megabyte of granularity is plenty.
@@ -117,6 +139,22 @@ class FileDownloader(
                 }
             }
             onProgress(done, total)
+
+            if (target.expectedBytes != null && target.expectedBytes != done) {
+                partial.delete()
+                throw DownloadRejected(
+                    "size mismatch for ${target.fileName}: expected ${target.expectedBytes} bytes, got $done",
+                )
+            }
+            if (digest != null) {
+                val actual = digest.digest().toHex()
+                if (!actual.equals(target.sha256, ignoreCase = true)) {
+                    partial.delete()
+                    throw DownloadRejected(
+                        "checksum mismatch for ${target.fileName}: the download is corrupt or was tampered with",
+                    )
+                }
+            }
 
             if (destination.exists() && !destination.delete()) {
                 throw IOException("could not replace ${destination.name}")
@@ -148,7 +186,7 @@ class FileDownloader(
         if (!parsed.protocol.equals("https", ignoreCase = true)) {
             throw DownloadRejected("refusing a non-HTTPS download: $url")
         }
-        if (parsed.host.lowercase() !in DownloadTarget.ALLOWED_HOSTS) {
+        if (!DownloadTarget.isAllowedHost(parsed.host)) {
             throw DownloadRejected("refusing to download from ${parsed.host}")
         }
         return parsed
@@ -196,4 +234,17 @@ class FileDownloader(
         const val MAX_REDIRECTS = 5
         val REDIRECT_CODES = setOf(301, 302, 303, 307, 308)
     }
+}
+
+private val HEX_DIGITS = "0123456789abcdef".toCharArray()
+
+/** Lowercase hex, the form catalog.json and `sha256sum` both use. */
+private fun ByteArray.toHex(): String {
+    val out = CharArray(size * 2)
+    forEachIndexed { i, byte ->
+        val v = byte.toInt() and 0xFF
+        out[i * 2] = HEX_DIGITS[v ushr 4]
+        out[i * 2 + 1] = HEX_DIGITS[v and 0x0F]
+    }
+    return String(out)
 }

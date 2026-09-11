@@ -22,6 +22,10 @@ class OpenCurvApp : Application() {
         container = AppContainer(this)
         createNotificationChannel()
 
+        // Non-blocking: registers the network callback and does an initial
+        // cache-age check, the actual HTTP fetch (if any) runs in its own launch.
+        container.trafficUpdater.start()
+
         container.scope.launch {
             val version = runCatching {
                 packageManager.getPackageInfo(packageName, 0).versionName

@@ -134,4 +134,77 @@ class MobilithekTrafficParserTest {
         assertEquals(53.5, reParsed[0].location.latitude, 0.0001)
         assertEquals(9.9, reParsed[0].location.longitude, 0.0001)
     }
+
+    @Test
+    fun geoJsonUsesImpassablePropertyKeyForTheMapRenderer() {
+        val incident = TrafficIncident(
+            id = "impassable-check",
+            title = "A1 Vollsperrung",
+            description = "",
+            type = IncidentType.ROAD_CLOSURE,
+            severity = IncidentSeverity.CRITICAL,
+            location = GeoPoint(50.0, 10.0),
+        )
+
+        val geoJson = MobilithekTrafficParser.toGeoJson(listOf(incident))
+        assertTrue(geoJson.contains("\"impassable\":true"))
+        assertFalse(geoJson.contains("isImpassable"))
+    }
+
+    @Test
+    fun toGeoJsonWritesFetchedAtAndStaysRoundTrippable() {
+        val incident = TrafficIncident(
+            id = "cache-item",
+            title = "A1 Vollsperrung",
+            description = "",
+            type = IncidentType.ROAD_CLOSURE,
+            severity = IncidentSeverity.CRITICAL,
+            location = GeoPoint(50.0, 10.0),
+            polyline = listOf(GeoPoint(50.0, 10.0), GeoPoint(50.01, 10.0)),
+        )
+
+        val geoJson = MobilithekTrafficParser.toGeoJson(listOf(incident), fetchedAtMillis = 1_726_000_000_000L)
+        assertEquals(1_726_000_000_000L, MobilithekTrafficParser.extractFetchedAt(geoJson))
+
+        // Exactly one feature per incident, even for a line - the cache
+        // format must round-trip 1:1 (see class doc), unlike toDisplayGeoJson.
+        val reParsed = MobilithekTrafficParser.parseGeoJson(geoJson)
+        assertEquals(1, reParsed.size)
+        assertEquals(2, reParsed[0].polyline?.size)
+    }
+
+    @Test
+    fun toDisplayGeoJsonAddsAnIconPointForLineIncidents() {
+        val lineIncident = TrafficIncident(
+            id = "line-item",
+            title = "A1 Vollsperrung",
+            description = "",
+            type = IncidentType.ROAD_CLOSURE,
+            severity = IncidentSeverity.CRITICAL,
+            location = GeoPoint(50.0, 10.0),
+            polyline = listOf(GeoPoint(50.0, 10.0), GeoPoint(50.02, 10.0)),
+        )
+        val pointIncident = TrafficIncident(
+            id = "point-item",
+            title = "A9 Warnung",
+            description = "",
+            type = IncidentType.HAZARD,
+            severity = IncidentSeverity.WARNING,
+            location = GeoPoint(48.0, 11.0),
+        )
+
+        val geoJson = MobilithekTrafficParser.toDisplayGeoJson(listOf(lineIncident, pointIncident))
+
+        // The line incident contributes 2 features (line + icon anchor), the point incident 1.
+        val featureCount = Regex("\"type\":\\s*\"Feature\"").findAll(geoJson).count()
+        assertEquals(3, featureCount)
+        assertTrue(geoJson.contains("\"role\":\"icon\""))
+        assertTrue(geoJson.contains("LineString"))
+
+        // A display feed is not meant to be reloaded as the source of truth,
+        // but if it ever is, the icon-anchor duplicate must not resurrect as
+        // a second incident.
+        val reParsed = MobilithekTrafficParser.parseGeoJson(geoJson)
+        assertEquals(2, reParsed.size)
+    }
 }

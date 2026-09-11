@@ -81,4 +81,68 @@ class TrafficIncidentTest {
         assertTrue(nogo.isClosure)
         assertEquals(150, nogo.radiusMeters)
     }
+
+    @Test
+    fun pointIncidentToNoGoAreasReturnsSingleCircle() {
+        val incident = TrafficIncident(
+            id = "inc-point",
+            title = "B27 Vollsperrung",
+            description = "Erdrutsch",
+            type = IncidentType.ROAD_CLOSURE,
+            severity = IncidentSeverity.CRITICAL,
+            location = GeoPoint(51.0, 9.0),
+            radiusMeters = 80,
+        )
+
+        val areas = incident.toNoGoAreas()
+        assertEquals(1, areas.size)
+        assertEquals(80, areas[0].radiusMeters)
+    }
+
+    @Test
+    fun lineIncidentToNoGoAreasSamplesAlongThePolyline() {
+        // ~1.1 km straight stretch along a meridian (1 deg lat ~= 111 km).
+        val line = listOf(
+            GeoPoint(50.000, 10.0),
+            GeoPoint(50.003, 10.0),
+            GeoPoint(50.006, 10.0),
+            GeoPoint(50.010, 10.0),
+        )
+        val incident = TrafficIncident(
+            id = "inc-line",
+            title = "A1 Vollsperrung",
+            description = "Streckensperrung",
+            type = IncidentType.ROAD_CLOSURE,
+            severity = IncidentSeverity.CRITICAL,
+            location = line.first(),
+            polyline = line,
+        )
+
+        val areas = incident.toNoGoAreas(spacingMeters = 300.0)
+
+        // More than one circle, always starting and ending on the line's endpoints.
+        assertTrue(areas.size > 1)
+        assertEquals(line.first(), areas.first().point)
+        assertEquals(line.last(), areas.last().point)
+        areas.forEach { assertTrue(it.isClosure) }
+
+        // Consecutive circles must overlap (radius >= half the sampling spacing)
+        // so a route cannot thread through the gap between them.
+        assertTrue(areas[0].radiusMeters >= 150)
+    }
+
+    @Test
+    fun shortLineIncidentFallsBackToSingleNoGoArea() {
+        val incident = TrafficIncident(
+            id = "inc-short-line",
+            title = "A1 Vollsperrung",
+            description = "kurzer Abschnitt",
+            type = IncidentType.ROAD_CLOSURE,
+            severity = IncidentSeverity.CRITICAL,
+            location = GeoPoint(50.0, 10.0),
+            polyline = listOf(GeoPoint(50.0, 10.0)), // single point, not a real line
+        )
+
+        assertEquals(1, incident.toNoGoAreas().size)
+    }
 }

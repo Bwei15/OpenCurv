@@ -159,3 +159,20 @@ Die Orchestrierung merged nacheinander in `main` und fährt die Abnahme.
 5. `Projektplan.md` (Fortschritt), `AI_Workspace_Overview.md` (neue Pakete
    `data/traffic`, `data/cameras`, `data/search` SQLite, `data/history`)
    nachziehen.
+
+## Neue Aufstellung (11.09.2026, nach zweitem Limit-Abbruch)
+
+Vier Opus-Agenten parallel erschöpfen das Sitzungslimit in Minuten. Deshalb:
+**ein Agent nach dem anderen**, Sonnet als Standardmodell, große Aufträge
+in kleinere Schritte geteilt, höchstens 2–3 Screenshots je Agent.
+
+| Reihenfolge | Schritt | Modell | Inhalt |
+| --- | --- | --- | --- |
+| 1 | 7.3 HUD | Sonnet | wie oben beschrieben |
+| 2 | 7.1 Karte | Sonnet | wie oben beschrieben |
+| 3 | 7.2a Sheet | Sonnet | Sheet von überall ziehbar, Einrasten, Peek mit Play-Knopf, Auto-Neuberechnung, NoGo-Bbox-Filter |
+| 4 | 7.2b Touren | Sonnet | Stoppliste, Rundtour, Verlauf (letzte Ziele/Touren) |
+| 5 | 7.2c Profile | Sonnet | JVM-Messung curvy/fast/enduro auf Niedersachsen, Profile nachschärfen |
+| 6 | 6.4a Pipeline | Sonnet | `build_places.py`, Workflow, Katalog-Art `places` |
+| 7 | 6.4b Suche | Sonnet | Download `places`/`cameras`, `SqlitePlaceIndex`, `QueryParser`, Mapsforge-Reste raus |
+| 8 | Welle 8 | Orchestrierung | Abnahme |

@@ -95,6 +95,62 @@ class MapCatalogTest {
     }
 
     @Test
+    fun `a places kind file becomes a places download target`() {
+        val json = """
+        {
+          "release": { "baseUrl": "https://github.com/Bwei15/OpenCurv/releases/download/data-20260910" },
+          "regions": [
+            {
+              "id": "de-hb",
+              "name": "Bremen",
+              "bbox": [8.4, 52.9, 9.0, 53.6],
+              "source": { "path": "europe/germany/bremen" },
+              "files": [
+                { "name": "de-hb.pmtiles", "kind": "maptiles", "bytes": 1000 },
+                {
+                  "name": "de-hb.places.sqlite",
+                  "kind": "places",
+                  "bytes": 4530176,
+                  "sha256": "places-sha"
+                }
+              ]
+            }
+          ]
+        }
+        """.trimIndent()
+
+        val bremen = MapCatalog.parse(json).single()
+        assertEquals("de-hb.places.sqlite", bremen.placesFile)
+        assertEquals(
+            "https://github.com/Bwei15/OpenCurv/releases/download/data-20260910/de-hb.places.sqlite",
+            bremen.placesUrl,
+        )
+
+        val target = DownloadTarget.places(bremen)
+        assertNotNull(target)
+        assertEquals("de-hb.places.sqlite", target!!.fileName)
+        assertEquals(com.motoroute.data.map.OfflineFileKind.PLACES, target.kind)
+        assertEquals("places-sha", target.sha256)
+        assertEquals(4530176L, target.expectedBytes)
+    }
+
+    @Test
+    fun `a region with no places file in the catalog gets no places download target`() {
+        val json = """
+        {
+          "regions": [
+            { "id": "de-hb", "name": "Bremen", "bbox": [8.4, 52.9, 9.0, 53.6],
+              "files": [ { "name": "de-hb.pmtiles", "kind": "maptiles", "bytes": 1000 } ] }
+          ]
+        }
+        """.trimIndent()
+
+        val bremen = MapCatalog.parse(json).single()
+        assertEquals(null, bremen.placesFile)
+        assertEquals(null, DownloadTarget.places(bremen))
+    }
+
+    @Test
     fun `a file entry without a checksum leaves the target unverified`() {
         val json = """
         {

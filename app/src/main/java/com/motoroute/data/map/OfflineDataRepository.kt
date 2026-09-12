@@ -36,6 +36,14 @@ class OfflineDataRepository(private val context: Context) {
      */
     val camerasDir: File get() = directoryFor(OfflineFileKind.CAMERAS)
 
+    /**
+     * Where downloaded `<region-id>.places.sqlite` files live - see
+     * `data/search/SqlitePlaceIndex.kt`. A region download that recognises
+     * `kind == "places"` from `catalog.json` writes here, next to [camerasDir];
+     * deleting the region removes the file through [RegionStore].
+     */
+    val placesDir: File get() = directoryFor(OfflineFileKind.PLACES)
+
     /** Where derived data lives - the place-search index, and nothing precious. */
     val indexDir: File get() = File(context.cacheDir, "search").apply { mkdirs() }
 

@@ -103,13 +103,15 @@
     <string name="search_no_results">Nothing found in the downloaded maps.</string>
     <string name="search_no_maps">No map downloaded yet, so there is nothing to search.</string>
     <string name="search_indexing">Building the place index: %1$d %% (%2$d places)</string>
-    <string name="search_hint">Towns and villages come from the downloaded map; streets and fuel stations are searched around where you are looking.</string>
+    <string name="search_no_address_index">No street/house-number index for this region yet - only towns and villages are searchable. Download the region again to add it.</string>
+    <string name="search_hint">Towns and villages come from the downloaded map; streets and house numbers come from the region\'s address index once downloaded.</string>
     <string name="place_city">City</string>
     <string name="place_town">Town</string>
     <string name="place_village">Village</string>
     <string name="place_suburb">District</string>
     <string name="place_hamlet">Hamlet</string>
     <string name="place_street">Street</string>
+    <string name="place_address">Address</string>
     <string name="place_fuel">Fuel</string>
     <string name="place_poi">Place</string>
 
@@ -132,6 +134,7 @@
     <string name="kind_profile">Profile</string>
     <string name="kind_maptiles">Map tiles</string>
     <string name="kind_cameras">Speed cameras</string>
+    <string name="kind_places">Address index</string>
 
     <!-- downloads -->
     <string name="download_title">Download maps</string>

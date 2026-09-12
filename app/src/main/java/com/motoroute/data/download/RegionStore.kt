@@ -16,8 +16,10 @@ data class RegionRecord(
     val country: String,
     val mapFile: String,
     val segmentFiles: List<String>,
+    /** The region's `<region-id>.places.sqlite` file, or null if none was catalogued. */
+    val placesFile: String? = null,
 ) {
-    val fileCount: Int get() = 1 + segmentFiles.size
+    val fileCount: Int get() = 1 + segmentFiles.size + (if (placesFile != null) 1 else 0)
 }
 
 /** A record plus what of it is actually on disk right now. */
@@ -26,10 +28,11 @@ data class RegionStatus(
     val mapPresent: Boolean,
     val presentSegments: List<String>,
     val sizeBytes: Long,
+    val placesPresent: Boolean = false,
 ) {
     val name: String get() = record.name
     val path: String get() = record.path
-    val filesPresent: Int get() = (if (mapPresent) 1 else 0) + presentSegments.size
+    val filesPresent: Int get() = (if (mapPresent) 1 else 0) + presentSegments.size + (if (placesPresent) 1 else 0)
     val filesTotal: Int get() = record.fileCount
     val isComplete: Boolean get() = filesPresent == filesTotal
     val canRoute: Boolean get() = presentSegments.isNotEmpty()
@@ -53,6 +56,15 @@ class RegionStore(
     private val indexFile: File,
     private val mapDir: File,
     private val segmentDir: File,
+    /**
+     * Where `<region-id>.places.sqlite` files live - see
+     * [com.motoroute.data.map.OfflineDataRepository.placesDir]. Optional and
+     * defaulted to null so existing call sites (and their tests) that predate
+     * the address index keep compiling; with it null, a region's places file
+     * is remembered in the index but never shows as present, and delete
+     * leaves nothing behind to remove for it.
+     */
+    private val placesDir: File? = null,
 ) {
 
     private var cache: List<RegionRecord>? = null
@@ -78,9 +90,12 @@ class RegionStore(
     fun status(record: RegionRecord): RegionStatus {
         val map = File(mapDir, record.mapFile)
         val present = record.segmentFiles.filter { segmentFile(it).isFile }
+        val places = record.placesFile?.let { placesFile(it) }
+        val placesPresent = places?.isFile == true
         val size = (if (map.isFile) map.length() else 0L) +
-            present.sumOf { segmentFile(it).length() }
-        return RegionStatus(record, map.isFile, present, size)
+            present.sumOf { segmentFile(it).length() } +
+            (if (placesPresent) places!!.length() else 0L)
+        return RegionStatus(record, map.isFile, present, size, placesPresent)
     }
 
     /**
@@ -106,11 +121,17 @@ class RegionStore(
             target.segmentFiles.map(SegmentTiles::canonicalName).distinct()
                 .filterNot { it in claimedElsewhere }
                 .forEach { add(File(segmentDir, it)) }
+            // A places file is named for exactly one region (<region-id>.places.sqlite),
+            // never shared like a routing tile can be, so it always goes with its region.
+            target.placesFile?.let { placesFile(it) }?.let(::add)
         }.filter { it.isFile }
     }
 
     /** The file a recorded tile name actually has in [segmentDir]. */
     private fun segmentFile(tile: String): File = File(segmentDir, SegmentTiles.canonicalName(tile))
+
+    /** The file a recorded places file name actually has in [placesDir], if any. */
+    private fun placesFile(name: String): File? = placesDir?.let { File(it, name) }
 
     /** Deletes a region as one package and forgets it. Returns the bytes freed. */
     fun delete(path: String): Long {
@@ -161,6 +182,7 @@ class RegionStore(
                     segmentFiles = region.segmentTiles.filter {
                         segmentFile(it).isFile
                     },
+                    placesFile = region.placesFile?.takeIf { placesFile(it)?.isFile == true },
                 )
             }
         if (adopted.isNotEmpty()) write(records() + adopted)
@@ -182,7 +204,12 @@ class RegionStore(
     companion object {
         const val INDEX_FILE_NAME = "regions.index"
 
-        /** One tab-separated line per region; tiles comma separated. */
+        /**
+         * One tab-separated line per region; tiles comma separated. The
+         * places file is field 6, added after the format already shipped -
+         * [decode] only requires 5 fields so a line written before this
+         * field existed still parses, just with a null [RegionRecord.placesFile].
+         */
         fun encode(records: List<RegionRecord>): String =
             records.joinToString("\n") { record ->
                 listOf(
@@ -191,6 +218,7 @@ class RegionStore(
                     record.country,
                     record.mapFile,
                     record.segmentFiles.joinToString(","),
+                    record.placesFile.orEmpty(),
                 ).joinToString("\t") { it.replace('\t', ' ') }
             }
 
@@ -206,6 +234,7 @@ class RegionStore(
                     country = parts[2],
                     mapFile = parts[3],
                     segmentFiles = parts[4].split(',').filter { it.isNotBlank() },
+                    placesFile = parts.getOrNull(5)?.takeIf { it.isNotBlank() },
                 )
             }
             .toList()
@@ -216,6 +245,7 @@ class RegionStore(
             country = region.country,
             mapFile = region.fileName,
             segmentFiles = region.segmentTiles,
+            placesFile = region.placesFile,
         )
     }
 }

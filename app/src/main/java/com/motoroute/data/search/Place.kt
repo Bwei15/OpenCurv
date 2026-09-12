@@ -38,6 +38,17 @@ enum class PlaceKind(val weight: Int) {
     SUBURB(25),
     HAMLET(20),
     STREET(30),
+    /**
+     * A resolved `streets`+`addresses` row from a `.places.sqlite` file (see
+     * `data/search/SqlitePlaceIndex.kt`). Weight alone puts it below every
+     * named place and even below a bare street match - on its own an address
+     * is the least likely thing a short query means. That is deliberately
+     * overridden in [PlaceSearchRepository]'s ranking once a query actually
+     * carries a house number (see `1.Doku/Ortssuche.md` §"App-Seite"): typing
+     * one is unambiguous intent, so those results are boosted to the top
+     * there rather than by raising this weight for every query.
+     */
+    ADDRESS(12),
     FUEL(15),
     POI(10),
     ;

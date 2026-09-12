@@ -63,6 +63,7 @@ class DownloadRepository(
                 add(DownloadTarget.map(region))
             }
             region.segmentTiles.forEach { add(segmentTarget(it, region)) }
+            DownloadTarget.places(region)?.let { add(it) }
         }
         enqueue(targets)
     }

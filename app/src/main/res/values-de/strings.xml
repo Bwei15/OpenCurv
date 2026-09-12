@@ -100,13 +100,15 @@
     <string name="search_no_results">In den geladenen Karten nichts gefunden.</string>
     <string name="search_no_maps">Noch keine Karte geladen — es gibt nichts zu durchsuchen.</string>
     <string name="search_indexing">Ortsverzeichnis wird erstellt: %1$d %% (%2$d Orte)</string>
-    <string name="search_hint">Städte und Dörfer kommen aus der geladenen Karte; Straßen und Tankstellen werden rund um den Kartenausschnitt gesucht.</string>
+    <string name="search_no_address_index">Für diese Region gibt es noch keinen Straßen-/Hausnummern-Index — nur Städte und Dörfer sind durchsuchbar. Region erneut herunterladen, um ihn zu ergänzen.</string>
+    <string name="search_hint">Städte und Dörfer kommen aus der geladenen Karte; Straßen und Hausnummern kommen aus dem Adress-Index der Region, sobald er geladen ist.</string>
     <string name="place_city">Stadt</string>
     <string name="place_town">Stadt</string>
     <string name="place_village">Dorf</string>
     <string name="place_suburb">Ortsteil</string>
     <string name="place_hamlet">Weiler</string>
     <string name="place_street">Straße</string>
+    <string name="place_address">Adresse</string>
     <string name="place_fuel">Tankstelle</string>
     <string name="place_poi">Ort</string>
 
@@ -128,6 +130,7 @@
     <string name="kind_segment">Routing-Kachel</string>
     <string name="kind_profile">Profil</string>
     <string name="kind_cameras">Blitzer</string>
+    <string name="kind_places">Adress-Index</string>
 
     <!-- Downloads -->
     <string name="download_title">Karten herunterladen</string>

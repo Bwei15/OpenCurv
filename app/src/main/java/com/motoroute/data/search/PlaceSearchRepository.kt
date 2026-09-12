@@ -5,45 +5,61 @@ import com.motoroute.domain.geo.Geo
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 
 /** How far along the place index is. */
 sealed interface IndexState {
-    data object NoMaps : IndexState
     data object Idle : IndexState
-    data class Building(val fraction: Float, val places: Int) : IndexState
-    data class Ready(val places: Int) : IndexState
+
+    /**
+     * Loaded and ready to search. [hasAddressIndex] is false when no
+     * downloaded region has shipped a `.places.sqlite` yet (see
+     * [SqlitePlaceIndex]) - towns and villages still search fine from the
+     * bundled/TSV index, but streets and house numbers do not. A small hint
+     * in the search box tells the rider why (`1.Doku/Ortssuche.md` §"App-Seite").
+     */
+    data class Ready(val places: Int, val hasAddressIndex: Boolean) : IndexState
 }
 
 /**
  * Offline destination search.
  *
- * The index is built from the maps the rider already downloaded, in two passes.
- * The coarse pass reads the low zoom levels and has every city and town in a
- * couple of seconds, so the search box is useful almost immediately. The
- * thorough pass then walks the detailed levels for villages, hamlets and
- * suburbs; it takes a while on a whole federal state, runs in the background,
- * and its result is written next to the map so it only ever happens once.
+ * Towns and villages come from a bundled TSV (`catalog/places_de.tsv`) plus
+ * any `.places` file a map download drops next to its map. Streets and house
+ * numbers come from [SqlitePlaceIndex], which reads the `<region-id>
+ * .places.sqlite` file a region download adds once one exists for that region
+ * (`tools/pipeline/bin/build_places.py`, wave 6.4a) - see `1.Doku/
+ * Ortssuche.md`.
  *
- * Streets are not indexed at all - they are scanned live around wherever the
- * rider is looking, because a street name is only a useful destination when it
- * is a nearby one, and indexing every street in Niedersachsen would cost more
- * than it is worth.
+ * There used to be a third source here: a live scan of the rider's Mapsforge
+ * `.map` tiles for streets and POIs near the map centre. That reader
+ * ([MapPlaceReader], now deleted) has been dead code since map rendering
+ * moved to PMTiles - downloaded regions stopped shipping `.map` files, so
+ * `mapFiles().filter { it.extension == "map" }` was always empty in practice.
+ * [SqlitePlaceIndex] is its replacement, built for exactly the street/address
+ * search that scan used to attempt live.
  */
 class PlaceSearchRepository(
     private val mapFiles: () -> List<File>,
-    private val cacheDir: File,
+    @Suppress("UNUSED_PARAMETER") cacheDir: File,
     private val scope: CoroutineScope,
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val basePlacesProvider: (() -> List<Place>)? = null,
     private val placesFiles: (() -> List<File>)? = null,
+    /** Street/address lookups; null in tests that only care about the TSV/base index. */
+    private val sqliteIndex: PlaceIndexSource? = null,
+    /**
+     * Where a search's timing goes - `android.util.Log.d("PlaceSearch", _)` in
+     * production (wired in [com.motoroute.di.AppContainer]), a no-op by
+     * default so this class stays Android-free and compiles under
+     * `tools/verifier` like the rest of the routing core.
+     */
+    private val logger: (String) -> Unit = {},
 ) {
 
     private val _state = MutableStateFlow<IndexState>(IndexState.Idle)
@@ -51,40 +67,29 @@ class PlaceSearchRepository(
 
     private val places = ArrayList<Place>()
     private val seen = HashSet<String>()
-    private var job: Job? = null
-    private var indexedFiles: Set<String> = emptySet()
 
     val size: Int get() = synchronized(places) { places.size }
 
     /** Adds places to the index, e.g. from an external source or test fixture. */
     fun loadPlaces(list: List<Place>) {
         addAll(list)
-        if (size > 0 && (_state.value is IndexState.Idle || _state.value is IndexState.NoMaps)) {
-            _state.value = IndexState.Ready(size)
-        }
+        if (size > 0 && _state.value is IndexState.Idle) updateState()
     }
 
-    /** Builds the index if it is not already there for exactly these maps. */
+    /** Loads the bundled/TSV town index and refreshes whether an address index exists. */
     fun ensureIndex() {
+        if (_state.value !is IndexState.Idle) return
         loadBaseAndPlacesFiles()
+        updateState()
+    }
 
-        val maps = mapFiles().filter { it.extension.equals("map", ignoreCase = true) }
-        if (maps.isEmpty()) {
-            _state.value = if (size > 0) IndexState.Ready(size) else IndexState.NoMaps
-            return
-        }
-
-        val fingerprint = maps.map(::fingerprintOf).toSet()
-        if (fingerprint == indexedFiles && job?.isActive != true) {
-            if (_state.value !is IndexState.Ready) {
-                _state.value = IndexState.Ready(size)
-            }
-            return
-        }
-        if (job?.isActive == true) return
-
-        indexedFiles = fingerprint
-        job = scope.launch(dispatcher) { build(maps) }
+    private fun updateState() {
+        // A repository built without a SqlitePlaceIndex at all (most unit
+        // tests) has nothing to say about address coverage, so it does not
+        // downgrade to "no address index" - only a repository that genuinely
+        // has the capability but found no `.places.sqlite` file does.
+        val hasAddressIndex = sqliteIndex?.hasIndex ?: true
+        _state.value = IndexState.Ready(size, hasAddressIndex)
     }
 
     private fun loadBaseAndPlacesFiles() {
@@ -94,26 +99,20 @@ class PlaceSearchRepository(
             if (file.isFile) addAll(readPlaces(file))
         }
 
+        // Sibling ".places" TSV files next to whatever mapFiles() points at
+        // (map or pmtiles) - e.g. a hand-imported "de-by.places" alongside
+        // "de-by.pmtiles". Downloaded regions supply the same thing through
+        // [placesFiles] already; this catches a manual import.
         val candidateDirs = mapFiles().mapNotNull { it.parentFile }.distinct()
         for (dir in candidateDirs) {
             dir.listFiles { f -> f.isFile && f.extension.equals("places", ignoreCase = true) }
                 ?.forEach { file -> addAll(readPlaces(file)) }
         }
-
-        cacheDir.listFiles { f ->
-            f.isFile && f.extension.equals("places", ignoreCase = true) && !f.name.contains('-')
-        }?.forEach { file -> addAll(readPlaces(file)) }
-
-        if (size > 0 && _state.value is IndexState.Idle) {
-            _state.value = IndexState.Ready(size)
-        }
     }
 
-    /** Called when maps are added or removed. */
+    /** Called when maps, regions or address-index files are added or removed. */
     fun invalidate() {
-        job?.cancel()
-        job = null
-        indexedFiles = emptySet()
+        sqliteIndex?.invalidate()
         synchronized(places) {
             places.clear()
             seen.clear()
@@ -122,15 +121,21 @@ class PlaceSearchRepository(
     }
 
     /**
-     * Ranked matches for [query].
+     * Ranked matches for [query]: towns/villages from the bundled index,
+     * streets and house numbers from [sqliteIndex] once a region has one.
      *
-     * Indexed places answer instantly; nearby streets and points of interest
-     * are scanned from the map on the spot, under a timeout, so a slow scan
-     * degrades into "no streets found" rather than a frozen search box.
+     * Ranking (`1.Doku/Ortssuche.md` §"App-Seite"): an exact place match
+     * outranks a street found within a named place, which outranks a street
+     * found only by proximity to [near], which outranks a bare address match
+     * - *unless* the query actually carried a house number, in which case the
+     * address jumps to the very top: typing one is unambiguous intent.
      */
-    suspend fun search(query: String, near: GeoPoint?): List<Place> {
+    suspend fun search(query: String, near: GeoPoint?): List<Place> = withContext(dispatcher) {
         val normalised = PlaceQuery.normalise(query)
-        if (normalised.isEmpty()) return emptyList()
+        if (normalised.isEmpty()) return@withContext emptyList()
+        val startedAt = System.currentTimeMillis()
+
+        val parsed = QueryParser.parse(query)
 
         val fromIndex = synchronized(places) { places.toList() }
             .mapNotNull { place ->
@@ -138,124 +143,89 @@ class PlaceSearchRepository(
                 if (rank == 0) null else place to rank
             }
 
-        val nearby = if (near != null) scanNearby(normalised, near) else emptyList()
+        val fromSqlite = sqliteIndex?.let { index ->
+            withTimeoutOrNull(SEARCH_TIMEOUT_MS) { sqliteMatches(index, parsed, near) }
+        }.orEmpty()
 
         val combined = LinkedHashMap<String, Pair<Place, Int>>()
-        (fromIndex + nearby).forEach { (place, rank) ->
+        (fromIndex + fromSqlite).forEach { (place, rank) ->
             val existing = combined[place.dedupeKey]
             if (existing == null || existing.second < rank) {
                 combined[place.dedupeKey] = place to rank
             }
         }
 
-        return combined.values
+        val result = combined.values
             .sortedByDescending { it.second }
             .take(MAX_RESULTS)
             .map { it.first }
+
+        logger(
+            "search '$query' -> ${result.size} results (${fromIndex.size} base, ${fromSqlite.size} sqlite) " +
+                "in ${System.currentTimeMillis() - startedAt} ms",
+        )
+        result
+    }
+
+    /** [sqliteIndex] candidates for one search, each tagged with its rank. */
+    private fun sqliteMatches(
+        index: PlaceIndexSource,
+        parsed: ParsedQuery,
+        near: GeoPoint?,
+    ): List<Pair<Place, Int>> {
+        val out = ArrayList<Pair<Place, Int>>()
+        val streetText = parsed.street
+
+        // a) places - an exact/prefix hit here already outranks everything
+        // below through PlaceQuery.rank's own weighting (a city's kind weight
+        // plus a full-text match dwarfs the street/address tiers), so no
+        // extra boost is needed to satisfy "exact place beats the rest".
+        parsed.place?.let(PlaceQuery::normalise)?.takeIf { it.isNotEmpty() }?.let { placeNorm ->
+            index.places(placeNorm, MAX_RESULTS).forEach { place ->
+                val rank = PlaceQuery.rank(place, placeNorm, near?.let { distance(it, place) })
+                if (rank > 0) out += place to rank
+            }
+        }
+
+        // b) streets - scoped to a named place when the query structurally
+        // named one (not the ambiguous single-word case, where QueryParser
+        // sets place == street and scoping "by itself" would be meaningless),
+        // else ranked by proximity to [near] when there is one.
+        if (streetText != null) {
+            val streetNorm = PlaceQuery.normalise(streetText)
+            if (streetNorm.isNotEmpty()) {
+                val placeNorm = parsed.place
+                    ?.takeIf { it != streetText }
+                    ?.let(PlaceQuery::normalise)
+                when {
+                    placeNorm != null -> index.streets(streetNorm, placeNorm = placeNorm, limit = MAX_RESULTS)
+                        .forEach { out += it to (RANK_STREET_IN_NAMED_PLACE + PlaceQuery.score(it.name, streetNorm)) }
+                    near != null -> index.streets(streetNorm, near = near, limit = MAX_RESULTS)
+                        .forEach { out += it to (RANK_STREET_NEAR_MAP + PlaceQuery.score(it.name, streetNorm)) }
+                }
+            }
+
+            // c) addresses - only once the rider has actually typed a house
+            // number; a bare street prefix is covered by (b) already, and an
+            // address without a house number is not a more useful result than
+            // the street it sits on.
+            val houseNumber = parsed.houseNumber
+            if (houseNumber != null && streetNorm.isNotEmpty()) {
+                val hnNorm = QueryParser.normaliseHouseNumber(houseNumber)
+                val placeNorm = parsed.place?.takeIf { it != streetText }?.let(PlaceQuery::normalise)
+                if (hnNorm.isNotEmpty()) {
+                    index.addresses(streetNorm, hnNorm, placeNorm = placeNorm, near = near, limit = MAX_RESULTS)
+                        .forEach { out += it to RANK_ADDRESS_WITH_HOUSE_NUMBER }
+                }
+            }
+        }
+
+        return out
     }
 
     /** Where the map data sits, so the map can open somewhere useful with no GPS. */
     suspend fun mapStartPosition(): GeoPoint? = withContext(dispatcher) {
-        val fromMap = mapFiles()
-            .filter { it.extension.equals("map", ignoreCase = true) }
-            .firstNotNullOfOrNull { file ->
-                MapPlaceReader(file).use { reader ->
-                    reader.startPosition()?.let { GeoPoint(it.latitude, it.longitude) }
-                }
-            }
-        fromMap ?: synchronized(places) { places.firstOrNull()?.point }
-    }
-
-    private suspend fun scanNearby(
-        normalised: String,
-        near: GeoPoint,
-    ): List<Pair<Place, Int>> = withTimeoutOrNull(NEARBY_TIMEOUT_MS) {
-        withContext(dispatcher) {
-            val found = ArrayList<Pair<Place, Int>>()
-            mapFiles()
-                .filter { it.extension.equals("map", ignoreCase = true) }
-                .forEach { file ->
-                    MapPlaceReader(file).use { reader ->
-                        if (!reader.isUsable) return@use
-                        reader.searchNearby(
-                            normalisedQuery = normalised,
-                            centreLat = near.latitude,
-                            centreLon = near.longitude,
-                            radiusMeters = NEARBY_RADIUS_METERS,
-                            limit = NEARBY_LIMIT,
-                        ) { place ->
-                            val rank = PlaceQuery.rank(place, normalised, distance(near, place))
-                            if (rank > 0) found += place to rank
-                        }
-                    }
-                }
-            found
-        }
-    } ?: emptyList()
-
-    private suspend fun build(files: List<File>) {
-        var restoredAll = true
-        files.forEach { file ->
-            val cached = readCache(file)
-            if (cached == null) {
-                restoredAll = false
-            } else {
-                addAll(cached)
-            }
-        }
-        if (restoredAll) {
-            _state.value = IndexState.Ready(size)
-            return
-        }
-
-        _state.value = IndexState.Building(0f, size)
-
-        // Each map's own places are kept apart from the rest, so the file
-        // written next to a map is that map's index and nothing else - a
-        // deleted region must not leave its towns behind in a neighbour's
-        // cache.
-        val perFile = HashMap<String, MutableList<Place>>()
-
-        // Coarse pass: cities and towns, over in seconds, so the search box
-        // starts answering while the thorough pass is still running.
-        files.forEach { file ->
-            val found = perFile.getOrPut(file.name) { mutableListOf() }
-            MapPlaceReader(file).use { reader ->
-                reader.scanPlaces(COARSE_ZOOM) {
-                    found += it
-                    add(it)
-                }
-            }
-            _state.value = IndexState.Building(COARSE_SHARE, size)
-        }
-
-        // Thorough pass: villages, hamlets, suburbs.
-        files.forEachIndexed { index, file ->
-            val share = 1f / files.size
-            val found = perFile.getOrPut(file.name) { mutableListOf() }
-            MapPlaceReader(file).use { reader ->
-                reader.scanPlaces(
-                    zoom = FINE_ZOOM,
-                    onProgress = { done, total ->
-                        val fraction = COARSE_SHARE +
-                            (1f - COARSE_SHARE) * share * (index + done.toFloat() / total)
-                        _state.value = IndexState.Building(fraction.coerceIn(0f, 1f), size)
-                    },
-                ) {
-                    found += it
-                    add(it)
-                }
-            }
-            writeCache(file, found)
-        }
-
-        _state.value = IndexState.Ready(size)
-    }
-
-    private fun add(place: Place) {
-        synchronized(places) {
-            if (seen.add(place.dedupeKey)) places += place
-        }
+        synchronized(places) { places.firstOrNull()?.point }
     }
 
     private fun addAll(list: List<Place>) {
@@ -267,52 +237,21 @@ class PlaceSearchRepository(
     private fun distance(from: GeoPoint, place: Place): Double =
         Geo.distanceMeters(from, place.point)
 
-    // ---- cache -----------------------------------------------------------
-
-    private fun fingerprintOf(file: File): String =
-        "${file.name}-${file.length()}-${file.lastModified()}"
-
-    private fun cacheFileOf(file: File): File =
-        File(cacheDir, fingerprintOf(file).replace(Regex("[^A-Za-z0-9._-]"), "_") + ".places")
-
-    private fun readCache(file: File): List<Place>? = runCatching {
-        val cache = cacheFileOf(file)
-        if (!cache.isFile) return null
-        readPlaces(cache)
-    }.getOrNull()
-
-    private fun writeCache(file: File, places: List<Place>) {
-        runCatching {
-            cacheDir.mkdirs()
-            // One index per map file version; drop the previous one so a
-            // re-downloaded map does not leave a stale index behind.
-            cacheDir.listFiles()
-                .orEmpty()
-                .filter { it.name.startsWith(file.name.substringBeforeLast('.')) }
-                .filterNot { it.name == cacheFileOf(file).name }
-                .forEach { it.delete() }
-
-            val text = places.joinToString("\n") {
-                val detailPart = if (it.detail != null) "\t${it.detail}" else ""
-                "${it.name.replace('\t', ' ')}\t${it.kind.name}\t${it.latitude}\t${it.longitude}$detailPart"
-            }
-            cacheFileOf(file).writeText(text)
-        }
-    }
-
     companion object {
-        /** Cities and towns live in the lowest zoom interval of the map. */
-        const val COARSE_ZOOM: Byte = 8
-
-        /** Villages, hamlets and suburbs only appear in the detailed one. */
-        const val FINE_ZOOM: Byte = 12
-
-        const val COARSE_SHARE = 0.05f
-
-        const val NEARBY_RADIUS_METERS = 25_000.0
-        const val NEARBY_LIMIT = 40
-        const val NEARBY_TIMEOUT_MS = 4_000L
         const val MAX_RESULTS = 30
+
+        /** A search never blocks the UI longer than this, even against a huge/corrupt index. */
+        const val SEARCH_TIMEOUT_MS = 3_000L
+
+        private const val RANK_STREET_IN_NAMED_PLACE = 260
+        private const val RANK_STREET_NEAR_MAP = 140
+
+        /**
+         * Above any base/TSV place match (which tops out around match(100)*4 +
+         * CITY.weight(60) + proximity(25) = 485) - see the class doc: typing a
+         * house number is unambiguous intent, so the address wins outright.
+         */
+        private const val RANK_ADDRESS_WITH_HOUSE_NUMBER = 900
 
         fun parsePlaceLine(line: String): Place? {
             val trimmed = line.trim()

@@ -2,11 +2,14 @@ package com.motoroute
 
 import com.motoroute.data.model.GeoPoint
 import com.motoroute.data.search.Place
+import com.motoroute.data.search.PlaceIndexSource
 import com.motoroute.data.search.PlaceKind
 import com.motoroute.data.search.PlaceQuery
+import com.motoroute.data.search.PlaceSearchRepository
 import com.motoroute.domain.geo.Geo
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -170,5 +173,132 @@ class PlaceSearchTest {
         val results = repo.search("garmisch", near = null)
         assertEquals(1, results.size)
         assertEquals("Garmisch-Partenkirchen", results.single().name)
+    }
+
+    // ---- SqlitePlaceIndex integration (via a fake, see PlaceIndexSource) --
+
+    @Test
+    fun `an address with a house number ranks above an exact place match`() = kotlinx.coroutines.test.runTest {
+        val tempDir = java.nio.file.Files.createTempDirectory("place-search-address").toFile()
+        // A place happens to share its exact name with the query text - an
+        // exact CITY match like this would otherwise win outright (see
+        // PlaceQuery.rank), which is exactly what typing a house number
+        // should override.
+        val basePlaces = listOf(Place("Hauptstraße 12", PlaceKind.CITY, 52.0, 9.0))
+        val address = Place(
+            "Hauptstraße 12", PlaceKind.ADDRESS, 52.37, 9.73,
+            detail = "30159 Hannover",
+        )
+        val fake = FakePlaceIndexSource(addressesResult = listOf(address))
+
+        val repo = PlaceSearchRepository(
+            mapFiles = { emptyList() },
+            cacheDir = tempDir,
+            scope = this,
+            basePlacesProvider = { basePlaces },
+            sqliteIndex = fake,
+        )
+        repo.ensureIndex()
+
+        val results = repo.search("Hauptstraße 12", near = null)
+        assertEquals("Hauptstraße 12", results.first().name)
+        assertEquals(PlaceKind.ADDRESS, results.first().kind)
+    }
+
+    @Test
+    fun `a comma-separated place scopes the street search to that place, not a bounding box`() =
+        kotlinx.coroutines.test.runTest {
+            val tempDir = java.nio.file.Files.createTempDirectory("place-search-street-scope").toFile()
+            val fake = FakePlaceIndexSource(
+                streetsResult = listOf(Place("Hauptstraße", PlaceKind.STREET, 52.37, 9.73, detail = "Hannover")),
+            )
+            val repo = PlaceSearchRepository(
+                mapFiles = { emptyList() },
+                cacheDir = tempDir,
+                scope = this,
+                sqliteIndex = fake,
+            )
+            repo.ensureIndex()
+
+            repo.search("Hannover, Hauptstraße", near = GeoPoint(52.0, 9.0))
+
+            assertEquals("hannover", fake.lastStreetsPlaceNorm)
+            assertNull("a named place must not also fall back to a bounding box", fake.lastStreetsNear)
+        }
+
+    @Test
+    fun `a single ambiguous word searches streets near the map, not within itself as a place`() =
+        kotlinx.coroutines.test.runTest {
+            val tempDir = java.nio.file.Files.createTempDirectory("place-search-ambiguous").toFile()
+            val fake = FakePlaceIndexSource(
+                streetsResult = listOf(Place("Hauptstraße", PlaceKind.STREET, 52.37, 9.73)),
+            )
+            val repo = PlaceSearchRepository(
+                mapFiles = { emptyList() },
+                cacheDir = tempDir,
+                scope = this,
+                sqliteIndex = fake,
+            )
+            repo.ensureIndex()
+            val near = GeoPoint(52.37, 9.73)
+
+            repo.search("Hauptstraße", near = near)
+
+            // QueryParser sets place == street == "Hauptstraße" here (genuinely
+            // ambiguous, see ParsedQuery's doc) - that must not be read as an
+            // instruction to scope the street search to a place of the same name.
+            assertNull(fake.lastStreetsPlaceNorm)
+            assertEquals(near, fake.lastStreetsNear)
+        }
+
+    @Test
+    fun `no places sqlite file yet still allows the base town search`() = kotlinx.coroutines.test.runTest {
+        val tempDir = java.nio.file.Files.createTempDirectory("place-search-no-address-index").toFile()
+        val fake = FakePlaceIndexSource(hasIndex = false)
+        val repo = PlaceSearchRepository(
+            mapFiles = { emptyList() },
+            cacheDir = tempDir,
+            scope = this,
+            basePlacesProvider = { listOf(Place("Hannover", PlaceKind.CITY, 52.37, 9.73)) },
+            sqliteIndex = fake,
+        )
+
+        repo.ensureIndex()
+
+        val state = repo.state.value
+        assertTrue(state is com.motoroute.data.search.IndexState.Ready)
+        assertEquals(false, (state as com.motoroute.data.search.IndexState.Ready).hasAddressIndex)
+
+        val results = repo.search("hannover", near = null)
+        assertEquals(1, results.size)
+    }
+
+    /** A minimal stand-in for [com.motoroute.data.search.SqlitePlaceIndex] - see [PlaceIndexSource]. */
+    private class FakePlaceIndexSource(
+        override val hasIndex: Boolean = true,
+        private val placesResult: List<Place> = emptyList(),
+        private val streetsResult: List<Place> = emptyList(),
+        private val addressesResult: List<Place> = emptyList(),
+    ) : PlaceIndexSource {
+        var lastStreetsPlaceNorm: String? = null
+        var lastStreetsNear: GeoPoint? = null
+
+        override fun places(prefixNorm: String, limit: Int): List<Place> = placesResult
+
+        override fun streets(prefixNorm: String, placeNorm: String?, near: GeoPoint?, limit: Int): List<Place> {
+            lastStreetsPlaceNorm = placeNorm
+            lastStreetsNear = near
+            return streetsResult
+        }
+
+        override fun addresses(
+            streetNorm: String,
+            hnNorm: String,
+            placeNorm: String?,
+            near: GeoPoint?,
+            limit: Int,
+        ): List<Place> = addressesResult
+
+        override fun invalidate() = Unit
     }
 }

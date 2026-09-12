@@ -12,6 +12,7 @@ import com.motoroute.data.download.RegionStore
 import com.motoroute.data.history.RouteHistory
 import com.motoroute.data.map.OfflineDataRepository
 import com.motoroute.data.search.PlaceSearchRepository
+import com.motoroute.data.search.SqlitePlaceIndex
 import com.motoroute.data.settings.SettingsRepository
 import com.motoroute.domain.NavigationController
 import com.motoroute.domain.cameras.SpeedCameraWarner
@@ -51,7 +52,11 @@ class AppContainer(context: Context) {
         indexFile = offlineData.regionIndexFile,
         mapDir = offlineData.mapDir,
         segmentDir = offlineData.segmentDir,
+        placesDir = offlineData.placesDir,
     )
+
+    /** Street and house-number lookups from downloaded `<region-id>.places.sqlite` files. */
+    val sqlitePlaceIndex = SqlitePlaceIndex(filesDir = { offlineData.placesDir })
 
     /** Offline destination search, built from the maps already on the phone or bundled places. */
     val placeSearch = PlaceSearchRepository(
@@ -71,6 +76,8 @@ class AppContainer(context: Context) {
              offlineData.indexDir.listFiles { f -> f.isFile && f.extension.equals("places", ignoreCase = true) }.orEmpty().toList()
             ).distinctBy { it.absolutePath }
         },
+        sqliteIndex = sqlitePlaceIndex,
+        logger = { message -> android.util.Log.d("PlaceSearch", message) },
     )
 
     val downloads = DownloadRepository(

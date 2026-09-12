@@ -35,6 +35,16 @@ enum class OfflineFileKind(val extension: String, val directory: String) {
      * reads every file matching this extension out of this directory.
      */
     CAMERAS("tsv", "cameras"),
+
+    /**
+     * A `<region-id>.places.sqlite` offline place/street/address index - see
+     * `tools/pipeline/bin/build_places.py` and `1.Doku/Ortssuche.md`. The
+     * catalog kind is `"places"`; [com.motoroute.data.search.SqlitePlaceIndex]
+     * opens every file matching this extension out of this directory.
+     * `"sqlite"` is unambiguous as a bare extension today - nothing else in
+     * the download pipeline produces a `.sqlite` file (see `make_catalog.py`).
+     */
+    PLACES("sqlite", "places"),
     ;
 
     companion object {

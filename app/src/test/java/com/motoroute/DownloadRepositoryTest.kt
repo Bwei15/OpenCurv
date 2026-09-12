@@ -207,6 +207,47 @@ class DownloadRepositoryTest {
     }
 
     @Test
+    fun `downloadRegion also enqueues the region's places file when the catalog listed one`() = runTest {
+        val dirs = directories()
+        val store = com.motoroute.data.download.RegionStore(
+            File(folder.root, "regions.index"),
+            dirs(OfflineFileKind.MAP),
+            dirs(OfflineFileKind.SEGMENT),
+            dirs(OfflineFileKind.PLACES),
+        )
+        val repository = DownloadRepository(
+            scope = TestScope(UnconfinedTestDispatcher(testScheduler)),
+            downloader = failingDownloader(),
+            directoryFor = dirs,
+            freeSpaceBytes = { Long.MAX_VALUE },
+            regionStore = store,
+        )
+
+        val region = com.motoroute.data.download.MapRegion(
+            path = "de-hb",
+            name = "Bremen",
+            country = "Germany",
+            bounds = com.motoroute.data.model.BoundingBox(52.9, 8.4, 53.6, 9.0),
+            approxSizeMb = 10,
+            mapFile = "de-hb.pmtiles",
+            placesFile = "de-hb.places.sqlite",
+            placesUrl = "https://github.com/Bwei15/OpenCurv/releases/download/data-20260910/de-hb.places.sqlite",
+        )
+
+        repository.downloadRegion(region)
+
+        assertEquals("de-hb.places.sqlite", store.record("de-hb")!!.placesFile)
+
+        val placesItem = repository.state.value.items.last()
+        assertEquals("de-hb.places.sqlite", placesItem.target.fileName)
+        assertEquals(OfflineFileKind.PLACES, placesItem.target.kind)
+        assertEquals(
+            "https://github.com/Bwei15/OpenCurv/releases/download/data-20260910/de-hb.places.sqlite",
+            placesItem.target.url,
+        )
+    }
+
+    @Test
     fun `a checksum mismatch surfaces through the repository as a clear failure`() = runTest {
         val content = "hello world".toByteArray()
         val target = DownloadTarget(

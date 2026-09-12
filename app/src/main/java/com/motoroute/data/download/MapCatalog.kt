@@ -190,6 +190,8 @@ class MapCatalog(private val context: Context) {
 
                 var mapFileName: String? = null
                 var mapUrl: String? = null
+                var placesFileName: String? = null
+                var placesUrl: String? = null
                 val segmentFiles = mutableListOf<String>()
                 val segmentUrls = mutableMapOf<String, String>()
                 val checksums = mutableMapOf<String, FileChecksum>()
@@ -217,6 +219,9 @@ class MapCatalog(private val context: Context) {
                         } else if (kind == "routing" || fileName.endsWith(".rd5", ignoreCase = true)) {
                             segmentFiles.add(fileName)
                             if (fileUrl.isNotEmpty()) segmentUrls[fileName] = fileUrl
+                        } else if (kind == "places" || fileName.endsWith(".places.sqlite", ignoreCase = true)) {
+                            placesFileName = fileName
+                            if (fileUrl.isNotEmpty()) placesUrl = fileUrl
                         }
                     }
                 }
@@ -236,6 +241,8 @@ class MapCatalog(private val context: Context) {
                     customSegmentTiles = segmentFiles.takeIf { it.isNotEmpty() },
                     segmentUrls = segmentUrls,
                     checksums = checksums,
+                    placesFile = placesFileName,
+                    placesUrl = placesUrl,
                 )
             } else {
                 MapRegion(

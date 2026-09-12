@@ -23,6 +23,7 @@ class RegionStoreTest {
     private lateinit var root: File
     private lateinit var maps: File
     private lateinit var segments: File
+    private lateinit var places: File
     private lateinit var store: RegionStore
 
     private val lowerSaxony = RegionRecord(
@@ -46,7 +47,8 @@ class RegionStoreTest {
         root = Files.createTempDirectory("opencurv-regions").toFile()
         maps = File(root, "maps").apply { mkdirs() }
         segments = File(root, "segments").apply { mkdirs() }
-        store = RegionStore(File(root, "regions.index"), maps, segments)
+        places = File(root, "places").apply { mkdirs() }
+        store = RegionStore(File(root, "regions.index"), maps, segments, places)
     }
 
     @Test
@@ -107,6 +109,63 @@ class RegionStoreTest {
         assertEquals(30L, freed)
         assertEquals(0, segments.listFiles()!!.size)
         assertTrue(store.records().isEmpty())
+    }
+
+    @Test
+    fun `a places file round trips through encode and decode`() {
+        val withPlaces = lowerSaxony.copy(placesFile = "de-ni.places.sqlite")
+        val encoded = RegionStore.encode(listOf(withPlaces))
+        assertEquals(listOf(withPlaces), RegionStore.decode(encoded))
+    }
+
+    @Test
+    fun `a line written before the places field existed still decodes with a null placesFile`() {
+        // 5-field format, exactly what encode() produced before this field was added.
+        val legacyLine = listOf(
+            lowerSaxony.path, lowerSaxony.name, lowerSaxony.country,
+            lowerSaxony.mapFile, lowerSaxony.segmentFiles.joinToString(","),
+        ).joinToString("\t")
+
+        val decoded = RegionStore.decode(legacyLine).single()
+        assertEquals(null, decoded.placesFile)
+        assertEquals(lowerSaxony, decoded)
+    }
+
+    @Test
+    fun `a downloaded places file counts toward status and is removed with the region`() {
+        val withPlaces = lowerSaxony.copy(placesFile = "de-ni.places.sqlite")
+        store.install(withPlaces)
+        write(maps, "niedersachsen.map", 10)
+        write(segments, "E5_N50.rd5", 10)
+        write(segments, "E10_N50.rd5", 10)
+
+        // Not complete yet - the places file has not landed.
+        assertFalse(store.statuses().single().isComplete)
+        assertEquals(3, store.statuses().single().filesPresent)
+        assertEquals(4, store.statuses().single().filesTotal)
+
+        write(places, "de-ni.places.sqlite", 50)
+        val status = store.statuses().single()
+        assertTrue(status.placesPresent)
+        assertTrue(status.isComplete)
+        assertEquals(80L, status.sizeBytes)
+
+        store.delete(withPlaces.path)
+        assertFalse(File(places, "de-ni.places.sqlite").exists())
+        assertFalse(File(maps, "niedersachsen.map").exists())
+    }
+
+    @Test
+    fun `a region without a places file is unaffected by RegionStore having one to manage`() {
+        store.install(lowerSaxony)
+        write(maps, "niedersachsen.map", 10)
+        write(segments, "E5_N50.rd5", 10)
+        write(segments, "E10_N50.rd5", 10)
+
+        val status = store.statuses().single()
+        assertFalse(status.placesPresent)
+        assertTrue(status.isComplete)
+        assertEquals(3, status.filesTotal)
     }
 
     @Test

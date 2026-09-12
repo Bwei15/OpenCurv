@@ -4,9 +4,9 @@ Stand: September 2026. Betroffene Module: `tools/pipeline/bin/build_places.py`,
 `.github/workflows/opencurv-data.yml` (Schritt "Adress-Index bauen"),
 `tools/pipeline/bin/make_catalog.py` (Katalog-Eintrag `"kind": "places"`),
 `app/src/main/java/com/motoroute/data/search/Place.kt` (`PlaceQuery.normalise`,
-die Referenzimplementierung der Normalisierung). Die App-Abfrageseite (Laden,
-Cachen, Suchindex im Gerät) ist **nicht** Teil dieser Stufe — das baut Welle
-6.4b auf der hier beschriebenen Datei auf.
+die Referenzimplementierung der Normalisierung), sowie — seit Welle 6.4b —
+`app/src/main/java/com/motoroute/data/search/QueryParser.kt` und
+`SqlitePlaceIndex.kt`, die App-Abfrageseite. §8 unten beschreibt sie.
 
 ---
 
@@ -275,3 +275,129 @@ Treffer: `Kornstraße | 12 | 53.067586 | 8.795968 | Bremen`.
 - **Populationswerte** kommen unverändert aus OSM (`population`-Tag) und sind
   oft veraltet oder fehlen ganz — `NULL` ist der erwartete Normalfall, keine
   Fehlererkennung nötig.
+
+---
+
+## 8. App-Seite (Welle 6.4b)
+
+### 8.1 Ablage & Download
+
+`<region-id>.places.sqlite` bekommt eine eigene [`OfflineFileKind.PLACES`]
+(`"sqlite"`, Verzeichnis `files/places/` — siehe
+[`OfflineFile.kt`](../app/src/main/java/com/motoroute/data/map/OfflineFile.kt)),
+analog zu `CAMERAS`. `MapCatalog.parseRegion` erkennt einen Datei-Eintrag mit
+`"kind": "places"` (oder dem Namensmuster `*.places.sqlite`) und trägt ihn in
+`MapRegion.placesFile`/`placesUrl` ein; `DownloadTarget.places(region)` baut
+daraus, wenn vorhanden, ein Download-Ziel, das `DownloadRepository
+.downloadRegion()` neben Karte und Routing-Kacheln in die Warteschlange legt.
+`RegionStore` merkt sich die Datei als Teil des `RegionRecord` (Feld 6 im
+Index, abwärtskompatibel — eine vor diesem Feld geschriebene Zeile decodiert
+weiterhin, nur mit `placesFile = null`); löschen einer Region löscht auch ihr
+`.places.sqlite` mit, weil es — anders als eine Routing-Kachel — nie von einer
+zweiten Region mitgenutzt wird.
+
+Ein abgeschlossener Region-Download ruft bereits `PlaceSearchRepository
+.invalidate()` auf (`MapViewModel.onDownloadedFilesChanged()`, über
+`OpenCurvRoot`, sobald `downloadQueue.allDone` wird) — dort war schon vor
+6.4b der Haken, an dem `SpeedCameraRepository.refresh()` säße, wenn Kameras
+denselben Weg gingen; `invalidate()` schließt jetzt zusätzlich alle offenen
+`.places.sqlite`-Verbindungen und öffnet sie beim nächsten `ensureIndex()`
+neu.
+
+### 8.2 `SqlitePlaceIndex`
+
+Öffnet jede `*.places.sqlite`-Datei aus `placesDir` einzeln read-only
+(`SQLiteDatabase.OPEN_READONLY`) und hält sie offen, bis `invalidate()`
+gerufen wird — mehrere Regionen (z. B. zwei Nachbar-Bundesländer) bleiben
+parallel geöffnet, jede Abfrage fragt alle durch und mischt die Treffer.
+
+Implementiert `PlaceIndexSource` (eigenes Interface, kein Android-Import) mit
+genau den drei Abfragen aus §5: `places(prefixNorm, limit)`,
+`streets(prefixNorm, placeNorm?, near?, limit)`,
+`addresses(streetNorm, hnNorm, placeNorm?, near?, limit)`. Jede ist per
+`EXPLAIN QUERY PLAN` gegen die gebaute `de-hb.places.sqlite` und
+`de-ni.places.sqlite` geprüft — überall `SEARCH ... USING INDEX`, nirgends
+`SCAN`. Für `addresses` gilt: `hn_norm` exakt zuerst, ein Präfix-Fallback nur,
+wenn nichts exakt passt (macht "1" → "12" progressiv enger statt bis zur
+letzten Ziffer leer). `streets` ohne genannten Ort nutzt eine Bounding-Box um
+`near` (± 25 km) statt eines Vollscans und sortiert die Kandidaten danach in
+Kotlin nach echter Distanz.
+
+`PlaceIndexSource` als eigenes Interface hat einen zweiten Zweck: es lässt
+sich mit einem reinen In-Memory-Fake ersetzen, ohne `android.database`
+anzufassen — so bleiben `PlaceSearchRepository`s Ranking-Tests
+(`PlaceSearchTest.kt`) JVM-testbar, obwohl `SqlitePlaceIndex.kt` selbst aus
+`tools/verifier` ausgeschlossen ist (siehe `tools/verifier/build.gradle.kts`).
+
+### 8.3 `QueryParser`
+
+Android-frei, zerlegt eine Eingabe in `ParsedQuery(place, street,
+houseNumber, postcode)`: erkennt Komma als Trenner (`"Ort, Straße
+Hausnummer"`), eine vorangestellte 4–5-stellige PLZ, und sucht ab dem ersten
+zahlenartigen Token (`\d+[a-zäöüß]?`) die Grenze zwischen Straße und einer
+nachgestellten Ortsangabe (`"Hauptstr. 12 Hannover"`). Abkürzungen `str.` /
+`Str.` / `-str.` werden vor jeder Normalisierung zu `straße` expandiert —
+`PlaceQuery.normalise` selbst kennt keine Abkürzungen und würde `"Hauptstr."`
+sonst zu `"hauptstr"` statt `"hauptstrasse"` falten, was den Bereichsscan
+gegen `streets.norm` leer laufen ließe.
+
+Ein einzelnes, zahlenloses Wort (`"Hannover"`, `"Hauptstraße"`) ist absichtlich
+mehrdeutig: `place` und `street` tragen denselben Text, und welche der beiden
+SQLite-Abfragen tatsächlich etwas findet, entscheidet die Datenbank, nicht der
+Parser. Volltests: `QueryParserTest.kt`.
+
+### 8.4 Ranking & Mischung
+
+`PlaceSearchRepository.search()` fragt weiterhin den Bestands-/TSV-Index (wie
+vor 6.4b) und zusätzlich `SqlitePlaceIndex`, und mischt beide über den
+gemeinsamen `Place.dedupeKey`. Reihenfolge, sofern kein Hausnummer-Token in
+der Eingabe steckt: exakter Ortstreffer (Basis-Ranking aus `PlaceQuery.rank`,
+typisch 400+) > Straße im per Komma/Nachtrag genannten Ort (Basis 260) >
+Straße nur nach Nähe zu `near` gefunden (Basis 140). Sobald die Eingabe eine
+Hausnummer enthält, bekommt jeder Adress-Treffer einen festen Bonus von 900 —
+über jedem Ortstreffer — weil eine getippte Hausnummer eindeutige Absicht ist
+(`1.Doku/Ortssuche.md`-Zitat im Code: "typing one is unambiguous intent").
+`PlaceKind` trägt dafür zwei neue Werte, `STREET` (bereits vor 6.4b vorhanden)
+und `ADDRESS`; deren `weight` selbst bleibt niedrig — die eigentliche
+Priorisierung passiert über den Rang-Bonus, nicht über das Gewicht, weil
+"Adresse ganz oben" nur *mit* Hausnummer gilt, nicht immer.
+
+Ein Straßentreffer zeigt als Untertitel den Ort (`"Straße · Hannover"`), ein
+Adresstreffer PLZ und Ort (`"Adresse · 30159 Hannover"`) — Titel ist dort
+`"Georgstraße 10"`, die eigentliche Adresse.
+
+### 8.5 `IndexState` und der Mapsforge-Abbau
+
+Der Mapsforge-Lesepfad (`MapPlaceReader`, `.map`-Tile-Scan, die
+`IndexState.Building`-Fortschrittsanzeige dafür) ist entfernt: seit Karten als
+PMTiles ausgeliefert werden, filterte `mapFiles().filter { extension ==
+"map" }` immer auf eine leere Liste — der Scan lief nie mehr wirklich, nur
+sein Cache-Mechanismus (`readCache`/`writeCache`) noch. Mit ihm sind die
+Mapsforge-Gradle-Abhängigkeiten gefallen
+(`mapsforge-map-reader/-map/-core` aus `tools/verifier`,
+`mapsforge-map-reader` aus `app/build.gradle.kts`, alle drei
+`mapsforge-*`-Aliase aus `gradle/libs.versions.toml`).
+
+`IndexState` hat jetzt nur noch `Idle` und `Ready(places, hasAddressIndex)`.
+`hasAddressIndex` ist `false`, solange keine heruntergeladene Region eine
+`.places.sqlite` mitgebracht hat — Orte/Städte bleiben trotzdem durchsuchbar
+(Bestands-/TSV-Index), nur Straßen/Hausnummern fehlen. `SearchScreen` zeigt in
+diesem Fall einen kleinen Hinweistext
+(`search_no_address_index`: "Für diese Region gibt es noch keinen
+Straßen-/Hausnummern-Index …").
+
+### 8.6 Nachweis
+
+Gemessen gegen die während dieser Welle gebaute `de-ni.places.sqlite`
+(Niedersachsen, 128 MB, 12.290 Orte / 164.436 Straßen / 2.448.425 Adressen),
+auf `files/places/` eines Emulators (`emulator-5554`) kopiert: Suche nach
+„Georgstr. 10 Hannover“ liefert als ersten Treffer „Georgstraße 10“ /
+„Address · 30159 Hannover“, vor den beiden „Hannover“-Ortstreffern und der
+Straße „Georgstraße“ selbst. Screenshot:
+[`1.Doku/design/screens/welle6_suche_georgstrasse_hannover.png`](design/screens/welle6_suche_georgstrasse_hannover.png).
+
+Antwortzeit aus dem `Log.d("PlaceSearch", …)`-Log: 1397 ms beim allerersten
+Treffer nach dem Öffnen der 128-MB-Datei (kalter Seiten-Cache), danach
+konstant 50–250 ms, z. B. `search 'Georgstr. 10 Hannover' -> 5 results (0
+base, 6 sqlite) in 121 ms` — innerhalb des <200-ms-Ziels aus dem Auftrag,
+sobald die Datei einmal warm ist.

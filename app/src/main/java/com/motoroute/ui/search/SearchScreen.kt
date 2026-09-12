@@ -18,7 +18,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -115,22 +114,13 @@ fun SearchScreen(
             )
         }
 
-        when (val state = indexState) {
-            is IndexState.Building -> IndexBanner(
-                text = stringResource(
-                    R.string.search_indexing,
-                    (state.fraction * 100).toInt(),
-                    state.places,
-                ),
-                fraction = state.fraction,
-            )
-            IndexState.NoMaps -> Text(
-                text = stringResource(R.string.search_no_maps),
-                color = colors.warning,
-                fontSize = 14.sp,
+        if (indexState is IndexState.Ready && !indexState.hasAddressIndex) {
+            Text(
+                text = stringResource(R.string.search_no_address_index),
+                color = colors.muted,
+                fontSize = 12.sp,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             )
-            else -> Unit
         }
 
         if (searching) {
@@ -225,21 +215,6 @@ private fun HistoryDestination.toPlace(): Place = Place(
 )
 
 @Composable
-private fun IndexBanner(text: String, fraction: Float) {
-    val colors = LocalRideColors.current
-    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-        Text(text = text, color = colors.muted, fontSize = 13.sp)
-        LinearProgressIndicator(
-            progress = { fraction },
-            color = colors.route,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(4.dp),
-        )
-    }
-}
-
-@Composable
 private fun ResultRow(place: Place, distanceMeters: Double?, onClick: () -> Unit) {
     val colors = LocalRideColors.current
     Row(
@@ -313,6 +288,7 @@ private fun kindLabel(kind: PlaceKind): String = stringResource(
         PlaceKind.SUBURB -> R.string.place_suburb
         PlaceKind.HAMLET -> R.string.place_hamlet
         PlaceKind.STREET -> R.string.place_street
+        PlaceKind.ADDRESS -> R.string.place_address
         PlaceKind.FUEL -> R.string.place_fuel
         PlaceKind.POI -> R.string.place_poi
     },

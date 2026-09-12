@@ -29,6 +29,14 @@ data class MapRegion(
     val mapUrl: String? = null,
     val customSegmentTiles: List<String>? = null,
     val segmentUrls: Map<String, String> = emptyMap(),
+    /**
+     * The region's `<region-id>.places.sqlite` file (catalog kind `"places"`),
+     * when the catalog listed one - see `1.Doku/Ortssuche.md`. Null for a
+     * region the pipeline has not built an address index for yet, or for the
+     * legacy regions.json schema, which predates it.
+     */
+    val placesFile: String? = null,
+    val placesUrl: String? = null,
     /** Keyed by file name (the same keys as [segmentUrls] plus the map file). */
     val checksums: Map<String, FileChecksum> = emptyMap(),
 ) {
@@ -145,6 +153,22 @@ data class DownloadTarget(
                 url = url,
                 fileName = fileName,
                 kind = OfflineFileKind.MAP,
+                label = region.name,
+                regionPath = region.path,
+                regionName = region.name,
+                sha256 = checksum?.sha256,
+                expectedBytes = checksum?.bytes,
+            )
+        }
+
+        /** The region's address index, or null when the catalog did not list one. */
+        fun places(region: MapRegion): DownloadTarget? {
+            val fileName = region.placesFile ?: return null
+            val checksum = region.checksums[fileName]
+            return DownloadTarget(
+                url = region.placesUrl ?: (MAP_BASE + region.path + ".places.sqlite"),
+                fileName = fileName,
+                kind = OfflineFileKind.PLACES,
                 label = region.name,
                 regionPath = region.path,
                 regionName = region.name,

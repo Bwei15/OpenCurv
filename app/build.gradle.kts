@@ -97,12 +97,6 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     debugImplementation(libs.androidx.compose.ui.tooling)
 
-    // Mapsforge stays only for the offline place search (data/search/), which
-    // reads POIs straight out of the .map files. Rendering moved to MapLibre;
-    // mapsforge-map-android (MapView, TileRendererLayer) and mapsforge-themes
-    // (XML render themes) are gone with it.
-    implementation(libs.mapsforge.map.reader)
-
     // Vector-tile rendering: PMTiles read locally via pmtiles://file://, no
     // server. Version pinned above 11.7.0, the first release with native
     // PMTiles support.

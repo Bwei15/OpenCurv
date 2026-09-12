@@ -349,11 +349,84 @@ class MapController(private val offlineData: OfflineDataRepository) {
     }
 
     private fun attachOverlayLayers(style: Style, context: Context) {
-        // POI icons for the vector-tile "poi" layer (style_day/night.json symbol layers
-        // reference these ids via icon-image) - re-registered on every style load same as
-        // the other style images below, since a reload wipes every image.
+        // Fuel/restaurant POI icons. These used to be declared straight in style_day/night.json
+        // (symbol layers referencing opencurv-poi-fuel-icon/opencurv-poi-food-icon), same as any
+        // other layer there - but that never actually rendered an icon on this MapLibre Android
+        // build (11.11.0): a symbol layer present in the style JSON starts having its tiles
+        // parsed into symbol buckets as soon as the style loads, and if the sprite image it
+        // references isn't registered yet at that moment, the bucket ends up with no icon quad -
+        // permanently, since addImage()/Style.Builder.withImage() only adds the image, it doesn't
+        // retroactively rebuild buckets already parsed without it. The layer stayed visible,
+        // correctly filtered and correctly zoomed the whole time (confirmed with
+        // queryRenderedFeatures/querySourceFeatures on-device: dozens of matching source features
+        // in view, zero ever rendered by the icon layer - while the sibling *_label text layer,
+        // which needs no icon-image, rendered normally), which is why this read as sparse test
+        // data rather than a bug. Adding the identical layer with [Style.addLayer] instead - i.e.
+        // after this function's own addImage() calls, exactly like the barrier/camera layers
+        // below - sidesteps the race entirely and is what actually fixes it.
         style.addImage(FUEL_ICON, poiBitmap(context, R.drawable.ic_poi_fuel, android.graphics.Color.WHITE, FUEL_GLYPH_ARGB, POI_RIM_ARGB, POI_DP))
         style.addImage(FOOD_ICON, poiBitmap(context, R.drawable.ic_poi_restaurant, android.graphics.Color.WHITE, FOOD_GLYPH_ARGB, POI_RIM_ARGB, POI_DP))
+        if (style.getLayer(FUEL_LAYER) == null) {
+            style.addLayerBelow(
+                SymbolLayer(FUEL_LAYER, "openmaptiles").apply {
+                    sourceLayer = "poi"
+                    minZoom = 12f
+                    setFilter(
+                        Expression.any(
+                            Expression.eq(Expression.get("class"), Expression.literal("fuel")),
+                            Expression.eq(Expression.get("class"), Expression.literal("petrol")),
+                        ),
+                    )
+                    setProperties(
+                        PropertyFactory.iconImage(FUEL_ICON),
+                        PropertyFactory.iconSize(
+                            Expression.interpolate(
+                                Expression.linear(),
+                                Expression.zoom(),
+                                Expression.stop(12, 0.5f),
+                                Expression.stop(15, 0.75f),
+                                Expression.stop(18, 1.0f),
+                            ),
+                        ),
+                        PropertyFactory.iconAllowOverlap(false),
+                        PropertyFactory.iconIgnorePlacement(false),
+                        PropertyFactory.symbolSortKey(0f),
+                    )
+                },
+                "poi_fuel_label",
+            )
+        }
+        if (style.getLayer(FOOD_LAYER) == null) {
+            style.addLayerBelow(
+                SymbolLayer(FOOD_LAYER, "openmaptiles").apply {
+                    sourceLayer = "poi"
+                    minZoom = 13f
+                    setFilter(
+                        Expression.any(
+                            Expression.eq(Expression.get("class"), Expression.literal("restaurant")),
+                            Expression.eq(Expression.get("class"), Expression.literal("cafe")),
+                            Expression.eq(Expression.get("class"), Expression.literal("fast_food")),
+                        ),
+                    )
+                    setProperties(
+                        PropertyFactory.iconImage(FOOD_ICON),
+                        PropertyFactory.iconSize(
+                            Expression.interpolate(
+                                Expression.linear(),
+                                Expression.zoom(),
+                                Expression.stop(13, 0.5f),
+                                Expression.stop(16, 0.75f),
+                                Expression.stop(18, 1.0f),
+                            ),
+                        ),
+                        PropertyFactory.iconAllowOverlap(false),
+                        PropertyFactory.iconIgnorePlacement(false),
+                        PropertyFactory.symbolSortKey(1f),
+                    )
+                },
+                "poi_food_label",
+            )
+        }
 
         if (style.getSource(TRAFFIC_SOURCE) == null) {
             style.addImage(BARRIER_ICON, poiBitmap(context, R.drawable.ic_poi_barrier, HAZARD_PLATE_ARGB, android.graphics.Color.WHITE, android.graphics.Color.WHITE, BARRIER_DP))

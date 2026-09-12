@@ -216,51 +216,20 @@ class MapLibreStyleTest {
     }
 
     @Test
-    fun `fuel and food POI layers are icon-image symbol layers, not circles`() {
-        // Welle 7: MapController.attachOverlayLayers() bakes bitmaps and registers them under
-        // these exact ids via style.addImage() - a style.json/MapController mismatch here would
-        // leave the pins invisible (unknown icon-image) with no build-time signal otherwise.
-        val expectedIconImage = mapOf(
-            "poi_fuel_pin" to "opencurv-poi-fuel-icon",
-            "poi_food_pin" to "opencurv-poi-food-icon",
-        )
-
+    fun `fuel and food POI pins are not declared in the style JSON`() {
+        // Welle 7.1b: the icon symbol layers are added at runtime by
+        // MapController.attachOverlayLayers() AFTER style.addImage(), because a
+        // symbol layer declared in the JSON is bucketed before the runtime image
+        // exists and then never shows an icon. Only the text label layers stay
+        // in the JSON; the circle pins must not come back either.
         for (styleName in styles) {
             val root = loadStyle(styleName)
             val layers = root.getJSONArray("layers")
-            val layerMap = mutableMapOf<String, JSONObject>()
-            for (i in 0 until layers.length()) {
-                val layer = layers.getJSONObject(i)
-                layerMap[layer.getString("id")] = layer
-            }
-
-            for ((layerId, iconImage) in expectedIconImage) {
-                val layer = layerMap[layerId]
-                assertNotNull("$styleName is missing POI layer $layerId", layer)
-                assertEquals(
-                    "$styleName: $layerId must be a symbol layer (Welle 7 replaced the circle pins with icons)",
-                    "symbol",
-                    layer!!.getString("type"),
-                )
-                val layout = layer.getJSONObject("layout")
-                assertEquals(
-                    "$styleName: $layerId must reference its baked icon image",
-                    iconImage,
-                    layout.getString("icon-image"),
-                )
-                assertTrue(
-                    "$styleName: $layerId must have a filter",
-                    layer.has("filter"),
-                )
-            }
-
-            // Tankstelle vor Restaurant: fuel must win the collision priority.
-            val fuelSortKey = layerMap.getValue("poi_fuel_pin").getJSONObject("layout").getDouble("symbol-sort-key")
-            val foodSortKey = layerMap.getValue("poi_food_pin").getJSONObject("layout").getDouble("symbol-sort-key")
-            assertTrue(
-                "$styleName: fuel's symbol-sort-key ($fuelSortKey) must be lower than food's ($foodSortKey) so fuel wins on overlap",
-                fuelSortKey < foodSortKey,
-            )
+            val ids = (0 until layers.length()).map { layers.getJSONObject(it).getString("id") }
+            assertTrue("$styleName must keep the fuel label layer", "poi_fuel_label" in ids)
+            assertTrue("$styleName must keep the food label layer", "poi_food_label" in ids)
+            assertTrue("$styleName must not declare poi_fuel_pin (runtime layer)", "poi_fuel_pin" !in ids)
+            assertTrue("$styleName must not declare poi_food_pin (runtime layer)", "poi_food_pin" !in ids)
         }
     }
 }

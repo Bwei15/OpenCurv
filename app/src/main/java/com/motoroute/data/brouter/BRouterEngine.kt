@@ -54,6 +54,8 @@ class RoutingException(message: String) : Exception(message)
  */
 class BRouterEngine(
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default,
+    /** Timing line per call; the app routes it to logcat, the JVM verifier stays silent. */
+    private val log: (String) -> Unit = {},
 ) {
 
     suspend fun route(request: RouteRequest): Route = withContext(dispatcher) {
@@ -131,8 +133,7 @@ class BRouterEngine(
             // One line per call: everything needed to spot a slow leg (context
             // setup incl. nogo prep, the RoutingContext/lookups parse, the
             // actual search) without flooding logcat on every route.
-            android.util.Log.d(
-                "BRouterEngine",
+            log(
                 "route alt=${request.alternativeIndex} nogos=${request.noGos.size} " +
                     "contextMs=${tContextReady - tEnter} engineCtorMs=${tEngineReady - tContextReady} " +
                     "doRunMs=${System.currentTimeMillis() - tEngineReady} totalMs=${System.currentTimeMillis() - tEnter}",

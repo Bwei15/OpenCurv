@@ -291,7 +291,6 @@ class NavigationController(
     }
 
     private suspend fun calculate(waypoints: List<GeoPoint>): Route {
-        android.util.Log.d("NavigationController", "calculate() start")
         val current = settings.current
         val profile = profileManager.profile(current.profileId)
             ?: profileManager.defaultProfile()

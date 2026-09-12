@@ -64,8 +64,14 @@ sourceSets {
             // Exercises SpeedCameraRepository, which is excluded above for
             // the same Context dependency as MapCatalog.
             "**/SpeedCameraRepositoryTest.kt",
+            // Compose UI helpers (ui/*) are not compiled here; these tests
+            // cover pure functions that live next to the composables.
+            "**/DraggableSheetSnapTest.kt",
+            "**/NavigationHudTest.kt",
+            "**/PoiHitTest.kt",
         )
-        resources.setSrcDirs(emptyList<String>())
+        // Test fixtures (e.g. the traffic feed sample) live next to the app tests.
+        resources.setSrcDirs(listOf("../../app/src/test/resources"))
     }
 }
 

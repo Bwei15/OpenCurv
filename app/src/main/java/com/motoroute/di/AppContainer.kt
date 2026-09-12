@@ -39,7 +39,7 @@ class AppContainer(context: Context) {
     val offlineData = OfflineDataRepository(appContext)
     val profileManager = ProfileManager(appContext)
     val locationProvider = LocationProvider(appContext)
-    val routingEngine = BRouterEngine()
+    val routingEngine = BRouterEngine(log = { android.util.Log.d("BRouterEngine", it) })
     val voice = VoiceGuidance(appContext)
 
     val mapCatalog = MapCatalog(appContext)

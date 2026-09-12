@@ -56,6 +56,8 @@
     <string name="plan_distance">Strecke</string>
     <string name="plan_time">Fahrzeit</string>
     <string name="plan_climb">Anstieg</string>
+    <string name="plan_peek_summary">%1$s km · an %2$s</string>
+    <string name="plan_peek_detail">%1$d m Anstieg · %2$s %3$d °/km</string>
 
     <string name="curviness_direct">direkt</string>
     <string name="curviness_mild">mild</string>

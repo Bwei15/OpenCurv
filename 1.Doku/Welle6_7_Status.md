@@ -169,8 +169,8 @@ in kleinere Schritte geteilt, höchstens 2–3 Screenshots je Agent.
 | Reihenfolge | Schritt | Modell | Inhalt |
 | --- | --- | --- | --- |
 | 1 | 7.3 HUD | Sonnet | **erledigt**, gemergt in `bef52d6` (Kurvigkeit raus, Schild+Tacho, Klappmenü, Blitzer im HUD + Banner; 231 Tests grün). Visuelle Abnahme steht noch aus (Welle 8). |
-| 2 | 7.1 Karte | Sonnet | wie oben beschrieben |
-| 3 | 7.2a Sheet | Sonnet | Sheet von überall ziehbar, Einrasten, Peek mit Play-Knopf, Auto-Neuberechnung, NoGo-Bbox-Filter |
+| 2 | 7.1 Karte | Sonnet | **erledigt**, gemergt `20530c7` + Nachbesserung `64f1cf1` (Dreieck-Puck, Sperrungen rot + Barriere-Icon, Blitzer-Icons, POI-Tippkarte, Kippung 45° in Fahrt, Kipp-Bug nach Demo behoben; 238 Tests). **Offen:** Tankstellen-/Restaurant-Icons und deren Labels sind in Hannover-Mitte (z~15) weiterhin nicht sichtbar, obwohl der `poi`-Layer (z12–14) in den Kacheln liegt und die Icon-Layer jetzt zur Laufzeit nach `addImage` angelegt werden. Nächster Schritt: `querySourceFeatures("openmaptiles", ["poi"])` im Sichtfenster loggen — kommen Features mit `class=fuel` an? Falls nein: Planetiler-Profil/Kachelinhalt prüfen (evtl. nur `rank`-gefiltert); falls ja: Layer-Reihenfolge/`icon-allow-overlap`. |
+| 3 | 7.2a Sheet | Sonnet | **läuft** (Worktree `w72a`) — Sheet von überall ziehbar, Einrasten, Peek mit Play-Knopf, Auto-Neuberechnung, NoGo-Bbox-Filter |
 | 4 | 7.2b Touren | Sonnet | Stoppliste, Rundtour, Verlauf (letzte Ziele/Touren) |
 | 5 | 7.2c Profile & Routing-Tempo | Sonnet | JVM-Messung curvy/fast/enduro auf Niedersachsen, Profile nachschärfen. **Neu:** Routing dauert auf dem Emulator 47 s für 2 km ohne NoGos, 82 s mit; 8 km laufen in den 60-s-Timeout (`pass0 timeout`). Ursachen prüfen: `routeCurviest` rechnet 4 Routen, `pass1coefficient = 2.0`, 48 MB Node-Cache, altes 182-MB-`E5_N50.rd5` neben dem neuen `de-ni_E5_N50.rd5` im Segmentordner. |
 | 6 | 6.4a Pipeline | Sonnet | `build_places.py`, Workflow, Katalog-Art `places` |

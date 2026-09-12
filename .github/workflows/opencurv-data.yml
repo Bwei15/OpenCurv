@@ -261,6 +261,16 @@ jobs:
             raw/src.osm.pbf "out/$REGION_ID/$REGION_ID.cameras.tsv"
           wc -l "out/$REGION_ID/$REGION_ID.cameras.tsv"
 
+      # Wie beim Blitzer-Schritt: unabhaengig vom Kurven-Score, deshalb vor
+      # der Score-Stufe (die raw/src.osm.pbf danach loescht) statt danach.
+      # build_places.py macht zwei Lesedurchgaenge selbst (siehe dortiger
+      # Modul-Docstring) -- kein zusaetzlicher hier.
+      - name: Adress-Index bauen
+        run: |
+          mkdir -p "out/$REGION_ID"
+          python3 tools/pipeline/bin/build_places.py \
+            raw/src.osm.pbf "out/$REGION_ID/$REGION_ID.places.sqlite" "$REGION_ID"
+
       - name: Kurven-Score anbringen
         run: |
           tools/pipeline/bin/run_scorer.sh raw/src.osm.pbf raw/scored.osm.pbf "$CURVE_LEVELS"

@@ -41,6 +41,7 @@ KIND_BY_EXT = {
     ".json": "metadata",
     ".zip": "bundle",
     ".tsv": "cameras",  # <region-id>.cameras.tsv - see kind_of() for the exact match
+    ".sqlite": "places",  # <region-id>.places.sqlite - see kind_of() for the exact match
 }
 
 DEFAULT_MAX = 2 * 1024 ** 3  # GitHub-Limit je Release-Asset
@@ -65,6 +66,11 @@ def kind_of(name):
     # explicit suffix check keeps that true instead of just assuming it.
     if name.endswith(".cameras.tsv"):
         return "cameras"
+    # Same reasoning for the address index (build_places.py's
+    # <region-id>.places.sqlite) -- ".sqlite" happens to be unambiguous today
+    # too, but an explicit check keeps that true on purpose.
+    if name.endswith(".places.sqlite"):
+        return "places"
     ext = os.path.splitext(name)[1].lower()
     return KIND_BY_EXT.get(ext, "other")
 

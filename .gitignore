@@ -30,6 +30,7 @@ local.properties
 *.osm.pbf
 *.osm.pbf.md5
 *.pmtiles
+*.places.sqlite
 *.bef
 *.hgt
 catalog.json

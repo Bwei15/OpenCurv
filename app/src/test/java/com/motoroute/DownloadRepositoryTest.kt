@@ -185,13 +185,25 @@ class DownloadRepositoryTest {
         assertEquals(OfflineFileKind.MAP, mapTarget.kind)
         assertEquals("https://github.com/Bwei15/OpenCurv/releases/download/data-20260910/de-by.pmtiles", mapTarget.url)
 
+        // The file written to segmentDir loses the per-region prefix - BRouter's
+        // own segment lookup (NodesCache.fileForSegment) only ever asks for the
+        // bare grid name, see SegmentTiles.canonicalName - while the URL it is
+        // fetched from still points at the catalog's prefixed asset name.
         val seg1 = items[1].target
-        assertEquals("de-by_E10_N45.rd5", seg1.fileName)
+        assertEquals("E10_N45.rd5", seg1.fileName)
         assertEquals(OfflineFileKind.SEGMENT, seg1.kind)
+        assertEquals(
+            "https://github.com/Bwei15/OpenCurv/releases/download/data-20260910/de-by_E10_N45.rd5",
+            seg1.url,
+        )
 
         val seg2 = items[2].target
-        assertEquals("de-by_E10_N50.rd5", seg2.fileName)
+        assertEquals("E10_N50.rd5", seg2.fileName)
         assertEquals(OfflineFileKind.SEGMENT, seg2.kind)
+        assertEquals(
+            "https://github.com/Bwei15/OpenCurv/releases/download/data-20260910/de-by_E10_N50.rd5",
+            seg2.url,
+        )
     }
 
     @Test

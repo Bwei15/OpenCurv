@@ -40,9 +40,12 @@ assign avoid_toll       = false  # %avoid_toll% | Avoid toll roads | boolean
 assign avoid_ferries    = false  # %avoid_ferries% | Avoid ferries | boolean
 assign allow_tracks     = false  # %allow_tracks% | Allow tracks (enduro) | boolean
 
-# Search harder than the default: curvy detours only appear if the router is
-# willing to look past the obvious straight line.
-assign pass1coefficient = 2.0
+# BRouter's own default (1.5, same as motorcycle_fast.brf) - "search harder"
+# at 2.0 roughly doubled the time to find a route on real Niedersachsen tiles
+# without a measurable gain in how curvy the result was (1.Doku/Kurven_Score.md
+# "Messung auf Niedersachsen"); the curve score below is what finds the fun
+# road, not a wider pass1 search.
+assign pass1coefficient = 1.5
 assign pass2coefficient = 0
 
 ---context:way
@@ -113,8 +116,15 @@ assign surfacecost =
 # ---- the curve engine ---------------------------------------------------
 # `boring` is how much a class is punished for being fast and straight.
 # curviness = 0 -> everything close to 1.0 (shortest sane route)
-# curviness = 2 -> motorways and trunks become practically impassable.
-assign boring = multiply curviness 1.0
+# curviness = 2 -> motorways and trunks become very expensive.
+#
+# Capped below the raw `curviness` value (measured on Niedersachsen, see
+# 1.Doku/Kurven_Score.md "Messung auf Niedersachsen"): an uncapped cost here
+# made curviness=2 detour onto whatever low-class road happened to be
+# cheapest, not necessarily the curviest one - avoiding big roads dominated
+# the route choice before the curve score below got a say. Capping it leaves
+# curviness 1 -> 2 the job of separating "curvy" from "maximally curvy".
+assign boring = multiply ( min curviness 1.3 ) 1.0
 
 assign classcost =
   if is_motorway  then ( if avoid_motorways then 50.0 else add 3.0 ( multiply boring 20.0 ) )
@@ -161,14 +171,19 @@ assign speedbonus = if is_slow_road then 0.97 else 1.0
 # curves) scales how hard the score pulls: at curviness=0 the coefficient
 # below is exactly 0, so curvescale is always 1.0 and the score is ignored
 # entirely, matching "0 = direct" for a rider who never wants the detour.
-# Coefficient 0.053 matches the one already measured end-to-end on real data
-# in tools/pipeline/profiles/opencurv_check.brf / Cloud_Pipeline.md 5.1: it
-# takes a way from score 0 to score 15 through roughly a 0.2x-1.0x cost span
-# at curviness=1, without ever letting the factor collapse to zero (floored
-# at 0.2, same floor the pipeline's own check profile uses).
+#
+# The floor itself scales with curviness rather than sitting fixed at 0.2
+# (measured on Niedersachsen, 1.Doku/Kurven_Score.md "Messung auf
+# Niedersachsen"): a fixed floor meant any way scoring roughly 8+ was already
+# floored at curviness=1, so raising the slider to 2 could not discount a
+# genuinely curvy way any further - curviness=1 and curviness=2 produced
+# near-identical routes on real tiles. With the floor dropping from 0.175
+# (curviness=1) to 0.1 (curviness=2), the top setting keeps pulling where the
+# old fixed floor had already given up.
+assign curvefloor = max 0.05 sub 0.25 multiply curviness 0.075
 assign curvescale =
   switch not opencurv:curve=
-    max 0.2 sub 1.0 multiply ( multiply curviness 0.053 ) v:opencurv:curve
+    max curvefloor sub 1.0 multiply ( multiply curviness 0.045 ) v:opencurv:curve
     1.0
 
 assign costfactor =

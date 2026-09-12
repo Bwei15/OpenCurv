@@ -794,3 +794,178 @@ Arbeitsstrang; siehe `1.Doku/RD5_Pipeline.md`.
 | `TagWriteBackTest` | Tag-Rückschrieb, Idempotenz, konfigurierbarer Name, XML/PBF-Gleichheit |
 | `ArenaExpectationsTest` | **E1–E9**, `R5_GRID`-Falle, Abgleich mit der analytischen Ground Truth, SVG |
 | `Diagnostics` | Ausdruck der Rohgeometrie je Arena-Route (zum Kalibrieren, keine Zusicherung) |
+
+---
+
+## 13. Messung auf Niedersachsen, 12.09.2026
+
+Kontext: Welle 7.2c ("Routing-Tempo & Profile"). Zwei Fragen: warum eine 2-km-Route auf dem
+Emulator 47 s brauchte (82 s mit Verkehrs-NoGos, eine 8-km-Route lief in `pass0 timeout after
+60 seconds`), und ob `curvy`/`fast`/`enduro` und der Kurvenhunger-Regler sich überhaupt spürbar
+unterscheiden. Gemessen mit den echten, vom pipeline-eigenen Build getaggten Niedersachsen-Kacheln
+(`~/Downloads/region-de-ni/{E5,E10}_N50.rd5`, `opencurv:curve`-Tag vorhanden), einmal auf der JVM
+(`app/src/test/java/com/motoroute/RoutingBenchmarkTest.kt`, Assume-geschützt, läuft nur wenn die
+Kacheln lokal liegen) und einmal auf `emulator-5554`.
+
+### 13.1 Warum die Berechnung so langsam war
+
+Vier unabhängige Ursachen, keine davon algorithmisch:
+
+1. **Zwei Tile-Versionen, eine davon nie geladen.** BRouters Segment-Lookup
+   (`btools.mapaccess.NodesCache.fileForSegment`, vendored in `brouter/`) leitet den Dateinamen
+   einer Kachel ausschließlich aus dem Lon/Lat-Gitter her - `E5_N50.rd5` - und sieht sich sonst
+   nichts im Segmentverzeichnis an. Der Download-Katalog (`app/src/main/assets/catalog/catalog.json`)
+   benennt die eigenen, getaggten Kacheln aber `de-ni_E5_N50.rd5`/`de-ni_E10_N50.rd5` - unter diesem
+   Namen sucht BRouter nie. Auf dem Emulator lag deshalb parallel das alte, ungetaggte 182-MB-Tile
+   von brouter.de unter dem kanonischen Namen `E5_N50.rd5`, und genau das wurde geroutet: dreimal so
+   viele Knoten wie das 29-MB-Regionaltile, und `opencurv:curve` kam nie zum Einsatz.
+2. **Vier Berechnungen statt einer.** `BRouterEngine.routeCurviest()` rechnete Default-mäßig die
+   beste Route **plus drei Alternativen** (`alternatives = 3`), also vier volle
+   pass0/pass1/pass2-Suchen pro Anfrage - siehe 13.3, Faktor ~2,5× gemessen, vorher (BRouter mit
+   `alternativeIdx` 0..3) eher ~7×.
+3. **`pass1coefficient = 2.0`** in `motorcycle_curvy.brf`/`motorcycle_enduro.brf` ("search harder"),
+   gegenüber BRouters eigenem Standard 1.5 (den `motorcycle_fast.brf` schon nutzte).
+4. **Node-Cache-Größe** (`NavigationController.MEMORY_CLASS_MB = 48`) war *nicht* die Ursache - siehe
+   Tabelle unten, ein größerer Cache machte die kleinen Regional-Kacheln eher langsamer (mehr
+   Allokations-Overhead), nicht schneller. Unverändert gelassen.
+
+### 13.2 JVM: vorher/nachher
+
+`./gradlew :app:testDebugUnitTest --tests "com.motoroute.RoutingBenchmarkTest"`, Profil `curvy`,
+echte `.rd5`-Kacheln, Median aus mehreren Läufen:
+
+| Strecke | vorher (alt: `E5_N50.rd5` 182 MB, `alternatives=3`, `pass1coefficient=2.0`) | nachher (Tile-Fix, `alternatives=1`, `pass1coefficient=1.5`) |
+|---|---|---|
+| Hannover-Mitte → Hameln, ~69 km, keine Alternativen | 742 ms | 876 ms* |
+| Hannover-Mitte, ~1,7 km, keine Alternativen | 89 ms | 93 ms* |
+| Hannover-Mitte, ~1,7 km, mit Alternativen | 620 ms (≈7× Einzelsuche) | 248 ms (≈2,5× Einzelsuche) |
+
+\* Die JVM lief in beiden Läufen bereits gegen die korrekt benannten, kleinen Regional-Kacheln (lokal
+unter `~/Downloads/region-de-ni/` liegen sie ohnehin unter dem kanonischen Namen) - der Tile-Fix
+selbst zeigt sich hier nicht in der Zeit, sondern darin, dass `opencurv:curve` jetzt überhaupt greift
+(13.4). Auf der JVM ist die reine BRouter-Suche so oder so unter einer Sekunde für 45 km; **die 47-82 s
+kamen praktisch vollständig vom Emulator, der gegen das 182-MB-Fremdtile suchte, mal vier.**
+
+Ziel laut Auftrag (45 km < 10 s, 2 km < 2 s) ist auf der JVM deutlich erreicht, sowohl vorher als
+auch nachher - der eigentliche Engpass lag nie im Algorithmus.
+
+### 13.3 Emulator: vorher/nachher
+
+Gemessen auf `emulator-5554` (ARM64-Image, nativ auf Apple Silicon), Profil `curvy`
+("balanced", Kurvenhunger 1), `searchAlternatives` an (Default), reale Mobilithek/DATEX-II-NoGos
+aktiv (siehe 13.7 - konnten für diesen Nachweis nicht abgeschaltet werden, `data/traffic/*` ist für
+diese Welle nicht anfassbar; die Zeiten unten sind also eher die "82 s mit NoGos"-Kategorie des
+Auftrags als die "47 s ohne"):
+
+| Strecke | vorher (Auftragsangabe) | nachher (gemessen, UI-Dump-Polling alle 3 s) |
+|---|---|---|
+| ~2 km | 47 s (ohne NoGos) / 82 s (mit NoGos) | 25–34 s |
+| kurze Strecke (< 0,5 km, rundet zu „0 km") | - | 12–20 s |
+| ~8 km | `pass0 timeout after 60 seconds` | siehe 13.7 (Messauflösung reichte für eine belastbare dritte Zahl nicht mehr) |
+
+Deutlich schneller als vorher, aber weit von den < 10 s (JVM: < 1 s) aus 13.2 entfernt. Der
+Rest-Abstand JVM ↔ Emulator ist nicht mehr die in 13.1 behobene Ursache (Tile/Alternativen/
+pass1coefficient) - das zeigt sich daran, dass die JVM für dieselben Profile und Kacheln
+durchgängig < 1 s braucht, während dieselbe `BRouterEngine`-Codepfad auf dem Gerät zehn- bis
+dreißigmal länger braucht. Zwei Verdächtige bleiben offen (siehe „Offene Punkte" im Bericht):
+die Dichte der aktiven Verkehrs-NoGos in diesem Testgebiet (`data/traffic/*`, außerhalb der
+Dateiliste dieser Welle) und dass `BRouterEngine.route()` für jede Berechnung eine neue
+`RoutingEngine`/`NodesCache` anlegt, die die `.rd5`-Dateien jedes Mal neu vom Flash liest, statt
+sie zwischen Anfragen offen zu halten - auf der schnellen SSD des Entwicklungsrechners fällt das
+nicht auf, auf dem emulierten Speicher könnte es das.
+
+### 13.4 Wirken Profile und Kurvenhunger wirklich?
+
+Vorher (altes `curvescale`, fester Floor 0.2, `boring` ungedeckelt):
+
+| Profil | Goslar → Bad Harzburg | | Hannover → Hameln | |
+|---|---|---|---|---|
+| | Distanz | curvinessScore | Distanz | curvinessScore |
+| fast | 11,81 km | 175,3 | 56,05 km | 120,2 |
+| curvy(0) | 11,81 km | 175,3 | 56,05 km | 120,2 |
+| curvy(1) | 14,17 km | 241,9 | 68,87 km | 211,4 |
+| curvy(2) | **25,22 km** | **229,2** | 72,81 km | 218,8 |
+| enduro | 16,05 km | 254,7 | 70,16 km | 212,8 |
+
+curvy(2) war im Harz **113 % länger** als curvy(0) - aber *weniger* kurvig als curvy(1) (229,2 <
+241,9). Ursache: `boring` skalierte ungedeckelt mit `curviness`, wodurch bei curviness=2 das
+Meiden großer Straßen die Routenwahl dominierte, bevor der `opencurv:curve`-Score (Floor fix bei
+0.2, siehe unten) überhaupt zum Zug kam - der Router nahm irgendeinen billigen Umweg, nicht
+zwingend den kurvigsten.
+
+Nachher (`boring` gedeckelt bei `min curviness 1.3`, `curvefloor` skaliert mit `curviness` statt
+fest 0.2):
+
+| Profil | Goslar → Bad Harzburg | | Hannover → Hameln | |
+|---|---|---|---|---|
+| | Distanz | curvinessScore | Distanz | curvinessScore |
+| fast | 11,81 km | 175,3 | 56,05 km | 120,2 |
+| curvy(0) | 11,81 km | 175,3 | 56,05 km | 120,2 |
+| curvy(1) | 14,17 km | 241,9 | 68,87 km | 211,4 |
+| curvy(2) | **17,52 km** | **279,0** | 72,81 km | 218,8 |
+| enduro | 16,05 km | 254,7 | 69,11 km | 213,7 |
+
+curvy(2) ist jetzt in beiden Fällen die kurvigste Option (Harz: +59 % Score, +48 % Distanz gegenüber
+curvy(0); Hannover-Hameln: +82 % Score, +30 % Distanz) - beide landen fast exakt im geforderten
+30-50-%-länger-Fenster für curviness=2 gegenüber "direkt". curvy(0) bleibt praktisch identisch mit
+`fast` (beide ignorieren den Score, siehe `assign curvescale` - bei curviness=0 ist der Koeffizient
+exakt 0). Die Differenzierung zwischen curviness=1 und =2 ist im welligen Harz deutlich (+15 % Score);
+in der flachen Ebene zwischen Hannover und Hameln ist der Sprung von 1 auf 2 klein (+3,5 % Score) -
+dort gibt es schlicht kein deutlich kurvigeres Wegenetz in erreichbarer Nähe, das ist eine Grenze der
+Landschaft, keine Formel-Schwäche mehr (die vorher gemessene Sättigung bei hohen Scores ist behoben,
+siehe die Harz-Zahlen).
+
+### 13.5 Profiländerungen im Überblick
+
+`app/src/main/assets/profiles/motorcycle_curvy.brf`, `motorcycle_enduro.brf`,
+`motorcycle_fast.brf` (identischer "curve engine"-Block in allen dreien, da `curviness` app-seitig
+immer mitgeschickt wird, unabhängig vom gewählten Profil):
+
+- `pass1coefficient`: `curvy`/`enduro` von 2.0 auf 1.5 (BRouter-Standard, wie `fast` es schon hatte).
+- `boring = multiply curviness 1.0` → `multiply ( min curviness 1.3 ) 1.0`: deckelt, wie stark
+  `curviness` große Straßen bestraft, damit dieser Term bei curviness=2 nicht die Routenwahl
+  dominiert, bevor der Score unten zum Zug kommt.
+- `curvescale`: fester Floor 0.2 → `curvefloor = max 0.05 sub 0.25 multiply curviness 0.075`
+  (0.175 bei curviness=1, 0.1 bei curviness=2), Koeffizient 0.053 → 0.045. curviness=0 bleibt exakt
+  neutral (Koeffizient dort exakt 0, unverändert).
+
+`app/src/main/java/com/motoroute/data/brouter/BRouterEngine.kt`: `routeCurviest()`s
+`alternatives`-Default 3 → 1 (beste Route + eine Alternative statt drei).
+
+`NavigationController.MEMORY_CLASS_MB` unverändert (48 MB) - siehe 13.1, Punkt 4.
+
+### 13.6 Tile-Namenskonvention
+
+Festgelegt in `SegmentTiles.canonicalName()`: der Katalog/die Downloads-URL darf ein Tile mit einem
+Präfix benennen (`<region-id>_E5_N50.rd5`), aber alles, was tatsächlich in `segmentDir` geschrieben
+oder von dort gelesen wird, muss der nackte BRouter-Gittername sein (`E5_N50.rd5`) - das ist der
+einzige Name, den `NodesCache.fileForSegment` je sucht. `DownloadRepository.segmentTarget()` schreibt
+neue Downloads deshalb unter dem kanonischen Namen auf die Platte, auch wenn Katalog-URL und
+Prüfsumme weiter unter dem Präfix-Namen geführt werden. `RegionStore` vergleicht beim Lesen (Status,
+Löschen, verwaiste Dateien) ebenfalls über `canonicalName()`, damit ein `de-ni_E5_N50.rd5` einer
+Region und ein `E5_N50.rd5` einer anderen als dieselbe geteilte Kachel erkannt werden (siehe
+`RegionStoreTest`: "a record with a prefixed catalog tile name still finds its canonical file" /
+"deleting a region keeps a tile another region claims under a different prefix"). Für den bereits auf
+`emulator-5554` installierten Bestand wurde das manuell nachgezogen (Symlinks `E5_N50.rd5` →
+`de-ni_E5_N50.rd5` usw., altes 182-MB-Tile entfernt) - ein frischer Download über den reparierten
+Code braucht das nicht mehr.
+
+### 13.7 Nachweis auf dem Emulator
+
+Build installiert (`app-debug.apk`, mit allen Änderungen aus 13.5/13.6), Profile per `adb push` +
+`run-as ... cp` auf die bereits laufende Installation aktualisiert (ein reines `adb install -r`
+reicht nicht: `ProfileManager.ensureInstalled()` kopiert die `.brf`-Dateien nur neu, wenn sich die
+App-Version geändert hat). Standort per `adb emu geo fix 9.7320 52.3759` auf Hannover-Mitte gesetzt,
+Start per Kartenlangdruck (`adb shell input swipe X Y X Y 900`), Ziel per Kartentipp, Zeit bis zum
+Verschwinden von „Calculating offline…" im UI-Dump (`adb shell uiautomator dump /sdcard/ui.xml`)
+gemessen. Ergebnisse in 13.3.
+
+Zwei Auffälligkeiten aus diesem Durchlauf, protokolliert statt stillschweigend übergangen:
+
+- Rund um jeden getesteten Startpunkt lag eine dichte Ansammlung aktiver Verkehrs-NoGo-Marker (die
+  Mobilithek/DATEX-II-Anbindung aus `data/traffic/*`) - sichtbar im Screenshot während der manuellen
+  Kartenerkundung. Das erklärt vermutlich einen Teil des Emulator-JVM-Abstands aus 13.3, ist aber
+  nicht Teil dieser Welle (`data/traffic/*` ist in 7.2c nicht anfassbar).
+- `ProfileManager.ensureInstalled()`, `NavigationController.kt` (außerhalb der Routing-Parameter)
+  und der Screen-Flow selbst sind ebenfalls außerhalb der Dateiliste dieser Welle - für den Nachweis
+  wurden sie nur beobachtet, nicht geändert.

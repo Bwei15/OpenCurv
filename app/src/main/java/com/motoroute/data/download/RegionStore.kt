@@ -77,28 +77,40 @@ class RegionStore(
 
     fun status(record: RegionRecord): RegionStatus {
         val map = File(mapDir, record.mapFile)
-        val present = record.segmentFiles.filter { File(segmentDir, it).isFile }
+        val present = record.segmentFiles.filter { segmentFile(it).isFile }
         val size = (if (map.isFile) map.length() else 0L) +
-            present.sumOf { File(segmentDir, it).length() }
+            present.sumOf { segmentFile(it).length() }
         return RegionStatus(record, map.isFile, present, size)
     }
 
     /**
      * The files a delete of [path] may remove: its map, plus the routing tiles
      * no other installed region needs.
+     *
+     * Tiles are compared by [SegmentTiles.canonicalName], the name they
+     * actually have in [segmentDir] - a record written before that convention
+     * existed can still list a prefixed catalog name (see
+     * `1.Doku/Kurven_Score.md`), and without canonicalising here two records
+     * for the very same on-disk tile would look unrelated, so a delete could
+     * take a tile another installed region still needs.
      */
     fun filesToRemove(path: String): List<File> {
         val target = record(path) ?: return emptyList()
         val claimedElsewhere = records()
             .filterNot { it.path == path }
             .flatMap { it.segmentFiles }
+            .map(SegmentTiles::canonicalName)
             .toSet()
         return buildList {
             add(File(mapDir, target.mapFile))
-            target.segmentFiles.filterNot { it in claimedElsewhere }
+            target.segmentFiles.map(SegmentTiles::canonicalName).distinct()
+                .filterNot { it in claimedElsewhere }
                 .forEach { add(File(segmentDir, it)) }
         }.filter { it.isFile }
     }
+
+    /** The file a recorded tile name actually has in [segmentDir]. */
+    private fun segmentFile(tile: String): File = File(segmentDir, SegmentTiles.canonicalName(tile))
 
     /** Deletes a region as one package and forgets it. Returns the bytes freed. */
     fun delete(path: String): Long {
@@ -115,7 +127,10 @@ class RegionStore(
     /** Map and tile files on disk that no installed region claims. */
     fun looseFiles(): List<File> {
         val claimedMaps = records().map { it.mapFile }.toSet()
-        val claimedSegments = records().flatMap { it.segmentFiles }.toSet()
+        // Files on disk are already canonical names (see SegmentTiles.canonicalName);
+        // a record may still list the prefixed catalog name it was installed under.
+        val claimedSegments = records().flatMap { it.segmentFiles }
+            .map(SegmentTiles::canonicalName).toSet()
         val maps = mapDir.listFiles().orEmpty().filter { it.isFile && it.name !in claimedMaps }
         val segments = segmentDir.listFiles().orEmpty()
             .filter { it.isFile && it.name !in claimedSegments }
@@ -144,7 +159,7 @@ class RegionStore(
                     // have some of them, and claiming the rest would make the
                     // region look broken rather than partially covered.
                     segmentFiles = region.segmentTiles.filter {
-                        File(segmentDir, it).isFile
+                        segmentFile(it).isFile
                     },
                 )
             }

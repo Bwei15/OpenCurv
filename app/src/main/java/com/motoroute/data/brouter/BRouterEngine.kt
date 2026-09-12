@@ -158,12 +158,20 @@ class BRouterEngine(
      * fun road": BRouter optimises cost, and two routes with near-identical
      * cost can differ hugely in how much fun they are.
      *
+     * [alternatives] defaults to 1, not BRouter's full 3: every alternative is
+     * another complete pass0/pass1/pass2 search, so the old default of 3 meant
+     * every calculation ran BRouter **four** times. Measured on real
+     * Niedersachsen tiles (1.Doku/Kurven_Score.md "Messung auf
+     * Niedersachsen"), a second alternative past the first rarely changed the
+     * winner - on a slow device that cost is better spent elsewhere (a
+     * shorter timeout, a snappier reroute).
+     *
      * @param maxDetourFactor how much longer than the best route an
      *   alternative may be before it is rejected.
      */
     suspend fun routeCurviest(
         request: RouteRequest,
-        alternatives: Int = 3,
+        alternatives: Int = 1,
         maxDetourFactor: Double = 1.25,
     ): Route {
         val best = route(request.copy(alternativeIndex = 0))

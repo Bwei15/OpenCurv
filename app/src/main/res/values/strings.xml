@@ -62,6 +62,35 @@
     <!-- De-emphasised line once the sheet is pulled out: "340 m climb · extreme 599 °/km" -->
     <string name="plan_peek_detail">%1$d m climb · %2$s %3$d °/km</string>
 
+    <!-- stop list (Welle 7.2b) -->
+    <string name="plan_stops_title">Stops</string>
+    <string name="plan_stop_start">Start</string>
+    <string name="plan_stop_destination">Destination</string>
+    <string name="plan_stop_numbered">Stop %1$d</string>
+    <string name="plan_stop_on_map">Point on the map</string>
+    <string name="plan_stop_gps">Current position</string>
+    <string name="plan_stop_roundtrip_destination">Destination = start</string>
+    <string name="plan_stop_move_up">Move up</string>
+    <string name="plan_stop_move_down">Move down</string>
+    <string name="plan_stop_remove">Remove stop</string>
+    <string name="plan_add_stop">Add stop</string>
+
+    <!-- round trip -->
+    <string name="plan_round_trip">Round trip</string>
+    <string name="plan_round_trip_length">Wanted length: %1$d km</string>
+    <string name="plan_round_trip_suggest">Suggest a loop</string>
+
+    <!-- history -->
+    <string name="plan_recent_trips_title">Last tours</string>
+    <!-- "Hannover → Hameln · 3 stops · 12.09." -->
+    <string name="plan_recent_trip_row">%1$s → %2$s · %3$d stops · %4$s</string>
+    <string name="search_recent_title">Last destinations</string>
+    <string name="search_title_destination">Search for a destination</string>
+    <string name="search_title_stop">Add a stop</string>
+    <string name="search_title_start">Search for a start</string>
+    <string name="search_placeholder_stop">Search for a stop</string>
+    <string name="search_placeholder_start">Search for a start</string>
+
     <string name="curviness_direct">direct</string>
     <string name="curviness_mild">mild</string>
     <string name="curviness_balanced">balanced</string>
@@ -184,6 +213,8 @@
     <string name="msg_start_is_map_centre">No GPS: starting from the centre of the map</string>
     <string name="msg_voice_test">Speaking a test announcement</string>
     <string name="msg_voice_unavailable">The speech engine is not ready yet</string>
+    <string name="msg_add_as_stop_prompt">Add this point as a stop?</string>
+    <string name="msg_add_as_stop_action">Add</string>
     <string name="msg_region_deleted">%1$s deleted, %2$s freed</string>
     <string name="msg_imported">Imported %1$s</string>
     <string name="msg_import_wrong_type">Not a .map, .rd5 or .brf file</string>

@@ -34,6 +34,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.motoroute.R
+import com.motoroute.data.history.HistoryDestination
 import com.motoroute.data.model.GeoPoint
 import com.motoroute.data.search.IndexState
 import com.motoroute.data.search.Place
@@ -42,6 +43,9 @@ import com.motoroute.domain.geo.Geo
 import com.motoroute.ui.components.IconTapButton
 import com.motoroute.ui.theme.LocalRideColors
 import java.util.Locale
+
+/** What a picked search result becomes: the destination, a stop, or the start. */
+enum class SearchMode { DESTINATION, STOP, START }
 
 /**
  * Destination search, offline.
@@ -52,6 +56,9 @@ import java.util.Locale
  * and street names it draws with. So this searches the map itself - towns and
  * villages from an index built once per map, streets scanned live around where
  * the rider is.
+ *
+ * [mode] decides where a pick lands (see [SearchMode]) and only changes the title and
+ * placeholder here - the actual routing happens in whoever calls [onPick].
  */
 @Composable
 fun SearchScreen(
@@ -60,6 +67,8 @@ fun SearchScreen(
     indexState: IndexState,
     searching: Boolean,
     near: GeoPoint?,
+    mode: SearchMode,
+    recentDestinations: List<HistoryDestination>,
     onQueryChange: (String) -> Unit,
     onPick: (Place) -> Unit,
     onBack: () -> Unit,
@@ -75,6 +84,13 @@ fun SearchScreen(
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeDrawing),
     ) {
+        Text(
+            text = stringResource(titleFor(mode)),
+            color = colors.onPanel,
+            fontWeight = FontWeight.Black,
+            fontSize = 18.sp,
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp),
+        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -90,7 +106,7 @@ fun SearchScreen(
                 value = query,
                 onValueChange = onQueryChange,
                 singleLine = true,
-                placeholder = { Text(stringResource(R.string.search_placeholder)) },
+                placeholder = { Text(stringResource(placeholderFor(mode))) },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 modifier = Modifier
                     .weight(1f)
@@ -142,13 +158,37 @@ fun SearchScreen(
         }
 
         LazyColumn(modifier = Modifier.weight(1f)) {
-            items(results, key = { it.dedupeKey }) { place ->
-                ResultRow(
-                    place = place,
-                    distanceMeters = near?.let { Geo.distanceMeters(it, place.point) },
-                    onClick = { onPick(place) },
-                )
-                HorizontalDivider()
+            if (query.isBlank()) {
+                if (recentDestinations.isNotEmpty()) {
+                    item(key = "recent-title") {
+                        Text(
+                            text = stringResource(R.string.search_recent_title),
+                            color = colors.muted,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Black,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        )
+                    }
+                }
+                items(recentDestinations, key = { "recent-${it.latitude}-${it.longitude}" }) { destination ->
+                    RecentDestinationRow(
+                        destination = destination,
+                        distanceMeters = near?.let {
+                            Geo.distanceMeters(it, GeoPoint(destination.latitude, destination.longitude))
+                        },
+                        onClick = { onPick(destination.toPlace()) },
+                    )
+                    HorizontalDivider()
+                }
+            } else {
+                items(results, key = { it.dedupeKey }) { place ->
+                    ResultRow(
+                        place = place,
+                        distanceMeters = near?.let { Geo.distanceMeters(it, place.point) },
+                        onClick = { onPick(place) },
+                    )
+                    HorizontalDivider()
+                }
             }
             item(key = "hint") {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -163,6 +203,26 @@ fun SearchScreen(
         }
     }
 }
+
+private fun titleFor(mode: SearchMode): Int = when (mode) {
+    SearchMode.DESTINATION -> R.string.search_title_destination
+    SearchMode.STOP -> R.string.search_title_stop
+    SearchMode.START -> R.string.search_title_start
+}
+
+private fun placeholderFor(mode: SearchMode): Int = when (mode) {
+    SearchMode.DESTINATION -> R.string.search_placeholder
+    SearchMode.STOP -> R.string.search_placeholder_stop
+    SearchMode.START -> R.string.search_placeholder_start
+}
+
+/** A history entry has no [PlaceKind] of its own - it is always shown as a plain named point. */
+private fun HistoryDestination.toPlace(): Place = Place(
+    name = name.orEmpty(),
+    kind = PlaceKind.POI,
+    latitude = latitude,
+    longitude = longitude,
+)
 
 @Composable
 private fun IndexBanner(text: String, fraction: Float) {
@@ -204,6 +264,35 @@ private fun ResultRow(place: Place, distanceMeters: Double?, onClick: () -> Unit
                 maxLines = 1,
             )
         }
+        distanceMeters?.let {
+            Text(
+                text = formatDistance(it),
+                color = colors.muted,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+    }
+}
+
+@Composable
+private fun RecentDestinationRow(destination: HistoryDestination, distanceMeters: Double?, onClick: () -> Unit) {
+    val colors = LocalRideColors.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = destination.name?.ifBlank { null } ?: stringResource(R.string.plan_stop_on_map),
+            color = colors.onPanel,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            modifier = Modifier.weight(1f),
+        )
         distanceMeters?.let {
             Text(
                 text = formatDistance(it),

@@ -12,6 +12,9 @@ import com.motoroute.data.download.DownloadTarget
 import com.motoroute.data.download.MapRegion
 import com.motoroute.data.download.RegionStatus
 import com.motoroute.data.download.RegionStore
+import com.motoroute.data.history.HistoryDestination
+import com.motoroute.data.history.HistoryStop
+import com.motoroute.data.history.HistoryTrip
 import com.motoroute.data.map.OfflineFile
 import com.motoroute.data.map.OfflineFileKind
 import com.motoroute.data.model.GeoPoint
@@ -24,21 +27,32 @@ import com.motoroute.data.settings.Settings
 import com.motoroute.domain.NavigationState
 import com.motoroute.domain.PlanningState
 import com.motoroute.domain.RecalcTrigger
+import com.motoroute.domain.RoundTripPlanner
+import com.motoroute.ui.search.SearchMode
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+
+/** A stop on the way to the destination: where, and what to call it in the stop list. */
+data class Stop(val point: GeoPoint, val name: String? = null)
 
 /** What the rider has picked on the map so far. */
 data class PlanSelection(
     val start: GeoPoint? = null,
     val destination: GeoPoint? = null,
     val destinationName: String? = null,
-    val via: List<GeoPoint> = emptyList(),
+    val via: List<Stop> = emptyList(),
+    /**
+     * Ziel = Start once this is on: the sheet stops asking for a destination and instead offers
+     * to suggest a loop through [via] and back. See [MapViewModel.suggestRoundTrip].
+     */
+    val roundTrip: Boolean = false,
 ) {
-    val isComplete: Boolean get() = destination != null
+    val isComplete: Boolean get() = destination != null || roundTrip
 }
 
 /**
@@ -91,7 +105,7 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
 
     /** "Zwischenziel" on the POI card. */
     fun choosePoiAsVia(hit: PoiHit) {
-        addVia(hit.point)
+        addVia(hit.point, hit.name.ifBlank { null })
         _selectedPoi.value = null
     }
 
@@ -122,30 +136,143 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         container.navigation.startLocationUpdates()
+        // Every successful calculation - manual or a profile/curviness auto-recalc - remembers
+        // its destination, so the search box's "last destinations" stays current without the
+        // rest of the app having to know history exists.
+        viewModelScope.launch {
+            container.navigation.planning.collect { state ->
+                if (state !is PlanningState.Ready) return@collect
+                val sel = _selection.value
+                val destination = if (sel.roundTrip) sel.start else sel.destination
+                destination?.let {
+                    container.routeHistory.recordDestination(sel.destinationName, it.latitude, it.longitude)
+                    refreshHistory()
+                }
+            }
+        }
     }
 
     // ---- map interaction --------------------------------------------------
 
     fun onMapTap(point: GeoPoint) {
-        _selection.value = _selection.value.copy(destination = point, destinationName = null)
+        _selection.value = _selection.value.copy(destination = point, destinationName = null, roundTrip = false)
     }
 
-    /** A press held in place sets where the route starts, GPS or no GPS. */
+    /**
+     * A press held in place sets where the route starts, GPS or no GPS - unless a plan already
+     * exists, in which case overwriting the start silently would throw away work. Once start and
+     * destination are both set, a long press instead asks (see [pendingStopPrompt]) whether the
+     * point should become a stop.
+     */
     fun onMapLongPress(point: GeoPoint) {
-        _selection.value = _selection.value.copy(start = point)
+        val sel = _selection.value
+        if (sel.start != null && sel.isComplete) {
+            _pendingStopPrompt.value = point
+            return
+        }
+        _selection.value = sel.copy(start = point)
         _message.value = getApplication<Application>().getString(com.motoroute.R.string.start_set)
+    }
+
+    /** The point from a long press while a plan already exists, awaiting the "add as stop?" answer. */
+    private val _pendingStopPrompt = MutableStateFlow<GeoPoint?>(null)
+    val pendingStopPrompt: StateFlow<GeoPoint?> = _pendingStopPrompt.asStateFlow()
+
+    fun confirmAddStop() {
+        _pendingStopPrompt.value?.let { addVia(it) }
+        _pendingStopPrompt.value = null
+    }
+
+    fun dismissAddStopPrompt() {
+        _pendingStopPrompt.value = null
     }
 
     fun onUserGesture() {
         if (_followMode.value) _followMode.value = false
     }
 
-    fun addVia(point: GeoPoint) {
-        _selection.value = _selection.value.let { it.copy(via = it.via + point) }
+    fun addVia(point: GeoPoint, name: String? = null) {
+        _selection.value = _selection.value.let { it.copy(via = it.via + Stop(point, name)) }
+        scheduleRecalc()
+    }
+
+    /** Swaps a stop with the one before it; index 0 has no "before" and is ignored. */
+    fun moveStopUp(index: Int) {
+        val via = _selection.value.via
+        if (index !in 1 until via.size) return
+        val mutable = via.toMutableList()
+        mutable[index - 1] = via[index].also { mutable[index] = via[index - 1] }
+        _selection.value = _selection.value.copy(via = mutable)
+        scheduleRecalc()
+    }
+
+    /** Swaps a stop with the one after it; the last stop has no "after" and is ignored. */
+    fun moveStopDown(index: Int) {
+        if (index !in _selection.value.via.indices) return
+        moveStopUp(index + 1)
+    }
+
+    fun removeStop(index: Int) {
+        val via = _selection.value.via
+        if (index !in via.indices) return
+        _selection.value = _selection.value.copy(via = via.filterIndexed { i, _ -> i != index })
+        scheduleRecalc()
+    }
+
+    /** "Rundtour": destination becomes the start, the stop list sits in between. */
+    fun setRoundTrip(enabled: Boolean) {
+        roundTripJob?.cancel()
+        _selection.value = if (enabled) {
+            _selection.value.copy(roundTrip = true)
+        } else {
+            // Nothing forces the via list empty here on purpose: turning the switch back off
+            // keeps whatever stops were on the loop as an ordinary multi-stop plan, since the
+            // rider may well want to keep riding through them to a real destination instead.
+            _selection.value.copy(roundTrip = false)
+        }
+        scheduleRecalc()
+    }
+
+    private var roundTripJob: Job? = null
+
+    /**
+     * Fills in a loop from [RoundTripPlanner] and calculates it, retrying with the points nudged
+     * toward the start when BRouter cannot reach one of them - see the class doc there for why
+     * this is a rough first cut, not a promise the ride comes out exactly [lengthKm] long.
+     */
+    fun suggestRoundTrip(lengthKm: Float) {
+        val app = getApplication<Application>()
+        if (!hasSegments) {
+            _message.value = app.getString(com.motoroute.R.string.msg_no_segments)
+            return
+        }
+        val start = _selection.value.start
+            ?: container.navigation.lastFix.value?.point
+            ?: mapController.center()
+            ?: run {
+                _message.value = app.getString(com.motoroute.R.string.msg_waiting_for_gps)
+                return
+            }
+        roundTripJob?.cancel()
+        roundTripJob = viewModelScope.launch {
+            var points = RoundTripPlanner.suggestLoop(start, lengthKm * 1000.0)
+            for (attempt in 0 until ROUND_TRIP_ATTEMPTS) {
+                _selection.value = _selection.value.copy(
+                    start = start,
+                    roundTrip = true,
+                    via = points.map { Stop(it, null) },
+                )
+                calculateRoute()
+                val result = container.navigation.planning.first { it !is PlanningState.Calculating }
+                if (result is PlanningState.Ready || attempt == ROUND_TRIP_ATTEMPTS - 1) break
+                points = points.map { RoundTripPlanner.nudgeTowardStart(it, start) }
+            }
+        }
     }
 
     fun clearSelection() {
         recalcTrigger.cancel()
+        roundTripJob?.cancel()
         _selection.value = PlanSelection()
         container.navigation.clearPlan()
         mapController.showRoute(null, 0)
@@ -179,10 +306,6 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun calculateRoute() {
         val app = getApplication<Application>()
-        val destination = _selection.value.destination ?: run {
-            _message.value = app.getString(com.motoroute.R.string.msg_pick_destination)
-            return
-        }
         if (!hasSegments) {
             _message.value = app.getString(com.motoroute.R.string.msg_no_segments)
             return
@@ -196,10 +319,16 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
                 _message.value = app.getString(com.motoroute.R.string.msg_waiting_for_gps)
                 return
             }
-        container.navigation.plan(start, destination, _selection.value.via)
+        // Rundtour: the destination the rider never had to pick is the point they are standing on.
+        val destination = if (_selection.value.roundTrip) start else _selection.value.destination ?: run {
+            _message.value = app.getString(com.motoroute.R.string.msg_pick_destination)
+            return
+        }
+        container.navigation.plan(start, destination, _selection.value.via.map { it.point })
     }
 
     fun startNavigation(route: Route) {
+        recordTripToHistory()
         _followMode.value = true
         _manualZoom.value = false
         container.navigation.startNavigation(route)
@@ -212,6 +341,7 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Rides the planned route without a motorcycle, for testing everything at home. */
     fun startDemo(route: Route) {
+        recordTripToHistory()
         _followMode.value = true
         _manualZoom.value = false
         container.navigation.startDemo(route)
@@ -220,6 +350,51 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     fun stopDemo() {
         container.navigation.stopDemo()
         clearSelection()
+    }
+
+    /** Snapshot of the current plan, written the moment a ride - real or demo - actually starts. */
+    private fun recordTripToHistory() {
+        val sel = _selection.value
+        val start = sel.start ?: container.navigation.lastFix.value?.point ?: mapController.center() ?: return
+        val destination = if (sel.roundTrip) start else sel.destination ?: return
+        val stops = buildList {
+            add(HistoryStop(name = null, latitude = start.latitude, longitude = start.longitude))
+            sel.via.forEach { add(HistoryStop(it.name, it.point.latitude, it.point.longitude)) }
+            add(HistoryStop(sel.destinationName, destination.latitude, destination.longitude))
+        }
+        val current = settings.value
+        container.routeHistory.recordTrip(stops, current.profileId, current.curviness, sel.roundTrip)
+        refreshHistory()
+    }
+
+    // ---- history ------------------------------------------------------------
+
+    private val _recentDestinations = MutableStateFlow(container.routeHistory.recentDestinations())
+    val recentDestinations: StateFlow<List<HistoryDestination>> = _recentDestinations.asStateFlow()
+
+    private val _recentTrips = MutableStateFlow(container.routeHistory.recentTrips())
+    val recentTrips: StateFlow<List<HistoryTrip>> = _recentTrips.asStateFlow()
+
+    private fun refreshHistory() {
+        _recentDestinations.value = container.routeHistory.recentDestinations()
+        _recentTrips.value = container.routeHistory.recentTrips()
+    }
+
+    /** Loads a remembered tour's stops, profile and curve appetite back into the plan and rides it out. */
+    fun loadHistoryTrip(trip: HistoryTrip) {
+        if (trip.stops.size < 2) return
+        val first = trip.stops.first()
+        val last = trip.stops.last()
+        val middle = trip.stops.subList(1, trip.stops.size - 1)
+        container.settings.update { it.copy(profileId = trip.profileId, curviness = trip.curviness) }
+        _selection.value = PlanSelection(
+            start = GeoPoint(first.latitude, first.longitude),
+            destination = if (trip.roundTrip) null else GeoPoint(last.latitude, last.longitude),
+            destinationName = if (trip.roundTrip) null else last.name,
+            via = middle.map { Stop(GeoPoint(it.latitude, it.longitude), it.name) },
+            roundTrip = trip.roundTrip,
+        )
+        calculateRoute()
     }
 
     fun forceReroute() = container.navigation.forceReroute()
@@ -252,7 +427,7 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     private val recalcTrigger = RecalcTrigger(viewModelScope)
 
     private fun scheduleRecalc() {
-        if (_selection.value.destination == null) return
+        if (!_selection.value.isComplete) return
         when (container.navigation.planning.value) {
             is PlanningState.Ready, PlanningState.Calculating -> recalcTrigger.request(::calculateRoute)
             else -> Unit
@@ -322,11 +497,28 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun chooseSearchResult(place: Place) {
-        _selection.value = _selection.value.copy(
-            destination = place.point,
-            destinationName = place.name,
-        )
+    /**
+     * A search result picked in [mode]: the destination (the default, also used for the map's
+     * own search bar), the end of the stop list, or the start.
+     */
+    fun chooseSearchResult(place: Place, mode: SearchMode = SearchMode.DESTINATION) {
+        when (mode) {
+            SearchMode.DESTINATION -> {
+                _selection.value = _selection.value.copy(
+                    destination = place.point,
+                    destinationName = place.name,
+                    roundTrip = false,
+                )
+            }
+            SearchMode.STOP -> {
+                _selection.value = _selection.value.let { it.copy(via = it.via + Stop(place.point, place.name)) }
+                scheduleRecalc()
+            }
+            SearchMode.START -> {
+                _selection.value = _selection.value.copy(start = place.point)
+                scheduleRecalc()
+            }
+        }
         _followMode.value = false
         mapController.centerOn(place.point, DESTINATION_ZOOM)
         _query.value = ""
@@ -491,6 +683,9 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
 
         /** Close enough to see the streets around a chosen destination. */
         private const val DESTINATION_ZOOM = 14
+
+        /** Initial suggestion plus this many nudge-and-retry rounds for [suggestRoundTrip]. */
+        private const val ROUND_TRIP_ATTEMPTS = 3
 
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {

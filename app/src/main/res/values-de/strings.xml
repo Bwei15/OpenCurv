@@ -59,6 +59,35 @@
     <string name="plan_peek_summary">%1$s km · an %2$s</string>
     <string name="plan_peek_detail">%1$d m Anstieg · %2$s %3$d °/km</string>
 
+    <!-- Stoppliste (Welle 7.2b) -->
+    <string name="plan_stops_title">Stopps</string>
+    <string name="plan_stop_start">Start</string>
+    <string name="plan_stop_destination">Ziel</string>
+    <string name="plan_stop_numbered">Stopp %1$d</string>
+    <string name="plan_stop_on_map">Punkt auf der Karte</string>
+    <string name="plan_stop_gps">Aktuelle Position</string>
+    <string name="plan_stop_roundtrip_destination">Ziel = Start</string>
+    <string name="plan_stop_move_up">Nach oben</string>
+    <string name="plan_stop_move_down">Nach unten</string>
+    <string name="plan_stop_remove">Stopp entfernen</string>
+    <string name="plan_add_stop">Stopp hinzufügen</string>
+
+    <!-- Rundtour -->
+    <string name="plan_round_trip">Rundtour</string>
+    <string name="plan_round_trip_length">Wunschlänge: %1$d km</string>
+    <string name="plan_round_trip_suggest">Rundtour vorschlagen</string>
+
+    <!-- Verlauf -->
+    <string name="plan_recent_trips_title">Letzte Touren</string>
+    <!-- "Hannover → Hameln · 3 Stopps · 12.09." -->
+    <string name="plan_recent_trip_row">%1$s → %2$s · %3$d Stopps · %4$s</string>
+    <string name="search_recent_title">Letzte Ziele</string>
+    <string name="search_title_destination">Ziel suchen</string>
+    <string name="search_title_stop">Stopp hinzufügen</string>
+    <string name="search_title_start">Start suchen</string>
+    <string name="search_placeholder_stop">Stopp suchen</string>
+    <string name="search_placeholder_start">Start suchen</string>
+
     <string name="curviness_direct">direkt</string>
     <string name="curviness_mild">mild</string>
     <string name="curviness_balanced">ausgewogen</string>
@@ -180,6 +209,8 @@
     <string name="msg_start_is_map_centre">Kein GPS: Start ist die Kartenmitte</string>
     <string name="msg_voice_test">Testansage wird gesprochen</string>
     <string name="msg_voice_unavailable">Die Sprachausgabe ist noch nicht bereit</string>
+    <string name="msg_add_as_stop_prompt">Diesen Punkt als Stopp hinzufügen?</string>
+    <string name="msg_add_as_stop_action">Hinzufügen</string>
     <string name="msg_region_deleted">%1$s gelöscht, %2$s frei geworden</string>
     <string name="msg_imported">%1$s importiert</string>
     <string name="msg_import_wrong_type">Keine .map-, .rd5- oder .brf-Datei</string>

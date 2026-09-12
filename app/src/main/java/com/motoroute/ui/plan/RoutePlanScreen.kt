@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.motoroute.R
 import com.motoroute.data.brouter.RoutingProfile
+import com.motoroute.data.history.HistoryTrip
 import com.motoroute.data.model.Curviness
 import com.motoroute.data.model.Route
 import com.motoroute.data.settings.Settings
@@ -50,9 +51,11 @@ import com.motoroute.domain.PlanningState
 import com.motoroute.ui.components.DraggableSheet
 import com.motoroute.ui.components.PrimaryButton
 import com.motoroute.ui.components.SecondaryButton
+import com.motoroute.ui.map.Stop
 import com.motoroute.ui.theme.LocalRideColors
 import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -78,9 +81,19 @@ fun RoutePlanSheet(
     destinationName: String?,
     hasDestination: Boolean,
     hasExplicitStart: Boolean,
+    via: List<Stop>,
+    roundTrip: Boolean,
+    recentTrips: List<HistoryTrip>,
     onProfileChange: (String) -> Unit,
     onCurvinessChange: (Float) -> Unit,
     onAlternativesChange: (Boolean) -> Unit,
+    onRoundTripChange: (Boolean) -> Unit,
+    onSuggestRoundTrip: (Float) -> Unit,
+    onAddStop: () -> Unit,
+    onMoveStopUp: (Int) -> Unit,
+    onMoveStopDown: (Int) -> Unit,
+    onRemoveStop: (Int) -> Unit,
+    onPickRecentTrip: (HistoryTrip) -> Unit,
     onCalculate: () -> Unit,
     onStart: (Route) -> Unit,
     onDemo: (Route) -> Unit,
@@ -185,6 +198,24 @@ fun RoutePlanSheet(
 
             Spacer(Modifier.height(4.dp))
 
+            // Stop list once there is a plan to hang stops off; recent tours instead while the
+            // sheet is empty - a rider either builds today's route or picks up an old one, not
+            // both at once.
+            if (hasDestination) {
+                StopList(
+                    hasExplicitStart = hasExplicitStart,
+                    via = via,
+                    destinationName = destinationName,
+                    roundTrip = roundTrip,
+                    onMoveUp = onMoveStopUp,
+                    onMoveDown = onMoveStopDown,
+                    onRemove = onRemoveStop,
+                    onAddStop = onAddStop,
+                )
+            } else if (recentTrips.isNotEmpty()) {
+                RecentTripsSection(trips = recentTrips, onPick = onPickRecentTrip)
+            }
+
             Text(
                 text = stringResource(R.string.plan_options),
                 color = colors.muted,
@@ -249,6 +280,244 @@ fun RoutePlanSheet(
                     fontSize = 14.sp,
                 )
             }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                androidx.compose.material3.Switch(
+                    checked = roundTrip,
+                    onCheckedChange = onRoundTripChange,
+                )
+                Text(
+                    text = stringResource(R.string.plan_round_trip),
+                    color = colors.onPanel,
+                    fontSize = 14.sp,
+                )
+            }
+
+            // Nothing to loop through yet: offer to fill the stop list in rather than leaving
+            // the rider staring at "Ziel = Start" with no stops in between.
+            if (roundTrip && via.isEmpty()) {
+                RoundTripSuggestCard(onSuggest = onSuggestRoundTrip)
+            }
+        }
+    }
+}
+
+/**
+ * Start -> Stop 1 -> ... -> Ziel. Only the stops in between are reorderable or removable - the
+ * endpoints are structural (Start comes from GPS or a long press, Ziel from search or a tap), so
+ * they get a plain row instead of buttons that would not make sense to press.
+ */
+@Composable
+private fun StopList(
+    hasExplicitStart: Boolean,
+    via: List<Stop>,
+    destinationName: String?,
+    roundTrip: Boolean,
+    onMoveUp: (Int) -> Unit,
+    onMoveDown: (Int) -> Unit,
+    onRemove: (Int) -> Unit,
+    onAddStop: () -> Unit,
+) {
+    val colors = LocalRideColors.current
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = stringResource(R.string.plan_stops_title),
+            color = colors.muted,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Black,
+        )
+        StopEndpointRow(
+            label = stringResource(R.string.plan_stop_start),
+            name = if (hasExplicitStart) stringResource(R.string.plan_stop_on_map) else stringResource(R.string.plan_stop_gps),
+        )
+        via.forEachIndexed { index, stop ->
+            StopRow(
+                label = stringResource(R.string.plan_stop_numbered, index + 1),
+                name = stop.name ?: stringResource(R.string.plan_stop_on_map),
+                canMoveUp = index > 0,
+                canMoveDown = index < via.lastIndex,
+                onMoveUp = { onMoveUp(index) },
+                onMoveDown = { onMoveDown(index) },
+                onRemove = { onRemove(index) },
+            )
+        }
+        StopEndpointRow(
+            label = stringResource(R.string.plan_stop_destination),
+            name = if (roundTrip) {
+                stringResource(R.string.plan_stop_roundtrip_destination)
+            } else {
+                destinationName ?: stringResource(R.string.plan_destination_pin)
+            },
+        )
+        TextButton(onClick = onAddStop) {
+            Text(
+                text = stringResource(R.string.plan_add_stop),
+                color = colors.route,
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp,
+            )
+        }
+    }
+}
+
+@Composable
+private fun StopEndpointRow(label: String, name: String) {
+    val colors = LocalRideColors.current
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Text(label, color = colors.muted, fontSize = 11.sp)
+        Text(name, color = colors.onPanel, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1)
+    }
+}
+
+@Composable
+private fun StopRow(
+    label: String,
+    name: String,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    val colors = LocalRideColors.current
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(label, color = colors.muted, fontSize = 11.sp)
+            Text(name, color = colors.onPanel, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1)
+        }
+        StopGlyphButton(
+            glyph = "↑",
+            contentDescription = stringResource(R.string.plan_stop_move_up),
+            onClick = onMoveUp,
+            enabled = canMoveUp,
+        )
+        StopGlyphButton(
+            glyph = "↓",
+            contentDescription = stringResource(R.string.plan_stop_move_down),
+            onClick = onMoveDown,
+            enabled = canMoveDown,
+        )
+        StopGlyphButton(
+            glyph = "✕",
+            contentDescription = stringResource(R.string.plan_stop_remove),
+            onClick = onRemove,
+        )
+    }
+}
+
+/** A plain text-glyph button rather than a new icon asset - just up/down/remove, 48 dp per Design_System.md's floor. */
+@Composable
+private fun StopGlyphButton(
+    glyph: String,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    val colors = LocalRideColors.current
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        shape = RoundedCornerShape(12.dp),
+        color = colors.panelSunken,
+        modifier = modifier
+            .size(STOP_BUTTON_SIZE)
+            .semantics { this.contentDescription = contentDescription },
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                text = glyph,
+                color = if (enabled) colors.onPanel else colors.muted,
+                fontWeight = FontWeight.Black,
+                fontSize = 16.sp,
+            )
+        }
+    }
+}
+
+private val STOP_BUTTON_SIZE = 48.dp
+
+/** Shown once "Rundtour" is on but there is nothing in the stop list yet to loop through. */
+@Composable
+private fun RoundTripSuggestCard(onSuggest: (Float) -> Unit) {
+    val colors = LocalRideColors.current
+    var lengthKm by remember { mutableStateOf(120f) }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = stringResource(R.string.plan_round_trip_length, lengthKm.roundToInt()),
+            color = colors.onPanel,
+            fontWeight = FontWeight.Bold,
+            fontSize = 15.sp,
+        )
+        Slider(
+            value = lengthKm,
+            onValueChange = { lengthKm = it },
+            valueRange = 50f..300f,
+            modifier = Modifier.height(48.dp),
+        )
+        SecondaryButton(
+            label = stringResource(R.string.plan_round_trip_suggest),
+            onClick = { onSuggest(lengthKm) },
+        )
+    }
+}
+
+/** "Letzte Touren": shown while the sheet has no active plan, up to five, newest first. */
+@Composable
+private fun RecentTripsSection(trips: List<HistoryTrip>, onPick: (HistoryTrip) -> Unit) {
+    val colors = LocalRideColors.current
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = stringResource(R.string.plan_recent_trips_title),
+            color = colors.muted,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Black,
+        )
+        trips.take(5).forEach { trip ->
+            RecentTripRow(trip = trip, onClick = { onPick(trip) })
+        }
+    }
+}
+
+@Composable
+private fun RecentTripRow(trip: HistoryTrip, onClick: () -> Unit) {
+    val colors = LocalRideColors.current
+    val onMap = stringResource(R.string.plan_stop_on_map)
+    val startName = trip.stops.first().name ?: onMap
+    val destinationName = if (trip.roundTrip) {
+        stringResource(R.string.plan_stop_roundtrip_destination)
+    } else {
+        trip.stops.last().name ?: onMap
+    }
+    val stopCount = (trip.stops.size - 2).coerceAtLeast(0)
+    val date = remember(trip.timestampMillis) {
+        SimpleDateFormat("dd.MM.", Locale.getDefault()).format(Date(trip.timestampMillis))
+    }
+    Surface(
+        onClick = onClick,
+        color = colors.panelSunken,
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp),
+    ) {
+        Box(contentAlignment = Alignment.CenterStart) {
+            Text(
+                text = stringResource(R.string.plan_recent_trip_row, startName, destinationName, stopCount, date),
+                color = colors.onPanel,
+                fontSize = 14.sp,
+                maxLines = 1,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 14.dp),
+            )
         }
     }
 }

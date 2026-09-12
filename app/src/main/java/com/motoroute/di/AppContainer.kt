@@ -9,6 +9,7 @@ import com.motoroute.data.download.FileDownloader
 import com.motoroute.data.download.MapCatalog
 import com.motoroute.data.location.LocationProvider
 import com.motoroute.data.download.RegionStore
+import com.motoroute.data.history.RouteHistory
 import com.motoroute.data.map.OfflineDataRepository
 import com.motoroute.data.search.PlaceSearchRepository
 import com.motoroute.data.settings.SettingsRepository
@@ -41,6 +42,9 @@ class AppContainer(context: Context) {
     val voice = VoiceGuidance(appContext)
 
     val mapCatalog = MapCatalog(appContext)
+
+    /** Last destinations and last tours, for the search box and the plan sheet (Welle 7.2b). */
+    val routeHistory = RouteHistory(java.io.File(appContext.filesDir, "history.json"))
 
     /** Which files belong to which downloaded region. */
     val regions = RegionStore(

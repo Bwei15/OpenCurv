@@ -22,8 +22,10 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -62,6 +64,7 @@ import com.motoroute.ui.plan.MissingDataCard
 import com.motoroute.ui.plan.PEEK_HEIGHT_DESTINATION
 import com.motoroute.ui.plan.PEEK_HEIGHT_EMPTY
 import com.motoroute.ui.plan.RoutePlanSheet
+import com.motoroute.ui.search.SearchMode
 import com.motoroute.ui.search.SearchScreen
 import com.motoroute.ui.settings.SettingsScreen
 import com.motoroute.ui.theme.LocalRideColors
@@ -99,6 +102,8 @@ fun OpenCurvRoot(
     val demoRunning by viewModel.demoRunning.collectAsState()
 
     var screen by remember { mutableStateOf(Screen.MAP) }
+    // Which slot a picked search result fills; only meaningful while screen == Screen.SEARCH.
+    var searchMode by remember { mutableStateOf(SearchMode.DESTINATION) }
     var onboarding by remember { mutableStateOf(!settings.onboardingDone) }
     val snackbar = remember { SnackbarHostState() }
 
@@ -107,6 +112,20 @@ fun OpenCurvRoot(
             snackbar.showSnackbar(it)
             viewModel.consumeMessage()
         }
+    }
+
+    // A long press with a plan already in place asks before it changes anything - see
+    // MapViewModel.onMapLongPress's doc for why overwriting the start silently is the wrong call
+    // once start and destination both exist.
+    val pendingStopPrompt by viewModel.pendingStopPrompt.collectAsState()
+    LaunchedEffect(pendingStopPrompt) {
+        if (pendingStopPrompt == null) return@LaunchedEffect
+        val result = snackbar.showSnackbar(
+            message = context.getString(R.string.msg_add_as_stop_prompt),
+            actionLabel = context.getString(R.string.msg_add_as_stop_action),
+            duration = SnackbarDuration.Short,
+        )
+        if (result == SnackbarResult.ActionPerformed) viewModel.confirmAddStop() else viewModel.dismissAddStopPrompt()
     }
 
     // Starting and stopping the foreground service follows the state machine
@@ -168,8 +187,9 @@ fun OpenCurvRoot(
                 zoom = zoom,
                 onOpenData = { screen = Screen.DATA },
                 onOpenSettings = { screen = Screen.SETTINGS },
-                onOpenSearch = {
+                onOpenSearch = { mode ->
                     viewModel.prepareSearch()
+                    searchMode = mode
                     screen = Screen.SEARCH
                 },
                 onRequestPermission = onRequestPermission,
@@ -177,6 +197,7 @@ fun OpenCurvRoot(
 
             Screen.SEARCH -> SearchRoot(
                 viewModel = viewModel,
+                mode = searchMode,
                 onBack = { screen = Screen.MAP },
             )
 
@@ -252,7 +273,7 @@ private fun MapRoot(
     zoom: Int,
     onOpenData: () -> Unit,
     onOpenSettings: () -> Unit,
-    onOpenSearch: () -> Unit,
+    onOpenSearch: (SearchMode) -> Unit,
     onRequestPermission: () -> Unit,
 ) {
     val colors = LocalRideColors.current
@@ -330,7 +351,7 @@ private fun MapRoot(
             ) {
                 SearchBar(
                     text = selection.destinationName,
-                    onClick = onOpenSearch,
+                    onClick = { onOpenSearch(SearchMode.DESTINATION) },
                     modifier = Modifier.weight(1f),
                 )
                 // The way back to your own position belongs where you look
@@ -410,6 +431,7 @@ private fun MapRoot(
             )
         }
 
+        val recentTrips by viewModel.recentTrips.collectAsState()
         RoutePlanSheet(
             settings = settings,
             profiles = viewModel.profiles(),
@@ -417,9 +439,19 @@ private fun MapRoot(
             destinationName = selection.destinationName,
             hasDestination = selection.isComplete,
             hasExplicitStart = selection.start != null,
+            via = selection.via,
+            roundTrip = selection.roundTrip,
+            recentTrips = recentTrips,
             onProfileChange = viewModel::setProfile,
             onCurvinessChange = viewModel::setCurviness,
             onAlternativesChange = viewModel::setAlternatives,
+            onRoundTripChange = viewModel::setRoundTrip,
+            onSuggestRoundTrip = viewModel::suggestRoundTrip,
+            onAddStop = { onOpenSearch(SearchMode.STOP) },
+            onMoveStopUp = viewModel::moveStopUp,
+            onMoveStopDown = viewModel::moveStopDown,
+            onRemoveStop = viewModel::removeStop,
+            onPickRecentTrip = viewModel::loadHistoryTrip,
             onCalculate = viewModel::calculateRoute,
             onStart = viewModel::startNavigation,
             onDemo = viewModel::startDemo,
@@ -580,12 +612,13 @@ private fun PoiCard(
 }
 
 @Composable
-private fun SearchRoot(viewModel: MapViewModel, onBack: () -> Unit) {
+private fun SearchRoot(viewModel: MapViewModel, mode: SearchMode, onBack: () -> Unit) {
     val query by viewModel.query.collectAsState()
     val results by viewModel.results.collectAsState()
     val indexState by viewModel.indexState.collectAsState()
     val searching by viewModel.searching.collectAsState()
     val navigationState by viewModel.navigationState.collectAsState()
+    val recentDestinations by viewModel.recentDestinations.collectAsState()
 
     SearchScreen(
         query = query,
@@ -593,9 +626,11 @@ private fun SearchRoot(viewModel: MapViewModel, onBack: () -> Unit) {
         indexState = indexState,
         searching = searching,
         near = navigationState.position ?: viewModel.mapController.center(),
+        mode = mode,
+        recentDestinations = recentDestinations,
         onQueryChange = viewModel::onQueryChange,
         onPick = {
-            viewModel.chooseSearchResult(it)
+            viewModel.chooseSearchResult(it, mode)
             onBack()
         },
         onBack = onBack,

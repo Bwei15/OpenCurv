@@ -174,7 +174,7 @@ private fun RegionRow(
     onDownload: () -> Unit,
 ) {
     val colors = LocalRideColors.current
-    val tiles = region.segmentTiles.size
+    val tiles = region.segmentTiles.size + (if (region.placesFile != null) 1 else 0)
 
     Row(
         modifier = Modifier

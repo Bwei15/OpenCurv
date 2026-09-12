@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generated": "2026-09-10T20:29:47Z",
+  "generated": "2026-09-12T14:17:59Z",
   "release": {
     "tag": "data-20260910",
     "repo": "Bwei15/OpenCurv",
@@ -45,8 +45,15 @@
         "provider": "geofabrik",
         "path": "europe/germany/niedersachsen"
       },
-      "totalBytes": 427006557,
+      "totalBytes": 554629725,
       "files": [
+        {
+          "name": "de-ni.places.sqlite",
+          "kind": "places",
+          "bytes": 127623168,
+          "sha256": "f96d360c9ba7d6cd68f1854323d33193b15423ab0a6ea02a2314d1eb8234aa75",
+          "url": "https://github.com/Bwei15/OpenCurv/releases/download/data-20260910/de-ni.places.sqlite"
+        },
         {
           "name": "de-ni.pmtiles",
           "kind": "maptiles",
@@ -77,5 +84,5 @@
       ]
     }
   ],
-  "totalBytes": 427079854
+  "totalBytes": 554703022
 }

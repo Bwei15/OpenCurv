@@ -57,6 +57,10 @@
     <string name="plan_distance">distance</string>
     <string name="plan_time">riding time</string>
     <string name="plan_climb">climb</string>
+    <!-- Collapsed sheet, route ready: "38 km · arr. 14:32" -->
+    <string name="plan_peek_summary">%1$s km · arr. %2$s</string>
+    <!-- De-emphasised line once the sheet is pulled out: "340 m climb · extreme 599 °/km" -->
+    <string name="plan_peek_detail">%1$d m climb · %2$s %3$d °/km</string>
 
     <string name="curviness_direct">direct</string>
     <string name="curviness_mild">mild</string>

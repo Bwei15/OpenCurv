@@ -82,6 +82,17 @@ class NavigationController(
     private var locationJob: Job? = null
     private var demoJob: Job? = null
 
+    /**
+     * The in-flight plan() calculation, if any.
+     *
+     * A profile or curviness change while a route already exists triggers an
+     * automatic recalculation (see [com.motoroute.domain.RecalcTrigger]); without
+     * this, the old request would keep running BRouter to completion alongside
+     * the new one - wasted CPU on a 4 GB phone, and a result that could land
+     * after the newer one and silently overwrite it.
+     */
+    private var planJob: Job? = null
+
     private val rerouting = ReroutingEngine(
         scope = scope,
         calculate = { from, to, via -> runCatching { calculate(listOf(from) + via + to) } },
@@ -159,19 +170,26 @@ class NavigationController(
 
     /** Calculates a route to [to] and parks it as the plan, without starting guidance. */
     fun plan(from: GeoPoint, to: GeoPoint, via: List<GeoPoint> = emptyList()) {
+        planJob?.cancel()
         destination = to
         viaPoints = via
         _planning.value = PlanningState.Calculating
-        scope.launch {
+        planJob = scope.launch {
             runCatching { calculate(listOf(from) + via + to) }
                 .onSuccess { _planning.value = PlanningState.Ready(it) }
                 .onFailure {
+                    // A cancellation means a newer plan() superseded this one
+                    // (see planJob's doc) - not a routing failure, so it must
+                    // not land in PlanningState.Failed and must keep
+                    // propagating for structured concurrency to work.
+                    if (it is kotlinx.coroutines.CancellationException) throw it
                     _planning.value = PlanningState.Failed(it.message ?: "routing failed")
                 }
         }
     }
 
     fun clearPlan() {
+        planJob?.cancel()
         _planning.value = PlanningState.Idle
         destination = null
         viaPoints = emptyList()

@@ -1,7 +1,7 @@
 package com.motoroute.ui.plan
 
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,16 +9,22 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -26,8 +32,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -41,6 +51,8 @@ import com.motoroute.ui.components.DraggableSheet
 import com.motoroute.ui.components.PrimaryButton
 import com.motoroute.ui.components.SecondaryButton
 import com.motoroute.ui.theme.LocalRideColors
+import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -52,6 +64,11 @@ import kotlin.math.roundToInt
  * underneath it is half the decision. Destinations come from the search box or
  * from a tap on the map; a long press sets where the route starts, which is
  * what makes planning without a GPS fix possible.
+ *
+ * The first row is pinned at the top of the content on purpose: it is the
+ * *entire* peek (see [DraggableSheet] - the peek height only ever reveals the
+ * top of the sheet), and it stays the first thing you see once dragged out
+ * too, so the ride button never needs a second, floating copy of itself.
  */
 @Composable
 fun RoutePlanSheet(
@@ -95,18 +112,16 @@ fun RoutePlanSheet(
                 .padding(bottom = 20.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            // Peek content: what the sheet has to say when it is pushed down.
-            Text(
-                text = destinationName
-                    ?: stringResource(
-                        if (hasDestination) R.string.plan_destination_pin else R.string.plan_no_destination,
-                    ),
-                color = colors.onPanel,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Black,
-                maxLines = 1,
+            PeekRow(
+                planning = planning,
+                destinationName = destinationName,
+                hasDestination = hasDestination,
+                onCalculate = onCalculate,
+                onStart = onStart,
             )
 
+            // Everything below here is outside the peek window - it only
+            // shows once the rider has actually dragged the sheet open.
             when (planning) {
                 PlanningState.Idle -> {
                     Text(
@@ -120,41 +135,35 @@ fun RoutePlanSheet(
                         color = colors.muted,
                         fontSize = 13.sp,
                     )
-                    PrimaryButton(
-                        label = stringResource(R.string.plan_calculate),
-                        enabled = hasDestination,
-                        onClick = onCalculate,
-                    )
                 }
 
-                PlanningState.Calculating -> {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.height(60.dp),
-                    ) {
-                        CircularProgressIndicator(
-                            color = colors.route,
-                            modifier = Modifier.size(26.dp),
-                        )
-                        Text(
-                            text = stringResource(R.string.plan_calculating),
-                            color = colors.onPanel,
-                            fontSize = 16.sp,
-                        )
-                    }
-                }
+                PlanningState.Calculating -> Unit
 
                 is PlanningState.Ready -> {
-                    RouteSummary(planning.route)
-                    PrimaryButton(
-                        label = stringResource(R.string.plan_start),
-                        onClick = { onStart(planning.route) },
+                    val route = planning.route
+                    // Climb and curviness used to sit in a four-up metrics
+                    // row with distance and time; both of those moved into
+                    // the peek line above, and these two are demoted to a
+                    // single small caption - useful, but not what the sheet
+                    // leads with any more.
+                    Text(
+                        text = stringResource(
+                            R.string.plan_peek_detail,
+                            route.ascendMeters,
+                            Curviness.label(route.curvinessScore),
+                            route.curvinessScore.roundToInt(),
+                        ),
+                        color = colors.muted,
+                        fontSize = 12.sp,
                     )
-                    SecondaryButton(
-                        label = stringResource(R.string.plan_demo),
-                        onClick = { onDemo(planning.route) },
-                    )
+                    TextButton(onClick = { onDemo(route) }) {
+                        Text(
+                            text = stringResource(R.string.plan_demo),
+                            color = colors.route,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                        )
+                    }
                     Text(
                         text = stringResource(R.string.plan_demo_hint),
                         color = colors.muted,
@@ -167,16 +176,6 @@ fun RoutePlanSheet(
                 }
 
                 is PlanningState.Failed -> {
-                    Text(
-                        text = planning.message,
-                        color = colors.danger,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    PrimaryButton(
-                        label = stringResource(R.string.plan_retry),
-                        onClick = onCalculate,
-                    )
                     SecondaryButton(
                         label = stringResource(R.string.plan_clear),
                         onClick = onClear,
@@ -205,7 +204,9 @@ fun RoutePlanSheet(
                                 fontSize = 14.sp,
                             )
                         },
-                        modifier = Modifier.height(46.dp),
+                        // 56 dp: the resting-register minimum (Design_System.md
+                        // §5), not the 46 dp this used to be.
+                        modifier = Modifier.height(56.dp),
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = colors.route,
                             selectedLabelColor = Color.Black,
@@ -252,36 +253,165 @@ fun RoutePlanSheet(
     }
 }
 
+/**
+ * The sheet's peek, in full: everything a rider needs without dragging
+ * anything open. A calculated route leads with the one number that matters -
+ * riding time - and a round ride button big enough not to be mistaken for a
+ * secondary action; anything still being decided gets a compact line plus
+ * whichever action applies, or a thin progress bar while BRouter is working.
+ */
 @Composable
-private fun RouteSummary(route: Route) {
+private fun PeekRow(
+    planning: PlanningState,
+    destinationName: String?,
+    hasDestination: Boolean,
+    onCalculate: () -> Unit,
+    onStart: (Route) -> Unit,
+) {
     val colors = LocalRideColors.current
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = PLAY_BUTTON_SIZE),
+        verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Metric(
-            String.format(Locale.getDefault(), "%.1f km", route.distanceMeters / 1000.0),
-            stringResource(R.string.plan_distance),
-        )
-        Metric(formatDuration(route.estimatedSeconds), stringResource(R.string.plan_time))
-        Metric("${route.ascendMeters} m", stringResource(R.string.plan_climb))
-        Metric(
-            Curviness.label(route.curvinessScore),
-            "${route.curvinessScore.roundToInt()} °/km",
-            colors.route,
-        )
+        when (planning) {
+            is PlanningState.Ready -> {
+                val route = planning.route
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = formatDuration(route.estimatedSeconds),
+                        color = colors.onPanel,
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Black,
+                    )
+                    Text(
+                        text = stringResource(
+                            R.string.plan_peek_summary,
+                            String.format(Locale.getDefault(), "%.0f", route.distanceMeters / 1000.0),
+                            formatArrival(route.estimatedSeconds),
+                        ),
+                        color = colors.muted,
+                        fontSize = 13.sp,
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                PlayButton(onClick = { onStart(route) })
+            }
+
+            PlanningState.Calculating -> {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = destinationName ?: stringResource(R.string.plan_calculating),
+                        color = colors.onPanel,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    LinearProgressIndicator(
+                        color = colors.route,
+                        trackColor = colors.panelSunken,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(2.dp)),
+                    )
+                }
+            }
+
+            else -> {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = destinationName
+                            ?: stringResource(
+                                if (hasDestination) R.string.plan_destination_pin else R.string.plan_no_destination,
+                            ),
+                        color = colors.onPanel,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Black,
+                        maxLines = 1,
+                    )
+                    if (planning is PlanningState.Failed) {
+                        Text(
+                            text = planning.message,
+                            color = colors.danger,
+                            fontSize = 12.sp,
+                            maxLines = 2,
+                        )
+                    }
+                }
+                if (hasDestination) {
+                    Spacer(Modifier.width(12.dp))
+                    PeekActionButton(
+                        label = stringResource(
+                            if (planning is PlanningState.Failed) R.string.plan_retry else R.string.plan_calculate,
+                        ),
+                        onClick = onCalculate,
+                    )
+                }
+            }
+        }
     }
 }
 
+/**
+ * The one button that matters once a route exists: round, in the accent
+ * colour rather than the route colour so it reads as "go" and not as part of
+ * the route readout, and at 64 dp well past the resting-register minimum so
+ * it is never mistaken for a secondary action.
+ */
 @Composable
-private fun Metric(
-    value: String,
-    caption: String,
-    color: Color = LocalRideColors.current.onPanel,
-) {
-    Column {
-        Text(value, color = color, fontSize = 20.sp, fontWeight = FontWeight.Black)
-        Text(caption, color = LocalRideColors.current.muted, fontSize = 11.sp)
+private fun PlayButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = LocalRideColors.current
+    val label = stringResource(R.string.plan_start)
+    Surface(
+        onClick = onClick,
+        shape = CircleShape,
+        color = colors.accent,
+        modifier = modifier
+            .size(PLAY_BUTTON_SIZE)
+            .semantics { contentDescription = label },
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                painter = painterResource(R.drawable.ic_action_start),
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(28.dp),
+            )
+        }
+    }
+}
+
+/**
+ * The "Calculate route" / "Try again" action in the peek row.
+ *
+ * Not [PrimaryButton]: that one insists on filling the width it is given,
+ * which is exactly wrong here - the peek row needs it to size to its own
+ * label and leave the rest to the destination text next to it, or a
+ * two-line wrap gets clipped by the peek's fixed height.
+ */
+@Composable
+private fun PeekActionButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = LocalRideColors.current
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(16.dp),
+        color = colors.route,
+        modifier = modifier.heightIn(min = 56.dp),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                text = label,
+                color = Color.Black,
+                fontWeight = FontWeight.Black,
+                fontSize = 15.sp,
+                maxLines = 1,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+            )
+        }
     }
 }
 
@@ -299,8 +429,23 @@ private fun formatDuration(seconds: Int): String {
     return if (hours > 0) "${hours} h ${minutes} min" else "$minutes min"
 }
 
-private val PEEK_HEIGHT_EMPTY = 60.dp
-private val PEEK_HEIGHT_DESTINATION = 132.dp
+/** Wall-clock arrival, computed from "now" - there is no other clock to ask offline. */
+private fun formatArrival(estimatedSeconds: Int): String {
+    val arrival = Calendar.getInstance().apply { add(Calendar.SECOND, estimatedSeconds) }
+    return SimpleDateFormat("HH:mm", Locale.getDefault()).format(arrival.time)
+}
+
+/** Peek height with no destination picked yet: just the hint text. */
+val PEEK_HEIGHT_EMPTY = 64.dp
+
+/**
+ * Peek height once a destination exists: tall enough for the 64 dp ride
+ * button plus its own breathing room, which is also enough for the
+ * destination-plus-calculate-button row and the progress bar.
+ */
+val PEEK_HEIGHT_DESTINATION = 96.dp
+
+private val PLAY_BUTTON_SIZE = 64.dp
 
 /**
  * A card, not a curtain: the old empty state covered the whole map until data

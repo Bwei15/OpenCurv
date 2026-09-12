@@ -1,7 +1,6 @@
 package com.motoroute.ui.components
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
@@ -31,26 +30,74 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
+import com.motoroute.ui.theme.Motion
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+
+/** Which end a [DraggableSheet] is resting at, or travelling toward. */
+enum class SheetTarget { EXPANDED, COLLAPSED }
+
+/**
+ * Decides where a released sheet should come to rest.
+ *
+ * Pure and Android-free, because "is this too stubborn" is exactly the
+ * question a unit test can answer without a finger on a device - which is
+ * how the old rule ("snap to whichever end is nearer") turned out to be the
+ * actual complaint: it made riders drag the sheet most of the way across
+ * before anything moved.
+ *
+ * [startedExpanded] is where the drag began - not the live position, which
+ * moves continuously while dragging, but the state the sheet had settled
+ * into before this gesture. [endFraction] is the release position, 0 at
+ * fully expanded and 1 at the peek. [velocityDpPerSecond] is the release
+ * velocity along the drag, positive toward the peek and negative toward
+ * fully expanded.
+ */
+fun snapTarget(
+    startedExpanded: Boolean,
+    endFraction: Float,
+    velocityDpPerSecond: Float,
+): SheetTarget = when {
+    velocityDpPerSecond > FLING_VELOCITY_DP -> SheetTarget.COLLAPSED
+    velocityDpPerSecond < -FLING_VELOCITY_DP -> SheetTarget.EXPANDED
+    // No fling: a quarter of the way off the state it started in is enough -
+    // see the class doc above for why that beats comparing to the midpoint.
+    startedExpanded -> if (endFraction >= SNAP_THRESHOLD) SheetTarget.COLLAPSED else SheetTarget.EXPANDED
+    else -> if (endFraction <= 1f - SNAP_THRESHOLD) SheetTarget.EXPANDED else SheetTarget.COLLAPSED
+}
+
+private const val SNAP_THRESHOLD = 0.25f
+private const val FLING_VELOCITY_DP = 600f
 
 /**
  * A bottom sheet the rider can push out of the way.
  *
  * The route panel used to be a fixed slab across the bottom of the map, so a
- * destination behind it could not be looked at, let alone tapped. This behaves
- * like the sheet on every phone map: drag it down to a peek, drag it back up
- * for the details, and it settles to whichever end it was nearer when let go.
+ * destination behind it could not be looked at, let alone tapped. This
+ * behaves like the sheet on every phone map: drag it down to a peek, drag it
+ * back up for the details, and it settles to whichever end the drag - or a
+ * fast flick - was actually headed for.
  *
- * Written by hand rather than with a scaffold because the sheet has to float
- * over a map that keeps its own gestures - anything that consumed the whole
- * screen's drag events would break panning.
+ * Unlike the first version, the whole plate is draggable, not just the
+ * handle: the handle gets its own small [draggable] (nothing scrollable
+ * lives there), and everything below it is one [verticalScroll] column
+ * wired through [NestedScrollConnection] so a vertical drag on a button, a
+ * chip or a line of text moves the sheet first and only scrolls the content
+ * once the sheet is fully open - standard bottom-sheet behaviour. The
+ * horizontal curviness slider is unaffected: its own drag detector is
+ * orientation-locked to the other axis, so it never competes for the same
+ * gesture.
  */
 @Composable
 fun DraggableSheet(
@@ -73,7 +120,22 @@ fun DraggableSheet(
     // (a different planning state, say) must not yank it back down again.
     var collapsedOnce by remember { mutableStateOf(false) }
     var lastMaxOffset by remember { mutableFloatStateOf(0f) }
+    // Where the sheet last came to rest. snapTarget() needs this, not the
+    // live offset, to tell "a small nudge away from fully open" apart from
+    // "a small nudge away from the peek" - same release position, opposite
+    // correct answer.
+    var restState by remember { mutableStateOf(SheetTarget.COLLAPSED) }
     val scope = rememberCoroutineScope()
+
+    suspend fun settleTo(target: SheetTarget) {
+        val value = if (target == SheetTarget.COLLAPSED) maxOffset else 0f
+        offset.animateTo(value, Motion.settle())
+        restState = target
+    }
+
+    fun dragBy(delta: Float) {
+        scope.launch { offset.snapTo((offset.value + delta).coerceIn(0f, maxOffset)) }
+    }
 
     LaunchedEffect(maxOffset) {
         offset.updateBounds(0f, maxOffset)
@@ -81,12 +143,77 @@ fun DraggableSheet(
         if (!collapsedOnce && maxOffset > 0f) {
             offset.snapTo(maxOffset)
             collapsedOnce = true
+            restState = SheetTarget.COLLAPSED
         } else if (wasCollapsed && maxOffset > 0f) {
-            offset.animateTo(maxOffset, tween(ANIMATION_MILLIS))
+            offset.animateTo(maxOffset, Motion.standard())
+            restState = SheetTarget.COLLAPSED
         } else if (offset.value > maxOffset) {
             offset.snapTo(maxOffset)
         }
         lastMaxOffset = maxOffset
+    }
+
+    // Makes the content's own verticalScroll cooperate with the sheet drag:
+    // an upward drag expands the sheet first and only scrolls once it is
+    // fully open (onPreScroll); a downward drag scrolls the content back to
+    // its top first and only collapses the sheet once there is nothing left
+    // to scroll (onPostScroll catches what the child could not consume). A
+    // release - fling or not - is decided by snapTarget() in onPreFling.
+    val nestedScrollConnection = remember(maxOffset) {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (source != NestedScrollSource.UserInput) return Offset.Zero
+                val delta = available.y
+                if (delta < 0f && offset.value > 0f) {
+                    val consumed = (offset.value + delta).coerceIn(0f, maxOffset) - offset.value
+                    dragBy(consumed)
+                    return Offset(0f, consumed)
+                }
+                return Offset.Zero
+            }
+
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource,
+            ): Offset {
+                if (source != NestedScrollSource.UserInput) return Offset.Zero
+                val delta = available.y
+                if (delta > 0f && offset.value < maxOffset) {
+                    val moved = (offset.value + delta).coerceIn(0f, maxOffset) - offset.value
+                    dragBy(moved)
+                    return Offset(0f, moved)
+                }
+                return Offset.Zero
+            }
+
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                val velocityDp = available.y / density.density
+                // At an extreme already and flinging further that way: there
+                // is nothing left for the sheet to do, so let the content's
+                // own momentum scroll run instead of swallowing it for free.
+                if (offset.value <= 0f && velocityDp < 0f) return Velocity.Zero
+                if (offset.value >= maxOffset && velocityDp > 0f) return Velocity.Zero
+                val target = snapTarget(
+                    startedExpanded = restState == SheetTarget.EXPANDED,
+                    endFraction = if (maxOffset > 0f) offset.value / maxOffset else 0f,
+                    velocityDpPerSecond = velocityDp,
+                )
+                scope.launch { settleTo(target) }
+                return available
+            }
+
+            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+                // The content flung itself to its own top with speed to
+                // spare: hand the rest to the sheet so it finishes the
+                // collapse instead of stopping dead at the boundary.
+                val velocityDp = available.y / density.density
+                if (velocityDp > 0f && offset.value < maxOffset) {
+                    settleTo(SheetTarget.COLLAPSED)
+                }
+                return Velocity.Zero
+            }
+        }
     }
 
     Surface(
@@ -96,26 +223,7 @@ fun DraggableSheet(
         modifier = modifier
             .fillMaxWidth()
             .offset { IntOffset(0, offset.value.roundToInt()) }
-            .onSizeChanged { contentHeightPx = it.height.toFloat() }
-            .draggable(
-                orientation = Orientation.Vertical,
-                state = rememberDraggableState { delta ->
-                    scope.launch {
-                        offset.snapTo((offset.value + delta).coerceIn(0f, maxOffset))
-                    }
-                },
-                onDragStopped = { velocity ->
-                    val collapse = when {
-                        velocity > FLING_VELOCITY -> true
-                        velocity < -FLING_VELOCITY -> false
-                        else -> offset.value > maxOffset / 2f
-                    }
-                    offset.animateTo(
-                        targetValue = if (collapse) maxOffset else 0f,
-                        animationSpec = tween(ANIMATION_MILLIS),
-                    )
-                },
-            ),
+            .onSizeChanged { contentHeightPx = it.height.toFloat() },
     ) {
         Column(
             modifier = Modifier
@@ -125,7 +233,20 @@ fun DraggableSheet(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(22.dp),
+                    .height(22.dp)
+                    .draggable(
+                        orientation = Orientation.Vertical,
+                        state = rememberDraggableState { delta -> dragBy(delta) },
+                        onDragStopped = { velocityPxPerSec ->
+                            val velocityDp = velocityPxPerSec / density.density
+                            val target = snapTarget(
+                                startedExpanded = restState == SheetTarget.EXPANDED,
+                                endFraction = if (maxOffset > 0f) offset.value / maxOffset else 0f,
+                                velocityDpPerSecond = velocityDp,
+                            )
+                            settleTo(target)
+                        },
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
                 Box(
@@ -138,12 +259,10 @@ fun DraggableSheet(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .nestedScroll(nestedScrollConnection)
                     .verticalScroll(rememberScrollState()),
                 content = content,
             )
         }
     }
 }
-
-private const val FLING_VELOCITY = 400f
-private const val ANIMATION_MILLIS = 220

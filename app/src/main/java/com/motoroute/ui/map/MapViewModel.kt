@@ -23,6 +23,7 @@ import com.motoroute.data.settings.MapTheme
 import com.motoroute.data.settings.Settings
 import com.motoroute.domain.NavigationState
 import com.motoroute.domain.PlanningState
+import com.motoroute.domain.RecalcTrigger
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -144,6 +145,7 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun clearSelection() {
+        recalcTrigger.cancel()
         _selection.value = PlanSelection()
         container.navigation.clearPlan()
         mapController.showRoute(null, 0)
@@ -239,9 +241,33 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
 
     // ---- settings ---------------------------------------------------------
 
-    fun setProfile(id: String) = container.settings.update { it.copy(profileId = id) }
+    /**
+     * Debounces a profile/curviness change into one automatic recalculation.
+     *
+     * Only matters once there is something to recalculate: a fresh plan
+     * still waits for the explicit "Calculate route" tap, so a rider who is
+     * still picking a profile is not sent on a 30-80 s BRouter run before
+     * they have even chosen a destination.
+     */
+    private val recalcTrigger = RecalcTrigger(viewModelScope)
 
-    fun setCurviness(value: Float) = container.settings.update { it.copy(curviness = value) }
+    private fun scheduleRecalc() {
+        if (_selection.value.destination == null) return
+        when (container.navigation.planning.value) {
+            is PlanningState.Ready, PlanningState.Calculating -> recalcTrigger.request(::calculateRoute)
+            else -> Unit
+        }
+    }
+
+    fun setProfile(id: String) {
+        container.settings.update { it.copy(profileId = id) }
+        scheduleRecalc()
+    }
+
+    fun setCurviness(value: Float) {
+        container.settings.update { it.copy(curviness = value) }
+        scheduleRecalc()
+    }
 
     fun setMapTheme(theme: MapTheme) = container.settings.update { it.copy(mapTheme = theme) }
 

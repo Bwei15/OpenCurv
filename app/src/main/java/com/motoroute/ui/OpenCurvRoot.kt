@@ -59,6 +59,8 @@ import com.motoroute.ui.navigation.GloveButton
 import com.motoroute.ui.navigation.SpeedCameraBanner
 import com.motoroute.ui.onboarding.OnboardingScreen
 import com.motoroute.ui.plan.MissingDataCard
+import com.motoroute.ui.plan.PEEK_HEIGHT_DESTINATION
+import com.motoroute.ui.plan.PEEK_HEIGHT_EMPTY
 import com.motoroute.ui.plan.RoutePlanSheet
 import com.motoroute.ui.search.SearchScreen
 import com.motoroute.ui.settings.SettingsScreen
@@ -284,7 +286,9 @@ private fun MapRoot(
     }
 
     val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val sheetPeek = if (selection.isComplete) 132.dp else 60.dp
+    // Kept in step with RoutePlanSheet's own peek height (same constants) so
+    // this spacer never leaves a gap under - or gets covered by - the sheet.
+    val sheetPeek = if (selection.isComplete) PEEK_HEIGHT_DESTINATION else PEEK_HEIGHT_EMPTY
     // Only shown at rest - navigating clears the tap handler above, so nothing sets this while riding.
     val selectedPoi by viewModel.selectedPoi.collectAsState()
 

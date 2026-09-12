@@ -125,6 +125,7 @@ _EXCLUDED_HIGHWAY = {
 }
 
 CENTROID_SAME_NAME_RADIUS_M = 5_000  # "5 km" rule from the Auftrag
+FALLBACK_STREET_RADIUS_M = 15_000
 STREET_ADDR_MATCH_RADIUS_M = 5_000   # how far an addr:street may be from a
                                       # way segment and still count as "an
                                       # dieser Strasse" for place resolution
@@ -466,10 +467,16 @@ def build_streets_and_addresses(street_segments, addresses, places):
             place_id = nearest_place(lat, lon)
         street_id = street_lookup.get((norm, place_id))
         if street_id is None:
-            # fall back to any street with this name regardless of place --
-            # better than dropping the address outright.
+            # fall back to the NEAREST street with this name. Picking the
+            # first one filed every unresolved "Georgstrasse 10" in the state
+            # under whichever town happened to be indexed first; a 15 km cap
+            # keeps a typo'd addr:city from attaching to a namesake far away.
             candidates = street_ids_by_norm.get(norm)
-            street_id = candidates[0] if candidates else None
+            street_id = None
+            if candidates:
+                best = min(candidates, key=lambda sid: haversine_m(lat, lon, streets[sid - 1][3], streets[sid - 1][4]))
+                if haversine_m(lat, lon, streets[best - 1][3], streets[best - 1][4]) <= FALLBACK_STREET_RADIUS_M:
+                    street_id = best
         if street_id is None:
             unmatched += 1
             continue

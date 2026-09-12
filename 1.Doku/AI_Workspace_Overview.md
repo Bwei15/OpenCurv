@@ -336,3 +336,22 @@ Diese Übersicht dokumentiert:
 7. **Build:** Java 17, Android SDK unter ~/Library/Android/sdk, adb/emulator ohne PATH, Gradle-Wrapper.
 
 Spätere KI-Sitzungen können diese Datei lesen, ohne die Architektur selbst durchzuarbeiten.
+
+---
+
+## Nachtrag 12.09.2026 (Wellen 6–8)
+
+Neue Pakete und Dateien, die oben noch fehlen:
+
+- **`data/traffic/`** — `AutobahnTrafficSource` (BMDV-Autobahn-API, kein Schlüssel), `TrafficUpdater` (Netzprüfung, 30-min-Takt, Cache `files/traffic_cache.json`), `TrafficRepository`, `MobilithekTrafficParser` (GeoJSON, Anzeige-Schema mit `role=="icon"`), `TrafficIncident.toNoGoAreas()`.
+- **`data/cameras/`** + **`domain/cameras/`** — `SpeedCameraRepository` (Assets `cameras/*.cameras.tsv` + `files/cameras/`), `SpeedCameraGrid`, `SpeedCameraWarner` (≤ 1 km, Richtung, Hysterese, Cooldown), Opt-in `settings.speedCameraWarnings`.
+- **`data/search/`** — Mapsforge-Pfad entfernt. `QueryParser` (Android-frei), `SqlitePlaceIndex` (liest `files/places/*.places.sqlite`), `PlaceIndexSource`; `PlaceKind.STREET/ADDRESS`.
+- **`data/history/RouteHistory`** — letzte Ziele/Touren in `files/history.json`.
+- **`domain/NoGoFilter`** (Korridor um die Wegpunkte), **`domain/RecalcTrigger`** (Debounce), **`domain/RoundTripPlanner`**.
+- **`data/download/`** — Katalog-Arten `maptiles`, `routing`, `cameras`, `places`; `SegmentTiles.canonicalName()` (Kachelname ohne Regionspräfix, sonst findet BRouter sie nicht); SHA-256-Prüfung; `MapCatalog.refreshFromNetwork()` über `api.github.com` (neuestes `data-*`-Release).
+- **`ui/map/MapController`** — Laufzeit-Layer: Puck (Dreieck), POI-Icons, `opencurv-traffic`, `opencurv-cameras`; `PoiHit`/`onPoiTap`.
+- **`ui/navigation/`** — HUD mit Klappmenü, `SpeedCameraAlert`/`SpeedCameraBanner`.
+- **`ui/components/DraggableSheet`** — `snapTarget()` (Weg + Fling), ganze Fläche ziehbar.
+- **Pipeline** — `build_cameras.py`, `build_places.py`; Katalog-Arten `cameras`, `places`.
+- **Tests** — App 300, Verifier 267 (`tools/verifier/build.gradle.kts` schließt Android-/UI-Klassen und -Tests aus; Test-Ressourcen aus `app/src/test/resources`).
+- **Karten-Abhängigkeit** — Mapsforge ist vollständig entfernt; nur noch MapLibre Native.

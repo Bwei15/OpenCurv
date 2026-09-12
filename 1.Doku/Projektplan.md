@@ -355,3 +355,49 @@ von Hausnummern gegen Orte) — dafür das große Modell.
 Tests (`testDebugUnitTest`, Verifier), Debug-APK, Emulator-Lauf mit
 Bildschirmfotos, Download-Nachweis, Projektplan und Workspace-Overview
 nachziehen.
+
+---
+
+## Fortschritt Welle 6–8 (Stand 12.09.2026)
+
+Arbeitsweise nach zwei Limit-Abbrüchen umgestellt: **ein Agent nach dem
+anderen**, Sonnet als Standard, kleine Aufträge, Worktrees von Hand
+(`git worktree add … main`), Abnahme durch die Orchestrierung. Details und
+Befunde je Schritt: `Welle6_7_Status.md`.
+
+### Abgeschlossen und in `main`
+
+| Schritt | Ergebnis | Beleg |
+| --- | --- | --- |
+| 6.1 Download-Reparatur | `release-assets.githubusercontent.com` + `api.github.com` erlaubt, Katalog aus neuestem `data-*`-Release, SHA-256/Größe geprüft (auch Resume). Niedersachsen (427 MB) im Emulator vollständig geladen — Welle 4 damit abgeschlossen. | `cde9996`, `design/screens/welle6_download_*` |
+| 6.2 Verkehrsdaten live | Autobahn-API (BMDV, ohne Schlüssel): Sperrungen, Baustellen, Warnungen; alle 30 min bei Netz, offline aus dem Cache; nur Vollsperrungen werden NoGos. | `5396877`, `Verkehrsdaten.md` |
+| 6.3 Blitzer | OSM `highway=speed_camera` je Region (Pipeline-Schritt + 1 275 Starter-Blitzer Niedersachsen), Warnung ≤ 1 km in Fahrtrichtung mit Ansage und rotem Vollbild, Opt-in (§23 StVO). | `159e925`, `Blitzer.md` |
+| 6.4 Adress-Index | Pipeline `build_places.py` → `<region>.places.sqlite` (Orte, Straßen, Hausnummern; Niedersachsen 122 MB, 2,45 Mio. Adressen, 5 min); App: Download-Art `places`, `QueryParser` („Georgstr. 10 Hannover“), `SqlitePlaceIndex`, Ranking; Mapsforge-Reste entfernt. Suche in 60–120 ms. | `762e4c7`, `c710a58`, `Ortssuche.md`, `design/screens/welle8_suche_adresse.png` |
+| 7.1 Karten-Overlays | Dreieck-Puck, Sperrungen rot mit Barriere-Icon, Blitzer-Icons, POI-Tippkarte („Als Ziel“/„Zwischenziel“), Karte in Fahrt gekippt (≥ 45°), Kipp-Bug nach Demo behoben. | `20530c7`, `64f1cf1` |
+| 7.2a Sheet | Von überall ziehbar, Einrasten nach Weg + Fling, Peek mit Fahrzeit + rundem Play-Knopf, Auto-Neuberechnung bei Profil/Kurvenhunger (400 ms Debounce, Cancel). | `b05085a` |
+| 7.2b Touren & Verlauf | Stoppliste (umordnen/löschen), Stopp per Suche/Langdruck, Rundtour-Schalter + Vorschlag nach Wunschlänge, letzte Ziele in der Suche, letzte Touren im Sheet. | `e2705aa` |
+| 7.2c/d Routing | **Kacheln wurden nie benutzt:** Katalogname `de-ni_E5_N50.rd5` ≠ BRouter-Name `E5_N50.rd5` → App routete auf altem Tile ohne Kurven-Tag; jetzt kanonische Namen. Alternativen 3→1, `pass1coefficient` 1.5, Profile nachgeschärft (curvy(2) kurvigste Option, +30–50 % Länge). NoGo-Korridorfilter (2 281 → 4 Kreise; Auslöser war ein Wegpunkt bei (0,0) ohne GPS). | `68f2d22`, `80da8b0`, `Kurven_Score.md` §13 |
+| 7.3 HUD | Kurvigkeit raus, Ankunft/Restkilometer klein unten links, Tempolimit-Schild + Tacho als ein Element rechts, Lautstärke/Neuladen/Beenden als Klappmenü, Zentrieren eigenständig, Blitzer-Warnung im HUD + Banner im Ruhebildschirm. | `bef52d6` |
+
+Abnahme: App-Unit-Tests 300/300, JVM-Verifier 267/267, Debug- und
+Release-APK bauen.
+
+### Offen nach Welle 8
+
+1. **Routing-Tempo auf dem Emulator**: JVM 0,1 s (2 km) / 0,9 s (69 km),
+   Emulator 5–12 s (2 km), 40 km laufen in den 60-s-Timeout. Thread-Dump zeigt
+   reine Java-Dekodierung der Kacheln (`DirectWeaver`) — kein Warten. Der
+   Emulator rendert die Karte per Software-GPU bei 320 % CPU; ob ein echtes
+   Gerät betroffen ist, ist **nicht gemessen** (Release-Build-Vergleich lief
+   beim Schreiben noch). Falls ja: Kachel-Dekodierung cachen
+   (`RoutingEngine`/`NodesCache` zwischen Anfragen halten).
+2. **POI-Icons (Tankstelle/Restaurant)** rendern trotz Laufzeit-Layer nicht;
+   Debug-Ansatz in `Welle6_7_Status.md`.
+3. Kleinere UI-Nits: Anstiegs-Zeile lugt im Peek hervor; Peek-Knopf im
+   ausgezogenen Sheet oben abgeschnitten; Zielname aus der Suche erscheint
+   nicht im Sheet („Destination on the map“ statt „Hameln“).
+4. `de-ni.places.sqlite` (122 MB) und `de-ni.cameras.tsv` müssen ins Release
+   `data-20260910` hochgeladen und `catalog.json` ergänzt werden — oder die
+   Pipeline (`opencurv-data.yml`) läuft neu. **Entscheidung des Auftraggebers.**
+5. Landes-/Bundesstraßen-Sperrungen (Mobilithek, DATEX II) brauchen eine
+   Registrierung; nur Erweiterungspunkt vorhanden.

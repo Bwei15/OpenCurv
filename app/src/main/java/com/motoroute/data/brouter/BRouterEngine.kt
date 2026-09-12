@@ -126,9 +126,16 @@ class BRouterEngine(
         val cancellation = this.coroutineContext[Job]?.invokeOnCompletion { cause ->
             if (cause != null) engine.terminate()
         }
+        // TEMP diagnostics: dump the routing thread's stack after 10 s.
+        val routingThread = Thread.currentThread()
+        val watchdog = Thread {
+            try { Thread.sleep(10_000) } catch (_: InterruptedException) { return@Thread }
+            log("STACK after 10 s:\n" + routingThread.stackTrace.take(25).joinToString("\n") { "  at $it" })
+        }.apply { isDaemon = true; start() }
         try {
             engine.doRun(request.maxRunningTimeMillis)
         } finally {
+            watchdog.interrupt()
             cancellation?.dispose()
             // One line per call: everything needed to spot a slow leg (context
             // setup incl. nogo prep, the RoutingContext/lookups parse, the

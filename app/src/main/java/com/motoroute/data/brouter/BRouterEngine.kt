@@ -58,7 +58,6 @@ class BRouterEngine(
 
     suspend fun route(request: RouteRequest): Route = withContext(dispatcher) {
         val tEnter = System.currentTimeMillis()
-        android.util.Log.d("BRouterEngine", "route() entered on ${Thread.currentThread().name}")
         require(request.waypoints.size >= 2) { "need at least a start and a destination" }
         if (!request.profile.isFile) {
             throw RoutingException("routing profile missing: ${request.profile.name}")
@@ -114,10 +113,10 @@ class BRouterEngine(
             }
         }
 
-        android.util.Log.d("BRouterEngine", "context ready after ${System.currentTimeMillis() - tEnter} ms")
+        val tContextReady = System.currentTimeMillis()
         val engine = RoutingEngine(null, null, request.segmentDir, nodes, rc, 0)
         engine.quite = true
-        android.util.Log.d("BRouterEngine", "engine constructed after ${System.currentTimeMillis() - tEnter} ms")
+        val tEngineReady = System.currentTimeMillis()
 
         // BRouter's search is a plain blocking loop that polls a termination
         // flag. Wiring coroutine cancellation to it means a rider who changes
@@ -125,13 +124,19 @@ class BRouterEngine(
         val cancellation = this.coroutineContext[Job]?.invokeOnCompletion { cause ->
             if (cause != null) engine.terminate()
         }
-        val t0 = System.currentTimeMillis()
-        android.util.Log.d("BRouterEngine", "doRun start alt=${request.alternativeIndex} nogos=${request.noGos.size}")
         try {
             engine.doRun(request.maxRunningTimeMillis)
         } finally {
-            android.util.Log.d("BRouterEngine", "doRun done in ${System.currentTimeMillis() - t0} ms")
             cancellation?.dispose()
+            // One line per call: everything needed to spot a slow leg (context
+            // setup incl. nogo prep, the RoutingContext/lookups parse, the
+            // actual search) without flooding logcat on every route.
+            android.util.Log.d(
+                "BRouterEngine",
+                "route alt=${request.alternativeIndex} nogos=${request.noGos.size} " +
+                    "contextMs=${tContextReady - tEnter} engineCtorMs=${tEngineReady - tContextReady} " +
+                    "doRunMs=${System.currentTimeMillis() - tEngineReady} totalMs=${System.currentTimeMillis() - tEnter}",
+            )
         }
         ensureActive()
 

@@ -110,6 +110,55 @@ class RegionStoreTest {
     }
 
     @Test
+    fun `a record with a prefixed catalog tile name still finds its canonical file`() {
+        // Our own pipeline's catalog calls the tile "de-ni_E5_N50.rd5" (see
+        // SegmentTiles.canonicalName), but the download only ever writes the
+        // bare grid name to segmentDir - status() has to bridge that gap.
+        val niedersachsen = RegionRecord(
+            path = "europe/germany/niedersachsen",
+            name = "Niedersachsen",
+            country = "Deutschland",
+            mapFile = "niedersachsen.map",
+            segmentFiles = listOf("de-ni_E5_N50.rd5", "de-ni_E10_N50.rd5"),
+        )
+        store.install(niedersachsen)
+        write(maps, "niedersachsen.map", 10)
+        write(segments, "E5_N50.rd5", 10)
+        write(segments, "E10_N50.rd5", 10)
+
+        val status = store.statuses().single()
+        assertTrue(status.isComplete)
+        assertEquals(30L, status.sizeBytes)
+    }
+
+    @Test
+    fun `deleting a region keeps a tile another region claims under a different prefix`() {
+        // Niedersachsen's catalog entry names the tile "de-ni_E5_N50.rd5",
+        // Schleswig-Holstein's names the very same grid cell plainly - both
+        // resolve to the one "E5_N50.rd5" file actually on disk, so deleting
+        // one must not take it.
+        val niedersachsen = RegionRecord(
+            path = "europe/germany/niedersachsen",
+            name = "Niedersachsen",
+            country = "Deutschland",
+            mapFile = "niedersachsen.map",
+            segmentFiles = listOf("de-ni_E5_N50.rd5", "de-ni_E10_N50.rd5"),
+        )
+        store.install(niedersachsen)
+        store.install(schleswig)
+        write(maps, "niedersachsen.map", 10)
+        write(maps, "schleswig-holstein.map", 10)
+        write(segments, "E5_N50.rd5", 10)
+        write(segments, "E10_N50.rd5", 10)
+
+        store.delete(niedersachsen.path)
+
+        assertTrue("a tile claimed under another prefix stays", File(segments, "E5_N50.rd5").exists())
+        assertFalse("a tile no one else needs goes", File(segments, "E10_N50.rd5").exists())
+        assertTrue(File(maps, "schleswig-holstein.map").exists())
+    }
+
+    @Test
     fun `files from an older install are adopted as their region`() {
         write(maps, "niedersachsen.map", 10)
         write(segments, "E5_N50.rd5", 10)

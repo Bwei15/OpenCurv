@@ -62,9 +62,23 @@ class DownloadRepository(
             } else {
                 add(DownloadTarget.map(region))
             }
-            region.segmentTiles.forEach { add(DownloadTarget.segment(it, region)) }
+            region.segmentTiles.forEach { add(segmentTarget(it, region)) }
         }
         enqueue(targets)
+    }
+
+    /**
+     * [DownloadTarget.segment] for [tile], but saved under the name BRouter
+     * actually looks for (see [SegmentTiles.canonicalName]).
+     *
+     * The catalog entry, its URL and its checksum stay keyed by the tile name
+     * the server uses (e.g. `de-ni_E5_N50.rd5`); only the file this writes to
+     * disk is renamed, to the bare grid name BRouter's segment lookup expects.
+     */
+    private fun segmentTarget(tile: String, region: MapRegion): DownloadTarget {
+        val target = DownloadTarget.segment(tile, region)
+        val canonical = SegmentTiles.canonicalName(tile)
+        return if (canonical == target.fileName) target else target.copy(fileName = canonical)
     }
 
     /** Queues [targets], skipping anything already on disk. */

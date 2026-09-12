@@ -50,4 +50,26 @@ object SegmentTiles {
     /** Rounds a coordinate down to the tile grid. */
     private fun snap(degrees: Double): Int =
         (floor(degrees / TILE_DEGREES) * TILE_DEGREES).toInt()
+
+    /** Matches the bare grid name at the end of a (possibly prefixed) tile file name. */
+    private val GRID_NAME = Regex("""[EW]\d+_[NS]\d+\.rd5$""")
+
+    /**
+     * The name BRouter actually looks for on disk.
+     *
+     * BRouter's segment lookup (`NodesCache.fileForSegment`, vendored in
+     * `brouter/`) derives a tile's file name purely from the lon/lat grid cell
+     * it is routing through - e.g. `E5_N50.rd5` - and never looks at anything
+     * else in `segmentDir`. A catalog is free to label the same tile with a
+     * prefix, e.g. our own pipeline's `de-ni_E5_N50.rd5` (kept distinct from
+     * brouter.de's plain `E5_N50.rd5` of the same grid cell so a release can
+     * carry both), but that label has to come back off before the file is
+     * written to or read from `segmentDir` - otherwise BRouter silently finds
+     * nothing there and the tile (with it, the whole `opencurv:curve` score)
+     * is never used. This is the one place that convention is decided, so
+     * every other file in this package runs tile names through it before
+     * touching disk.
+     */
+    fun canonicalName(fileName: String): String =
+        GRID_NAME.find(fileName)?.value ?: fileName
 }

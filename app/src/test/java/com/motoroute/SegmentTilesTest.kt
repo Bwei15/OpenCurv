@@ -55,6 +55,22 @@ class SegmentTilesTest {
     }
 
     @Test
+    fun `canonicalName strips a pipeline prefix back to the grid name`() {
+        // BRouter's own lookup (NodesCache.fileForSegment) only ever asks for
+        // the bare grid name - a catalog entry prefixed per-region has to lose
+        // that prefix before it is written to or read from segmentDir.
+        assertEquals("E5_N50.rd5", SegmentTiles.canonicalName("de-ni_E5_N50.rd5"))
+        assertEquals("E10_N50.rd5", SegmentTiles.canonicalName("de-ni_E10_N50.rd5"))
+        assertEquals("W5_S5.rd5", SegmentTiles.canonicalName("some_region_W5_S5.rd5"))
+    }
+
+    @Test
+    fun `canonicalName leaves an already-plain tile name alone`() {
+        assertEquals("E5_N50.rd5", SegmentTiles.canonicalName("E5_N50.rd5"))
+        assertEquals("not-a-tile.rd5", SegmentTiles.canonicalName("not-a-tile.rd5"))
+    }
+
+    @Test
     fun `a whole country still yields a sane number of tiles`() {
         val germany = BoundingBox(minLat = 47.2, minLon = 5.8, maxLat = 55.1, maxLon = 15.1)
         val tiles = SegmentTiles.covering(germany)

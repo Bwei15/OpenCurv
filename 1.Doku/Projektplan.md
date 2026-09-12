@@ -387,16 +387,20 @@ Release-APK bauen.
 1. **Routing-Tempo auf dem Emulator**: JVM 0,1 s (2 km) / 0,9 s (69 km),
    Emulator 5–12 s (2 km), 40 km laufen in den 60-s-Timeout. Thread-Dump zeigt
    reine Java-Dekodierung der Kacheln (`DirectWeaver`) — kein Warten. Der
-   Emulator rendert die Karte per Software-GPU bei 320 % CPU; ob ein echtes
-   Gerät betroffen ist, ist **nicht gemessen** (Release-Build-Vergleich lief
-   beim Schreiben noch). Falls ja: Kachel-Dekodierung cachen
-   (`RoutingEngine`/`NodesCache` zwischen Anfragen halten).
+   Emulator rendert die Karte per Software-GPU bei 320 % CPU. **Gemessen im
+   Release-Build (R8, nicht debuggable):** `doRun` 2,3 s statt 10–22 s im
+   Debug-Build für dieselbe Kurzstrecke — der Debug-Build ist der Hauptfaktor.
+   Auf einem echten Gerät mit Release-APK nachmessen; erst dann ggf.
+   Kachel-Dekodierung zwischen Anfragen cachen.
 2. **POI-Icons (Tankstelle/Restaurant)** rendern trotz Laufzeit-Layer nicht;
    Debug-Ansatz in `Welle6_7_Status.md`.
 3. Kleinere UI-Nits: Anstiegs-Zeile lugt im Peek hervor; Peek-Knopf im
    ausgezogenen Sheet oben abgeschnitten; Zielname aus der Suche erscheint
    nicht im Sheet („Destination on the map“ statt „Hameln“).
-4. `de-ni.places.sqlite` (122 MB) und `de-ni.cameras.tsv` müssen ins Release
+4. **Ohne Adress-Index ist die Suche in der Release-App fast leer** (nur die
+   129 Starter-Orte; „Hameln“ wird nicht gefunden). `de-ni.places.sqlite`
+   (122 MB, liegt lokal im Scratch der Sitzung und auf dem Emulator) und
+   `de-ni.cameras.tsv` müssen ins Release
    `data-20260910` hochgeladen und `catalog.json` ergänzt werden — oder die
    Pipeline (`opencurv-data.yml`) läuft neu. **Entscheidung des Auftraggebers.**
 5. Landes-/Bundesstraßen-Sperrungen (Mobilithek, DATEX II) brauchen eine

@@ -173,9 +173,9 @@ in kleinere Schritte geteilt, höchstens 2–3 Screenshots je Agent.
 | 3 | 7.2a Sheet | Sonnet | **erledigt**, gemergt `b05085a` (247 Tests). Nit für Welle 8: Anstiegs-Zeile lugt im Peek unten hervor. Ursprünglich: Sheet von überall ziehbar, Einrasten, Peek mit Play-Knopf, Auto-Neuberechnung, NoGo-Bbox-Filter |
 | 4 | 7.2b Touren | Sonnet | **erledigt** (276 Tests; Agent am Limit abgebrochen, Stand von der Orchestrierung geprüft und committet). Nits für Welle 8: im ausgezogenen Sheet wird der Peek-Knopf oben abgeschnitten; Rundtour-Vorschlag auf dem Emulator noch nicht durchgespielt. Ursprünglich: Stoppliste, Rundtour, Verlauf (letzte Ziele/Touren) |
 | 5 | 7.2c Profile & Routing-Tempo | Sonnet | **erledigt** `68f2d22` + Nachtrag 7.2d `80da8b0` (262 Tests). Tile-Namenskollision behoben (App nutzte nie die getaggten Kacheln), Alternativen 3→1, `pass1coefficient` 1.5, Profile nachgeschärft (curvy(2) +30–50 % länger, kurvigste Option). NoGo-Filter jetzt Korridor statt Bounding-Box (2 281 → 4 Kreise; Ursache war ein Ausreißer-Wegpunkt bei (0,0) ohne GPS-Fix). Emulator: 1 km kalt ~12 s, warm ~5 s — `doRun` dominiert, JVM 89 ms; auf echtem Gerät zu messen. Ursprünglich: JVM-Messung curvy/fast/enduro auf Niedersachsen, Profile nachschärfen. **Neu:** Routing dauert auf dem Emulator 47 s für 2 km ohne NoGos, 82 s mit; 8 km laufen in den 60-s-Timeout (`pass0 timeout`). Ursachen prüfen: `routeCurviest` rechnet 4 Routen, `pass1coefficient = 2.0`, 48 MB Node-Cache, altes 182-MB-`E5_N50.rd5` neben dem neuen `de-ni_E5_N50.rd5` im Segmentordner. |
-| 6 | 6.4a Pipeline | Sonnet | **läuft** (Worktree `w64a`) — `build_places.py`, Workflow, Katalog-Art `places` |
-| 7 | 6.4b Suche | Sonnet | Download `places`/`cameras`, `SqlitePlaceIndex`, `QueryParser`, Mapsforge-Reste raus |
-| 8 | Welle 8 | Orchestrierung | Abnahme |
+| 6 | 6.4a Pipeline | Sonnet | **erledigt** `762e4c7` (Zuordnungs-Fix durch Orchestrierung). Ursprünglich: `build_places.py`, Workflow, Katalog-Art `places` |
+| 7 | 6.4b Suche | Sonnet | **erledigt** `c710a58`, Adresse in 87 ms gefunden (`design/screens/welle8_suche_adresse.png`). Ursprünglich: Download `places`/`cameras`, `SqlitePlaceIndex`, `QueryParser`, Mapsforge-Reste raus |
+| 8 | Welle 8 | Orchestrierung | **erledigt** `dd7a5b0`: App 300/300, Verifier 267/267, Debug + Release bauen; Befunde und offene Punkte im Projektplan („Fortschritt Welle 6–8“). |
 
 ### Befunde der Orchestrierung (11.09.2026, spät)
 - `NoGoFilter` (Bounding-Box der Wegpunkte + 30 km) ist in `main` (`bef52d6`), mit Test.

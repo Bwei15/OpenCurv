@@ -45,8 +45,14 @@ object EnglishPhrasebook : Phrasebook {
         AnnouncementKind.SPEED_CAMERA -> speedCameraPhrase(a)
     }
 
-    private fun speedCameraPhrase(a: VoiceAnnouncement): String =
-        a.speedCameraLimitKmh?.let { "Speed camera ahead, ${it}" } ?: "Speed camera ahead"
+    private fun speedCameraPhrase(a: VoiceAnnouncement): String {
+        // Most important first, then the number the rider has to act on. A bare
+        // "Speed camera ahead, 70" - the first version - said neither how far
+        // nor what the 70 meant.
+        val where = if (a.distanceMeters > 0) "in ${distanceWords(a.distanceMeters)}" else "ahead"
+        val limit = a.speedCameraLimitKmh?.let { ", limit $it" }.orEmpty()
+        return "Speed camera $where$limit"
+    }
 
     private fun curveWarning(a: VoiceAnnouncement): String =
         if (a.comboCount >= 3) "Attention, sequence of bends" else "Attention, ${sharpName(a.maneuver)}"
@@ -116,8 +122,11 @@ object GermanPhrasebook : Phrasebook {
         AnnouncementKind.SPEED_CAMERA -> speedCameraPhrase(a)
     }
 
-    private fun speedCameraPhrase(a: VoiceAnnouncement): String =
-        a.speedCameraLimitKmh?.let { "Achtung, Blitzer, $it" } ?: "Achtung, Blitzer"
+    private fun speedCameraPhrase(a: VoiceAnnouncement): String {
+        val where = if (a.distanceMeters > 0) "in ${distanceWords(a.distanceMeters)}" else "voraus"
+        val limit = a.speedCameraLimitKmh?.let { ", erlaubt $it" }.orEmpty()
+        return "Blitzer $where$limit"
+    }
 
     private fun curveWarning(a: VoiceAnnouncement): String =
         if (a.comboCount >= 3) "Achtung, mehrere Kurven" else "Achtung, ${sharpName(a.maneuver)}"

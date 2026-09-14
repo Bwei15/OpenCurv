@@ -118,6 +118,11 @@ class NavigationController(
                 voice.speak(
                     VoiceAnnouncement(
                         kind = AnnouncementKind.SPEED_CAMERA,
+                        // The distance is what turns "Achtung, Blitzer" into
+                        // something a rider can act on, and it is why the
+                        // warner now fires once per tier instead of once per
+                        // camera - see domain/cameras/CameraWarningTiming.kt.
+                        distanceMeters = it.distanceMeters.toInt(),
                         speedCameraLimitKmh = it.maxSpeedKmh,
                     ),
                 )

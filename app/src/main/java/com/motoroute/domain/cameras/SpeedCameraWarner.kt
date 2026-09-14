@@ -41,11 +41,20 @@ data class SpeedCameraWarning(
  *    the start conditions) until the camera is more than
  *    [RELEASE_RADIUS_M] away or has been passed (bearing to it now differs
  *    from heading by more than [PASSED_BEARING_DIFF_DEG]);
- *  - the same camera announces at most once per [COOLDOWN_MILLIS] - the
- *    persistent [warning] state is not subject to this, only the one-shot
- *    [announcements] signal the voice layer speaks from, so a rider who loops
- *    back past the same camera twice inside three minutes still sees the red
- *    screen both times but only hears it once.
+ *  - a camera is announced once per [CameraWarningTiming] tier as the rider
+ *    closes on it - roughly 1000, 500 and 250 m at Landstraße speed, scaled by
+ *    how fast the bike is actually going - and each call carries the distance
+ *    and the posted limit. The first version said one thing, once, at whatever
+ *    distance the camera happened to be first seen; the ride report asked for
+ *    the staged version, which is also how every other warning in this app
+ *    works (see `domain/guidance/AnnouncementTiming.kt`);
+ *  - within one approach a tier never repeats, and crossing two tiers between
+ *    fixes announces only the nearer one;
+ *  - the whole approach re-arms only after [COOLDOWN_MILLIS] - the persistent
+ *    [warning] state is not subject to this, only the one-shot [announcements]
+ *    signal the voice layer speaks from, so a rider who loops back past the
+ *    same camera twice inside three minutes sees the warning both times but
+ *    hears it once.
  */
 class SpeedCameraWarner(private var grid: SpeedCameraGrid = SpeedCameraGrid(emptyList())) {
 
@@ -61,6 +70,15 @@ class SpeedCameraWarner(private var grid: SpeedCameraGrid = SpeedCameraGrid(empt
 
     private var activeCamera: SpeedCamera? = null
     private val lastAnnouncedAtMillis = HashMap<String, Long>()
+
+    /**
+     * Deepest tier already spoken for the camera currently being approached.
+     *
+     * Per-approach rather than per-camera-forever: it resets when the camera
+     * releases, so riding past the same camera tomorrow gets the full set of
+     * calls again (subject to [COOLDOWN_MILLIS]).
+     */
+    private var announcedTier = -1
 
     /** Swaps in a freshly loaded camera set (e.g. after a region download completes). */
     fun updateCameras(grid: SpeedCameraGrid) {
@@ -95,10 +113,12 @@ class SpeedCameraWarner(private var grid: SpeedCameraGrid = SpeedCameraGrid(empt
             val passed = speedMps >= MIN_SPEED_MPS &&
                 Geo.bearingDifference(headingDegrees, bearingToCamera) > PASSED_BEARING_DIFF_DEG
             if (distance > RELEASE_RADIUS_M || passed) {
-                activeCamera = null
-                _warning.value = null
+                clear()
             } else {
                 _warning.value = SpeedCameraWarning(active, distance, active.maxSpeedKmh)
+                // Still approaching: this is where the second and third calls
+                // come from, which the first version had no way to produce.
+                maybeAnnounce(active, distance, speedMps, nowMillis)
                 return
             }
         }
@@ -109,13 +129,39 @@ class SpeedCameraWarner(private var grid: SpeedCameraGrid = SpeedCameraGrid(empt
         val camera = bestCandidate(point, headingDegrees) ?: return
         val distance = Geo.distanceMeters(point, camera.point)
         activeCamera = camera
+        announcedTier = -1
         _warning.value = SpeedCameraWarning(camera, distance, camera.maxSpeedKmh)
+        maybeAnnounce(camera, distance, speedMps, nowMillis)
+    }
 
-        val lastAnnounced = lastAnnouncedAtMillis[camera.id]
-        if (lastAnnounced == null || nowMillis - lastAnnounced >= COOLDOWN_MILLIS) {
-            lastAnnouncedAtMillis[camera.id] = nowMillis
-            _announcements.tryEmit(SpeedCameraWarning(camera, distance, camera.maxSpeedKmh))
+    /**
+     * Speaks the deepest tier that has come due and not yet been spoken.
+     *
+     * The cooldown is checked against the *approach*, not the tier: a camera
+     * first seen at 900 m gets its three calls on the way in, and only a second
+     * approach minutes later starts the set over.
+     */
+    private fun maybeAnnounce(
+        camera: SpeedCamera,
+        distanceMeters: Double,
+        speedMps: Double,
+        nowMillis: Long,
+    ) {
+        val tier = CameraWarningTiming.deepestDueTierIndex(distanceMeters, speedMps)
+        if (tier < 0 || tier <= announcedTier) return
+
+        val lastApproach = lastAnnouncedAtMillis[camera.id]
+        val startingNewApproach = announcedTier < 0
+        if (startingNewApproach && lastApproach != null && nowMillis - lastApproach < COOLDOWN_MILLIS) {
+            // Same camera again too soon: show it, stay quiet, and do not let
+            // the later tiers speak either.
+            announcedTier = CameraWarningTiming.LAST_TIER_INDEX
+            return
         }
+        if (startingNewApproach) lastAnnouncedAtMillis[camera.id] = nowMillis
+
+        announcedTier = tier
+        _announcements.tryEmit(SpeedCameraWarning(camera, distanceMeters, camera.maxSpeedKmh))
     }
 
     /** Nearest camera within range whose approach and direction conditions all hold. */
@@ -141,15 +187,22 @@ class SpeedCameraWarner(private var grid: SpeedCameraGrid = SpeedCameraGrid(empt
 
     private fun clear() {
         activeCamera = null
+        announcedTier = -1
         _warning.value = null
     }
 
     companion object {
-        /** A camera further than this is not worth warning about yet. */
-        const val WARN_RADIUS_M = 1000.0
+        /**
+         * A camera further than this is not worth looking at yet.
+         *
+         * Comes from [CameraWarningTiming] rather than being a number of its
+         * own: the widest tier can fire at 1400 m on an Autobahn, and a search
+         * radius below that would mean the tier exists but never happens.
+         */
+        val WARN_RADIUS_M: Double get() = CameraWarningTiming.SEARCH_RADIUS_METERS
 
         /** Hysteresis: an active warning survives until the camera is this far away. */
-        const val RELEASE_RADIUS_M = 1200.0
+        val RELEASE_RADIUS_M: Double get() = CameraWarningTiming.SEARCH_RADIUS_METERS + 200.0
 
         /** Max bearing error, rider -> camera, to count as "heading towards it". */
         const val APPROACH_BEARING_DIFF_DEG = 35.0

@@ -1,11 +1,13 @@
 package com.motoroute.ui.navigation
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -19,7 +21,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -37,7 +45,9 @@ import com.motoroute.ui.theme.Scrim
 import com.motoroute.ui.theme.Space
 import com.motoroute.ui.theme.TypeScale
 import java.util.Locale
+import kotlin.math.cos
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 /** Maps a maneuver onto its vector icon. */
 fun Maneuver.iconRes(): Int = when (this) {
@@ -86,7 +96,20 @@ fun ManeuverIcon(
     modifier: Modifier = Modifier,
     size: Dp = 104.dp,
     tint: Color = LocalRideColors.current.hudForeground,
+    /** 1-based exit number; a roundabout with one is drawn rather than iconified. */
+    roundaboutExit: Int = 0,
 ) {
+    val isRoundabout = maneuver == Maneuver.ROUNDABOUT || maneuver == Maneuver.ROUNDABOUT_LEFT
+    if (isRoundabout && roundaboutExit > 0) {
+        RoundaboutIcon(
+            exit = roundaboutExit,
+            mirrored = maneuver == Maneuver.ROUNDABOUT_LEFT,
+            modifier = modifier,
+            size = size,
+            tint = tint,
+        )
+        return
+    }
     Icon(
         painter = painterResource(maneuver.iconRes()),
         contentDescription = maneuver.label(),
@@ -94,6 +117,105 @@ fun ManeuverIcon(
         modifier = modifier.size(size),
     )
 }
+
+/**
+ * A roundabout drawn as a ring with the exit number inside it.
+ *
+ * The static vector this replaces showed a generic ring-with-an-arrow and left
+ * the exit number to a line of small text beside it - so the one piece of
+ * information the rider actually needs ("which exit?") was the smallest thing
+ * on the bar. Here the number *is* the icon: an open ring, like a reload
+ * glyph, with a gap at the bottom where the rider enters, an arrowhead at the
+ * top, and the exit number filling the middle.
+ *
+ * Everything scales off [size], so the same composable serves the 112 dp
+ * maneuver arrow and the 52 dp "then" preview without a second asset. The ring
+ * is mirrored for [Maneuver.ROUNDABOUT_LEFT]; on the right-hand-traffic roads
+ * this app is built for that is the rare case, but a clockwise roundabout
+ * drawn counter-clockwise would be actively misleading.
+ */
+@Composable
+fun RoundaboutIcon(
+    exit: Int,
+    modifier: Modifier = Modifier,
+    mirrored: Boolean = false,
+    size: Dp = 104.dp,
+    tint: Color = LocalRideColors.current.hudForeground,
+) {
+    Box(
+        modifier = modifier
+            .size(size)
+            .semantics { contentDescription = "Roundabout, exit $exit" },
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize().scale(scaleX = if (mirrored) -1f else 1f, scaleY = 1f)) {
+            val side = kotlin.math.min(this.size.width, this.size.height)
+            val strokeWidth = side * RING_STROKE_FRACTION
+            // Room for the arrowhead, which sticks out past the ring.
+            val inset = strokeWidth / 2f + side * RING_INSET_FRACTION
+            val diameter = side - inset * 2f
+            val radius = diameter / 2f
+            val centre = Offset(this.size.width / 2f, this.size.height / 2f)
+
+            // Sweep clockwise, leaving GAP_DEGREES open centred on the bottom
+            // (90 degrees, since y grows downward) - that gap is the road the
+            // rider comes in on.
+            drawArc(
+                color = tint,
+                startAngle = 90f + GAP_DEGREES / 2f,
+                sweepAngle = 360f - GAP_DEGREES,
+                useCenter = false,
+                topLeft = Offset(centre.x - radius, centre.y - radius),
+                size = Size(diameter, diameter),
+                style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
+            )
+
+            // Arrowhead at the top of the ring, apex pointing out.
+            val half = strokeWidth * ARROW_HALF_WIDTH
+            val tip = Offset(centre.x, centre.y - radius - strokeWidth * ARROW_REACH)
+            val path = Path().apply {
+                moveTo(tip.x, tip.y)
+                lineTo(centre.x - half, centre.y - radius + strokeWidth * 0.5f)
+                lineTo(centre.x + half, centre.y - radius + strokeWidth * 0.5f)
+                close()
+            }
+            drawPath(path, tint)
+
+            // A tick for the exit road itself, so the ring reads as a junction
+            // rather than a plain circle.
+            val exitAngle = Math.toRadians(-42.0)
+            drawLine(
+                color = tint,
+                start = Offset(
+                    centre.x + (radius * cos(exitAngle)).toFloat(),
+                    centre.y + (radius * sin(exitAngle)).toFloat(),
+                ),
+                end = Offset(
+                    centre.x + ((radius + strokeWidth * 1.6f) * cos(exitAngle)).toFloat(),
+                    centre.y + ((radius + strokeWidth * 1.6f) * sin(exitAngle)).toFloat(),
+                ),
+                strokeWidth = strokeWidth,
+                cap = StrokeCap.Round,
+            )
+        }
+        Text(
+            text = exit.toString(),
+            color = tint,
+            // In dp-derived sp so the number scales with the icon rather than
+            // with the system font, same reason ManeuverIcon is sized in dp.
+            fontSize = (size.value * EXIT_NUMBER_FRACTION).sp,
+            fontWeight = FontWeight.Black,
+            maxLines = 1,
+        )
+    }
+}
+
+private const val RING_STROKE_FRACTION = 0.085f
+private const val RING_INSET_FRACTION = 0.09f
+private const val GAP_DEGREES = 62f
+private const val ARROW_HALF_WIDTH = 1.25f
+private const val ARROW_REACH = 1.5f
+private const val EXIT_NUMBER_FRACTION = 0.40f
 
 /**
  * Distance to the maneuver.
@@ -149,7 +271,10 @@ fun DistanceReadout(
         Text(
             text = value,
             color = color,
-            fontSize = 56.sp,
+            // The tokens, not literals: these two used to be 56/26 sp written
+            // out here, so raising the HUD display size in Type.kt did nothing
+            // to the one number it was raised for.
+            fontSize = TypeScale.HudDisplay,
             fontWeight = FontWeight.Black,
             maxLines = 1,
         )
@@ -157,9 +282,9 @@ fun DistanceReadout(
             Text(
                 text = unit,
                 color = color,
-                fontSize = 26.sp,
+                fontSize = TypeScale.HudUnit,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
+                modifier = Modifier.padding(start = Space.Xs, bottom = 6.dp),
             )
         }
     }
@@ -319,7 +444,68 @@ fun GloveButton(
 fun menuToggleIcon(expanded: Boolean): Int =
     if (expanded) R.drawable.ic_action_close else R.drawable.ic_action_menu
 
-/** Full-width status strip, e.g. "Rerouting" or "Off route". */
+/**
+ * A transient piece of news, as a pill that floats over the map.
+ *
+ * This replaces the full-width status strip that used to sit between the
+ * maneuver bar and the map. The strip was a layout participant, so every time
+ * it appeared - a recalculation, a camera, going off route - the speed readout
+ * and everything under it jumped down by 44 dp and back up again. The ride
+ * report called that out directly: the HUD never settles.
+ *
+ * A pill is an overlay instead. It is smaller, it is centred where the eye
+ * already is, and crucially it changes nothing about the rest of the HUD's
+ * geometry. [dotColor] carries the severity, so the pill itself keeps the
+ * HUD's own dark surface rather than flashing a full field of red at a rider
+ * mid-corner.
+ */
+@Composable
+fun StatusPill(
+    text: String,
+    dotColor: Color,
+    modifier: Modifier = Modifier,
+    iconRes: Int? = null,
+) {
+    val colors = LocalRideColors.current
+    Surface(
+        color = colors.hudBackground.copy(alpha = Scrim.FloatingControl),
+        shape = RoundedCornerShape(Radius.Full),
+        modifier = modifier,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = Space.Lg, vertical = Space.Sm),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Space.Sm),
+        ) {
+            if (iconRes != null) {
+                Icon(
+                    painter = painterResource(iconRes),
+                    contentDescription = null,
+                    tint = dotColor,
+                    modifier = Modifier.size(20.dp),
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(dotColor),
+                )
+            }
+            Text(
+                text = text,
+                color = colors.hudForeground,
+                fontWeight = FontWeight.Black,
+                // A pill is read in motion, so it takes the banner size rather
+                // than the resting-register label size it would look right at.
+                fontSize = TypeScale.HudBanner,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+/** Full-width status strip. Kept for the resting screens; the HUD uses [StatusPill]. */
 @Composable
 fun StatusBanner(text: String, color: Color, modifier: Modifier = Modifier) {
     Surface(color = color, modifier = modifier.fillMaxWidth()) {

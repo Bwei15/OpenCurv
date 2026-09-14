@@ -17,14 +17,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,7 +37,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.motoroute.R
 import com.motoroute.data.brouter.RoutingProfile
 import com.motoroute.data.history.HistoryTrip
@@ -48,11 +44,19 @@ import com.motoroute.data.model.Curviness
 import com.motoroute.data.model.Route
 import com.motoroute.data.settings.Settings
 import com.motoroute.domain.PlanningState
+import com.motoroute.ui.components.AddStopTile
 import com.motoroute.ui.components.DraggableSheet
 import com.motoroute.ui.components.PrimaryButton
+import com.motoroute.ui.components.ReorderableStopColumn
 import com.motoroute.ui.components.SecondaryButton
+import com.motoroute.ui.components.StopRole
+import com.motoroute.ui.components.StopTile
 import com.motoroute.ui.map.Stop
 import com.motoroute.ui.theme.LocalRideColors
+import com.motoroute.ui.theme.Radius
+import com.motoroute.ui.theme.Space
+import com.motoroute.ui.theme.TapTargetSize
+import com.motoroute.ui.theme.TypeScale
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -60,8 +64,8 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 /**
- * Route planning: pick a destination, choose how much fun you want, calculate,
- * then ride - or watch the app ride it for you first.
+ * Route planning: say where you are going, put the stops in the order you want
+ * them, calculate, then ride.
  *
  * The panel is a sheet that can be pushed down out of the way, because the map
  * underneath it is half the decision. Destinations come from the search box or
@@ -72,6 +76,19 @@ import kotlin.math.roundToInt
  * *entire* peek (see [DraggableSheet] - the peek height only ever reveals the
  * top of the sheet), and it stays the first thing you see once dragged out
  * too, so the ride button never needs a second, floating copy of itself.
+ *
+ * ## What the September 2026 ride report changed
+ *
+ * The sheet had grown into a single scrolling column of everything: a hint, a
+ * demo-ride link, the stop list as bare rows with up/down/remove glyphs, a
+ * profile chip row, a curviness slider, and two switches - one of which
+ * ("Rundtour") was not an option but a decision about what kind of route this
+ * is, hidden at the very bottom where a rider would never find it.
+ *
+ * Now: the mode choice is a segmented control right under the peek, the stops
+ * are draggable tiles with one X each, and the options are a single row that
+ * opens [RouteOptionsScreen]. The demo-ride link is gone entirely - it was a
+ * development tool sitting on the rider's critical path.
  */
 @Composable
 fun RoutePlanSheet(
@@ -84,19 +101,15 @@ fun RoutePlanSheet(
     via: List<Stop>,
     roundTrip: Boolean,
     recentTrips: List<HistoryTrip>,
-    onProfileChange: (String) -> Unit,
-    onCurvinessChange: (Float) -> Unit,
-    onAlternativesChange: (Boolean) -> Unit,
     onRoundTripChange: (Boolean) -> Unit,
     onSuggestRoundTrip: (Float) -> Unit,
     onAddStop: () -> Unit,
-    onMoveStopUp: (Int) -> Unit,
-    onMoveStopDown: (Int) -> Unit,
+    onMoveStop: (Int, Int) -> Unit,
     onRemoveStop: (Int) -> Unit,
     onPickRecentTrip: (HistoryTrip) -> Unit,
+    onOpenOptions: () -> Unit,
     onCalculate: () -> Unit,
     onStart: (Route) -> Unit,
-    onDemo: (Route) -> Unit,
     onClear: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -105,9 +118,7 @@ fun RoutePlanSheet(
     // A resting-state panel, not a driving HUD: Design_System.md is explicit
     // that the sheet is playful and light while parked and only turns dark
     // and HUD-like once the rider is actually navigating (a different screen
-    // entirely - see ActiveNavigationScreen). Regel 2 applies too: a floating
-    // plate needs its own 1 dp rim, since a shadow alone is invisible in
-    // direct sun and directionless over a plain road.
+    // entirely - see ActiveNavigationScreen).
     val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val peekHeight = (if (hasDestination) PEEK_HEIGHT_DESTINATION else PEEK_HEIGHT_EMPTY) + navBarBottom
 
@@ -121,94 +132,44 @@ fun RoutePlanSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+                .padding(horizontal = Space.Lg)
+                .padding(bottom = Space.Xl),
+            verticalArrangement = Arrangement.spacedBy(Space.Md),
         ) {
             PeekRow(
                 planning = planning,
                 destinationName = destinationName,
                 hasDestination = hasDestination,
+                roundTrip = roundTrip,
                 onCalculate = onCalculate,
                 onStart = onStart,
             )
 
-            // Everything below here is outside the peek window - it only
-            // shows once the rider has actually dragged the sheet open.
-            when (planning) {
-                PlanningState.Idle -> {
-                    Text(
-                        text = stringResource(
-                            if (hasExplicitStart) {
-                                R.string.plan_start_set_hint
-                            } else {
-                                R.string.plan_hint
-                            },
-                        ),
-                        color = colors.muted,
-                        fontSize = 13.sp,
-                    )
-                }
+            // Everything below here is outside the peek window - it only shows
+            // once the rider has actually dragged the sheet open.
 
-                PlanningState.Calculating -> Unit
+            // What kind of route this is: the first question, so the first
+            // control. It used to be a switch at the very bottom.
+            ModeSelector(
+                roundTrip = roundTrip,
+                onChange = onRoundTripChange,
+            )
 
-                is PlanningState.Ready -> {
-                    val route = planning.route
-                    // Climb and curviness used to sit in a four-up metrics
-                    // row with distance and time; both of those moved into
-                    // the peek line above, and these two are demoted to a
-                    // single small caption - useful, but not what the sheet
-                    // leads with any more.
-                    Text(
-                        text = stringResource(
-                            R.string.plan_peek_detail,
-                            route.ascendMeters,
-                            Curviness.label(route.curvinessScore),
-                            route.curvinessScore.roundToInt(),
-                        ),
-                        color = colors.muted,
-                        fontSize = 12.sp,
-                    )
-                    TextButton(onClick = { onDemo(route) }) {
-                        Text(
-                            text = stringResource(R.string.plan_demo),
-                            color = colors.route,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp,
-                        )
-                    }
-                    Text(
-                        text = stringResource(R.string.plan_demo_hint),
-                        color = colors.muted,
-                        fontSize = 12.sp,
-                    )
-                    SecondaryButton(
-                        label = stringResource(R.string.plan_discard),
-                        onClick = onClear,
-                    )
-                }
-
-                is PlanningState.Failed -> {
-                    SecondaryButton(
-                        label = stringResource(R.string.plan_clear),
-                        onClick = onClear,
-                    )
-                }
+            if (planning is PlanningState.Failed) {
+                Text(
+                    text = planning.message,
+                    color = colors.danger,
+                    fontSize = TypeScale.Label,
+                )
             }
 
-            Spacer(Modifier.height(4.dp))
-
-            // Stop list once there is a plan to hang stops off; recent tours instead while the
-            // sheet is empty - a rider either builds today's route or picks up an old one, not
-            // both at once.
-            if (hasDestination) {
-                StopList(
+            if (hasDestination || roundTrip) {
+                StopSection(
                     hasExplicitStart = hasExplicitStart,
                     via = via,
                     destinationName = destinationName,
                     roundTrip = roundTrip,
-                    onMoveUp = onMoveStopUp,
-                    onMoveDown = onMoveStopDown,
+                    onMove = onMoveStop,
                     onRemove = onRemoveStop,
                     onAddStop = onAddStop,
                 )
@@ -216,245 +177,234 @@ fun RoutePlanSheet(
                 RecentTripsSection(trips = recentTrips, onPick = onPickRecentTrip)
             }
 
-            Text(
-                text = stringResource(R.string.plan_options),
-                color = colors.muted,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Black,
-            )
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                profiles.forEach { profile ->
-                    FilterChip(
-                        selected = profile.id == settings.profileId,
-                        onClick = { onProfileChange(profile.id) },
-                        label = {
-                            Text(
-                                profile.displayName,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp,
-                            )
-                        },
-                        // 56 dp: the resting-register minimum (Design_System.md
-                        // §5), not the 46 dp this used to be.
-                        modifier = Modifier.height(56.dp),
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = colors.route,
-                            selectedLabelColor = Color.Black,
-                            labelColor = colors.onPanel,
-                        ),
-                    )
-                }
-            }
-
-            Column {
-                Text(
-                    text = stringResource(
-                        R.string.plan_curviness,
-                        stringResource(curvinessLabel(settings.curviness)),
-                    ),
-                    color = colors.onPanel,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                )
-                Slider(
-                    value = settings.curviness,
-                    onValueChange = onCurvinessChange,
-                    valueRange = 0f..2f,
-                    steps = 3,
-                    modifier = Modifier.height(48.dp),
-                )
-            }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                androidx.compose.material3.Switch(
-                    checked = settings.searchAlternatives,
-                    onCheckedChange = onAlternativesChange,
-                )
-                Text(
-                    text = stringResource(R.string.plan_alternatives),
-                    color = colors.onPanel,
-                    fontSize = 14.sp,
-                )
-            }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                androidx.compose.material3.Switch(
-                    checked = roundTrip,
-                    onCheckedChange = onRoundTripChange,
-                )
-                Text(
-                    text = stringResource(R.string.plan_round_trip),
-                    color = colors.onPanel,
-                    fontSize = 14.sp,
-                )
-            }
-
-            // Nothing to loop through yet: offer to fill the stop list in rather than leaving
-            // the rider staring at "Ziel = Start" with no stops in between.
+            // Nothing to loop through yet: offer to fill the stop list in rather
+            // than leaving the rider staring at "Ziel = Start" with no stops.
             if (roundTrip && via.isEmpty()) {
                 RoundTripSuggestCard(onSuggest = onSuggestRoundTrip)
+            }
+
+            OptionsRow(
+                summary = routeOptionsSummary(settings, profiles),
+                onClick = onOpenOptions,
+            )
+
+            if (planning is PlanningState.Ready) {
+                val route = planning.route
+                Text(
+                    text = stringResource(
+                        R.string.plan_peek_detail,
+                        route.ascendMeters,
+                        Curviness.label(route.curvinessScore),
+                        route.curvinessScore.roundToInt(),
+                    ),
+                    color = colors.muted,
+                    fontSize = TypeScale.Micro,
+                )
+                SecondaryButton(
+                    label = stringResource(R.string.plan_discard),
+                    onClick = onClear,
+                )
+            } else if (planning is PlanningState.Failed) {
+                SecondaryButton(
+                    label = stringResource(R.string.plan_clear),
+                    onClick = onClear,
+                )
+            } else if (!hasDestination && !roundTrip) {
+                Text(
+                    text = stringResource(
+                        if (hasExplicitStart) R.string.plan_start_set_hint else R.string.plan_hint,
+                    ),
+                    color = colors.muted,
+                    fontSize = TypeScale.Label,
+                )
             }
         }
     }
 }
 
 /**
- * Start -> Stop 1 -> ... -> Ziel. Only the stops in between are reorderable or removable - the
- * endpoints are structural (Start comes from GPS or a long press, Ziel from search or a tap), so
- * they get a plain row instead of buttons that would not make sense to press.
+ * "To a destination" / "Round trip", as one segmented control.
+ *
+ * A round trip is not a switch you flip on top of a route to somewhere - it is
+ * the other kind of route, and the two are mutually exclusive. A segmented
+ * control says that; a checkbox below the options did not, which is why the
+ * ride report could not find it.
  */
 @Composable
-private fun StopList(
+private fun ModeSelector(roundTrip: Boolean, onChange: (Boolean) -> Unit) {
+    val colors = LocalRideColors.current
+    Surface(
+        color = colors.panelSunken,
+        shape = RoundedCornerShape(Radius.Full),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(modifier = Modifier.padding(Space.Xs)) {
+            SegmentedOption(
+                label = stringResource(R.string.plan_mode_to_destination),
+                selected = !roundTrip,
+                onClick = { onChange(false) },
+                modifier = Modifier.weight(1f),
+            )
+            SegmentedOption(
+                label = stringResource(R.string.plan_mode_round_trip),
+                selected = roundTrip,
+                onClick = { onChange(true) },
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun SegmentedOption(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = LocalRideColors.current
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(Radius.Full),
+        color = if (selected) colors.panel else Color.Transparent,
+        modifier = modifier.heightIn(min = SEGMENT_HEIGHT),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                text = label,
+                color = if (selected) colors.onPanel else colors.muted,
+                fontWeight = FontWeight.Bold,
+                fontSize = TypeScale.BodySmall,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+/**
+ * Start -> Stop 1 -> ... -> Ziel, as tiles.
+ *
+ * Only the stops in between can be moved or removed: the endpoints are
+ * structural (Start comes from GPS or a long press, Ziel from search or a tap),
+ * which is why they are drawn as outlines with no grip and no X.
+ */
+@Composable
+private fun StopSection(
     hasExplicitStart: Boolean,
     via: List<Stop>,
     destinationName: String?,
     roundTrip: Boolean,
-    onMoveUp: (Int) -> Unit,
-    onMoveDown: (Int) -> Unit,
+    onMove: (Int, Int) -> Unit,
     onRemove: (Int) -> Unit,
     onAddStop: () -> Unit,
 ) {
     val colors = LocalRideColors.current
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    val onMapLabel = stringResource(R.string.plan_stop_on_map)
+
+    Column(verticalArrangement = Arrangement.spacedBy(Space.Sm)) {
         Text(
-            text = stringResource(R.string.plan_stops_title),
-            color = colors.muted,
-            fontSize = 13.sp,
+            text = stringResource(R.string.plan_route_section),
+            color = colors.faint,
+            fontSize = TypeScale.Label,
             fontWeight = FontWeight.Black,
         )
-        StopEndpointRow(
-            label = stringResource(R.string.plan_stop_start),
-            name = if (hasExplicitStart) stringResource(R.string.plan_stop_on_map) else stringResource(R.string.plan_stop_gps),
+
+        StopTile(
+            name = if (hasExplicitStart) onMapLabel else stringResource(R.string.plan_stop_gps),
+            role = StopRole.START,
+            caption = stringResource(R.string.plan_stop_start),
         )
-        via.forEachIndexed { index, stop ->
-            StopRow(
-                label = stringResource(R.string.plan_stop_numbered, index + 1),
-                name = stop.name ?: stringResource(R.string.plan_stop_on_map),
-                canMoveUp = index > 0,
-                canMoveDown = index < via.lastIndex,
-                onMoveUp = { onMoveUp(index) },
-                onMoveDown = { onMoveDown(index) },
-                onRemove = { onRemove(index) },
+
+        if (via.isNotEmpty()) {
+            ReorderableStopColumn(
+                count = via.size,
+                onMove = onMove,
+            ) { index, dragging, dragHandle ->
+                StopTile(
+                    name = via[index].name ?: onMapLabel,
+                    role = StopRole.VIA,
+                    number = index + 1,
+                    onRemove = { onRemove(index) },
+                    // Passing these is what puts the grip on the tile; the
+                    // actual movement comes from the drag handle.
+                    onMoveUp = { if (index > 0) onMove(index, index - 1) },
+                    onMoveDown = { if (index < via.lastIndex) onMove(index, index + 1) },
+                    dragging = dragging,
+                    modifier = dragHandle,
+                )
+            }
+            Text(
+                text = stringResource(R.string.plan_reorder_hint),
+                color = colors.faint,
+                fontSize = TypeScale.Micro,
             )
         }
-        StopEndpointRow(
-            label = stringResource(R.string.plan_stop_destination),
+
+        StopTile(
             name = if (roundTrip) {
                 stringResource(R.string.plan_stop_roundtrip_destination)
             } else {
                 destinationName ?: stringResource(R.string.plan_destination_pin)
             },
+            role = StopRole.DESTINATION,
+            caption = stringResource(R.string.plan_stop_destination),
         )
-        TextButton(onClick = onAddStop) {
-            Text(
-                text = stringResource(R.string.plan_add_stop),
-                color = colors.route,
-                fontWeight = FontWeight.Bold,
-                fontSize = 15.sp,
-            )
-        }
+
+        AddStopTile(onClick = onAddStop, label = stringResource(R.string.plan_add_stop))
     }
 }
 
+/** The one row that replaces everything that used to be stacked below the stops. */
 @Composable
-private fun StopEndpointRow(label: String, name: String) {
-    val colors = LocalRideColors.current
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        Text(label, color = colors.muted, fontSize = 11.sp)
-        Text(name, color = colors.onPanel, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1)
-    }
-}
-
-@Composable
-private fun StopRow(
-    label: String,
-    name: String,
-    canMoveUp: Boolean,
-    canMoveDown: Boolean,
-    onMoveUp: () -> Unit,
-    onMoveDown: () -> Unit,
-    onRemove: () -> Unit,
-) {
-    val colors = LocalRideColors.current
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(label, color = colors.muted, fontSize = 11.sp)
-            Text(name, color = colors.onPanel, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1)
-        }
-        StopGlyphButton(
-            glyph = "↑",
-            contentDescription = stringResource(R.string.plan_stop_move_up),
-            onClick = onMoveUp,
-            enabled = canMoveUp,
-        )
-        StopGlyphButton(
-            glyph = "↓",
-            contentDescription = stringResource(R.string.plan_stop_move_down),
-            onClick = onMoveDown,
-            enabled = canMoveDown,
-        )
-        StopGlyphButton(
-            glyph = "✕",
-            contentDescription = stringResource(R.string.plan_stop_remove),
-            onClick = onRemove,
-        )
-    }
-}
-
-/** A plain text-glyph button rather than a new icon asset - just up/down/remove, 48 dp per Design_System.md's floor. */
-@Composable
-private fun StopGlyphButton(
-    glyph: String,
-    contentDescription: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-) {
+private fun OptionsRow(summary: String, onClick: () -> Unit) {
     val colors = LocalRideColors.current
     Surface(
         onClick = onClick,
-        enabled = enabled,
-        shape = RoundedCornerShape(12.dp),
         color = colors.panelSunken,
-        modifier = modifier
-            .size(STOP_BUTTON_SIZE)
-            .semantics { this.contentDescription = contentDescription },
+        shape = RoundedCornerShape(Radius.Md),
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = TapTargetSize),
     ) {
-        Box(contentAlignment = Alignment.Center) {
+        Row(
+            modifier = Modifier.padding(horizontal = Space.Md, vertical = Space.Sm),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.plan_options_open),
+                    color = colors.onPanel,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = TypeScale.BodySmall,
+                )
+                Text(
+                    text = summary,
+                    color = colors.muted,
+                    fontSize = TypeScale.Micro,
+                    maxLines = 1,
+                )
+            }
             Text(
-                text = glyph,
-                color = if (enabled) colors.onPanel else colors.muted,
-                fontWeight = FontWeight.Black,
-                fontSize = 16.sp,
+                text = "›",
+                color = colors.faint,
+                fontSize = TypeScale.Subtitle,
+                fontWeight = FontWeight.Bold,
             )
         }
     }
 }
-
-private val STOP_BUTTON_SIZE = 48.dp
 
 /** Shown once "Rundtour" is on but there is nothing in the stop list yet to loop through. */
 @Composable
 private fun RoundTripSuggestCard(onSuggest: (Float) -> Unit) {
     val colors = LocalRideColors.current
     var lengthKm by remember { mutableStateOf(120f) }
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(Space.Sm)) {
         Text(
             text = stringResource(R.string.plan_round_trip_length, lengthKm.roundToInt()),
             color = colors.onPanel,
             fontWeight = FontWeight.Bold,
-            fontSize = 15.sp,
+            fontSize = TypeScale.Body,
         )
         Slider(
             value = lengthKm,
@@ -473,11 +423,11 @@ private fun RoundTripSuggestCard(onSuggest: (Float) -> Unit) {
 @Composable
 private fun RecentTripsSection(trips: List<HistoryTrip>, onPick: (HistoryTrip) -> Unit) {
     val colors = LocalRideColors.current
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(Space.Sm)) {
         Text(
             text = stringResource(R.string.plan_recent_trips_title),
-            color = colors.muted,
-            fontSize = 13.sp,
+            color = colors.faint,
+            fontSize = TypeScale.Label,
             fontWeight = FontWeight.Black,
         )
         trips.take(5).forEach { trip ->
@@ -503,20 +453,20 @@ private fun RecentTripRow(trip: HistoryTrip, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         color = colors.panelSunken,
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(Radius.Md),
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 48.dp),
+            .heightIn(min = TapTargetSize),
     ) {
         Box(contentAlignment = Alignment.CenterStart) {
             Text(
                 text = stringResource(R.string.plan_recent_trip_row, startName, destinationName, stopCount, date),
                 color = colors.onPanel,
-                fontSize = 14.sp,
+                fontSize = TypeScale.BodySmall,
                 maxLines = 1,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 14.dp),
+                    .padding(horizontal = Space.Md, vertical = Space.Md),
             )
         }
     }
@@ -534,6 +484,7 @@ private fun PeekRow(
     planning: PlanningState,
     destinationName: String?,
     hasDestination: Boolean,
+    roundTrip: Boolean,
     onCalculate: () -> Unit,
     onStart: (Route) -> Unit,
 ) {
@@ -552,7 +503,7 @@ private fun PeekRow(
                     Text(
                         text = formatDuration(route.estimatedSeconds),
                         color = colors.onPanel,
-                        fontSize = 28.sp,
+                        fontSize = TypeScale.TitleLarge,
                         fontWeight = FontWeight.Black,
                     )
                     Text(
@@ -560,12 +511,13 @@ private fun PeekRow(
                             R.string.plan_peek_summary,
                             String.format(Locale.getDefault(), "%.0f", route.distanceMeters / 1000.0),
                             formatArrival(route.estimatedSeconds),
-                        ),
+                        ) + " · " + motorwayLabel(route),
                         color = colors.muted,
-                        fontSize = 13.sp,
+                        fontSize = TypeScale.Label,
+                        maxLines = 1,
                     )
                 }
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(Space.Md))
                 PlayButton(onClick = { onStart(route) })
             }
 
@@ -574,18 +526,18 @@ private fun PeekRow(
                     Text(
                         text = destinationName ?: stringResource(R.string.plan_calculating),
                         color = colors.onPanel,
-                        fontSize = 16.sp,
+                        fontSize = TypeScale.Body,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                     )
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(Space.Sm))
                     LinearProgressIndicator(
                         color = colors.route,
                         trackColor = colors.panelSunken,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(4.dp)
-                            .clip(RoundedCornerShape(2.dp)),
+                            .clip(RoundedCornerShape(Radius.Full)),
                     )
                 }
             }
@@ -595,24 +547,20 @@ private fun PeekRow(
                     Text(
                         text = destinationName
                             ?: stringResource(
-                                if (hasDestination) R.string.plan_destination_pin else R.string.plan_no_destination,
+                                when {
+                                    roundTrip -> R.string.plan_mode_round_trip
+                                    hasDestination -> R.string.plan_destination_pin
+                                    else -> R.string.plan_no_destination
+                                },
                             ),
                         color = colors.onPanel,
-                        fontSize = 18.sp,
+                        fontSize = TypeScale.Subtitle,
                         fontWeight = FontWeight.Black,
                         maxLines = 1,
                     )
-                    if (planning is PlanningState.Failed) {
-                        Text(
-                            text = planning.message,
-                            color = colors.danger,
-                            fontSize = 12.sp,
-                            maxLines = 2,
-                        )
-                    }
                 }
-                if (hasDestination) {
-                    Spacer(Modifier.width(12.dp))
+                if (hasDestination || roundTrip) {
+                    Spacer(Modifier.width(Space.Md))
                     PeekActionButton(
                         label = stringResource(
                             if (planning is PlanningState.Failed) R.string.plan_retry else R.string.plan_calculate,
@@ -622,6 +570,24 @@ private fun PeekRow(
                 }
             }
         }
+    }
+}
+
+/**
+ * "0 km Autobahn" / "12 km Autobahn".
+ *
+ * On the summary line because it is the one thing a motorcyclist wants to know
+ * about a calculated route that the distance and the time do not tell them -
+ * and because a number there is what makes the avoidance visible enough to
+ * trust (see `motorcycle_curvy.brf`).
+ */
+@Composable
+private fun motorwayLabel(route: Route): String {
+    val km = motorwayKilometres(route.motorwayMeters)
+    return if (km <= 0) {
+        stringResource(R.string.plan_motorway_none)
+    } else {
+        stringResource(R.string.plan_motorway_share, km)
     }
 }
 
@@ -667,29 +633,21 @@ private fun PeekActionButton(label: String, onClick: () -> Unit, modifier: Modif
     val colors = LocalRideColors.current
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(Radius.Md),
         color = colors.route,
-        modifier = modifier.heightIn(min = 56.dp),
+        modifier = modifier.heightIn(min = TapTargetSize),
     ) {
         Box(contentAlignment = Alignment.Center) {
             Text(
                 text = label,
                 color = Color.Black,
                 fontWeight = FontWeight.Black,
-                fontSize = 15.sp,
+                fontSize = TypeScale.BodySmall,
                 maxLines = 1,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                modifier = Modifier.padding(horizontal = Space.Xl, vertical = Space.Md),
             )
         }
     }
-}
-
-private fun curvinessLabel(value: Float): Int = when {
-    value < 0.4f -> R.string.curviness_direct
-    value < 0.9f -> R.string.curviness_mild
-    value < 1.4f -> R.string.curviness_balanced
-    value < 1.8f -> R.string.curviness_hungry
-    else -> R.string.curviness_max
 }
 
 private fun formatDuration(seconds: Int): String {
@@ -716,6 +674,8 @@ val PEEK_HEIGHT_DESTINATION = 96.dp
 
 private val PLAY_BUTTON_SIZE = 64.dp
 
+private val SEGMENT_HEIGHT = 46.dp
+
 /**
  * A card, not a curtain: the old empty state covered the whole map until data
  * appeared, which hid the very thing a new rider wants to look at.
@@ -733,28 +693,28 @@ fun MissingDataCard(
     var dismissed by remember { mutableStateOf(false) }
     if (dismissed) return
 
-    androidx.compose.material3.Surface(
+    Surface(
         color = colors.panel,
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(Radius.Lg),
         border = androidx.compose.foundation.BorderStroke(1.dp, colors.panelRim),
         modifier = modifier.fillMaxWidth(),
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.padding(Space.Lg),
+            verticalArrangement = Arrangement.spacedBy(Space.Sm),
         ) {
             Text(
                 text = stringResource(
                     if (!hasMaps) R.string.empty_no_map else R.string.empty_no_segments,
                 ),
                 color = colors.onPanel,
-                fontSize = 18.sp,
+                fontSize = TypeScale.Subtitle,
                 fontWeight = FontWeight.Black,
             )
             Text(
                 text = stringResource(R.string.empty_body),
                 color = colors.muted,
-                fontSize = 14.sp,
+                fontSize = TypeScale.BodySmall,
             )
             PrimaryButton(
                 label = stringResource(R.string.empty_action),

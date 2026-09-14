@@ -48,6 +48,7 @@ import com.motoroute.R
 import com.motoroute.data.settings.MapTheme
 import com.motoroute.domain.CameraController
 import com.motoroute.domain.PlanningState
+import com.motoroute.domain.RideItinerary
 import com.motoroute.service.DownloadService
 import com.motoroute.service.NavigationService
 import com.motoroute.ui.data.MapDownloadScreen
@@ -56,20 +57,23 @@ import com.motoroute.ui.map.MapScreen
 import com.motoroute.ui.map.MapViewModel
 import com.motoroute.ui.map.PoiHit
 import com.motoroute.ui.map.PoiKind
+import com.motoroute.ui.components.StopRole
 import com.motoroute.ui.navigation.ActiveNavigationScreen
 import com.motoroute.ui.navigation.GloveButton
+import com.motoroute.ui.navigation.RideStop
 import com.motoroute.ui.navigation.SpeedCameraBanner
 import com.motoroute.ui.onboarding.OnboardingScreen
 import com.motoroute.ui.plan.MissingDataCard
 import com.motoroute.ui.plan.PEEK_HEIGHT_DESTINATION
 import com.motoroute.ui.plan.PEEK_HEIGHT_EMPTY
+import com.motoroute.ui.plan.RouteOptionsScreen
 import com.motoroute.ui.plan.RoutePlanSheet
 import com.motoroute.ui.search.SearchMode
 import com.motoroute.ui.search.SearchScreen
 import com.motoroute.ui.settings.SettingsScreen
 import com.motoroute.ui.theme.LocalRideColors
 
-private enum class Screen { MAP, SEARCH, DATA, DOWNLOAD, SETTINGS }
+private enum class Screen { MAP, SEARCH, DATA, DOWNLOAD, SETTINGS, ROUTE_OPTIONS }
 
 /**
  * Top-level composition.
@@ -187,6 +191,7 @@ fun OpenCurvRoot(
                 zoom = zoom,
                 onOpenData = { screen = Screen.DATA },
                 onOpenSettings = { screen = Screen.SETTINGS },
+                onOpenRouteOptions = { screen = Screen.ROUTE_OPTIONS },
                 onOpenSearch = { mode ->
                     viewModel.prepareSearch()
                     searchMode = mode
@@ -212,6 +217,16 @@ fun OpenCurvRoot(
                 viewModel = viewModel,
                 queue = downloadQueue,
                 onBack = { screen = Screen.DATA },
+            )
+
+            Screen.ROUTE_OPTIONS -> RouteOptionsScreen(
+                settings = settings,
+                profiles = viewModel.profiles(),
+                onBack = { screen = Screen.MAP },
+                onProfileChange = viewModel::setProfile,
+                onCurvinessChange = viewModel::setCurviness,
+                onAlternativesChange = viewModel::setAlternatives,
+                onAvoidMotorwaysChange = viewModel::setAvoidMotorways,
             )
 
             Screen.SETTINGS -> SettingsScreen(
@@ -283,6 +298,7 @@ private fun MapRoot(
     zoom: Double,
     onOpenData: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenRouteOptions: () -> Unit,
     onOpenSearch: (SearchMode) -> Unit,
     onRequestPermission: () -> Unit,
 ) {
@@ -337,6 +353,13 @@ private fun MapRoot(
                 following = follow,
                 isDemo = demoRunning,
                 cameraWarning = speedCameraWarning,
+                // The ride menu is the route now, not a drawer of buttons.
+                stops = rideStops(
+                    selection = selection,
+                    state = navigationState,
+                ),
+                onAddStop = { onOpenSearch(SearchMode.STOP) },
+                onRemoveStop = viewModel::removeStop,
             )
         } else {
             Column(
@@ -452,19 +475,15 @@ private fun MapRoot(
             via = selection.via,
             roundTrip = selection.roundTrip,
             recentTrips = recentTrips,
-            onProfileChange = viewModel::setProfile,
-            onCurvinessChange = viewModel::setCurviness,
-            onAlternativesChange = viewModel::setAlternatives,
             onRoundTripChange = viewModel::setRoundTrip,
             onSuggestRoundTrip = viewModel::suggestRoundTrip,
             onAddStop = { onOpenSearch(SearchMode.STOP) },
-            onMoveStopUp = viewModel::moveStopUp,
-            onMoveStopDown = viewModel::moveStopDown,
+            onMoveStop = viewModel::moveStop,
             onRemoveStop = viewModel::removeStop,
             onPickRecentTrip = viewModel::loadHistoryTrip,
+            onOpenOptions = onOpenRouteOptions,
             onCalculate = viewModel::calculateRoute,
             onStart = viewModel::startNavigation,
-            onDemo = viewModel::startDemo,
             onClear = viewModel::clearSelection,
             modifier = Modifier.align(Alignment.BottomCenter),
         )
@@ -703,4 +722,64 @@ private fun OfflineDataRoot(
         onDeleteFile = viewModel::deleteFile,
         onBack = onBack,
     )
+}
+
+/**
+ * The ride's stops as the HUD sheet wants them: current position first, the
+ * remaining stops with distance and arrival, the destination last.
+ *
+ * Stops already behind the rider are dropped rather than greyed out - a list of
+ * places you have been is a logbook, and mid-ride the sheet is for what is
+ * still coming. The arithmetic is [RideItinerary]'s, which is unit tested; this
+ * only chooses what to show.
+ */
+@Composable
+private fun rideStops(
+    selection: com.motoroute.ui.map.PlanSelection,
+    state: com.motoroute.domain.NavigationState,
+): List<RideStop> {
+    val route = state.route ?: return emptyList()
+    val travelled = (route.distanceMeters - state.remainingDistanceMeters).coerceAtLeast(0.0)
+    val speed = state.speedMps.takeIf { it > RideItinerary.MIN_ETA_SPEED_MPS }
+        ?: RideItinerary.averageSpeedMps(route)
+    val itinerary = remember(route, selection.via, travelled) {
+        RideItinerary.stopsAhead(
+            route = route,
+            viaPoints = selection.via.map { it.point },
+            travelledMeters = travelled,
+            nowMillis = System.currentTimeMillis(),
+            speedMps = speed,
+        )
+    }
+
+    val onMapLabel = stringResource(R.string.plan_stop_on_map)
+    val stops = mutableListOf(
+        RideStop(
+            name = stringResource(R.string.ride_stop_current_position),
+            role = StopRole.START,
+        ),
+    )
+    var number = 1
+    selection.via.forEachIndexed { index, stop ->
+        val leg = itinerary.getOrNull(index) ?: return@forEachIndexed
+        if (leg.isPassed) return@forEachIndexed
+        stops += RideStop(
+            name = stop.name ?: onMapLabel,
+            role = StopRole.VIA,
+            number = number++,
+            distanceMeters = leg.distanceAheadMeters,
+            etaEpochMillis = leg.etaEpochMillis,
+        )
+    }
+    stops += RideStop(
+        name = if (selection.roundTrip) {
+            stringResource(R.string.plan_stop_roundtrip_destination)
+        } else {
+            selection.destinationName ?: stringResource(R.string.plan_destination_pin)
+        },
+        role = StopRole.DESTINATION,
+        distanceMeters = state.remainingDistanceMeters,
+        etaEpochMillis = state.etaEpochMillis,
+    )
+    return stops
 }

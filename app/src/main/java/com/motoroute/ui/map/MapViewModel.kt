@@ -212,6 +212,23 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         moveStopUp(index + 1)
     }
 
+    /**
+     * Moves the stop at [from] to [to], shifting the ones in between.
+     *
+     * A drag past two tiles is one move, not two swaps: swapping repeatedly
+     * would leave the intermediate stops in the wrong order whenever the finger
+     * crossed more than one slot between frames. See
+     * [com.motoroute.ui.components.ReorderableStopColumn].
+     */
+    fun moveStop(from: Int, to: Int) {
+        val via = _selection.value.via
+        if (from !in via.indices || to !in via.indices || from == to) return
+        val mutable = via.toMutableList()
+        mutable.add(to, mutable.removeAt(from))
+        _selection.value = _selection.value.copy(via = mutable)
+        scheduleRecalc()
+    }
+
     fun removeStop(index: Int) {
         val via = _selection.value.via
         if (index !in via.indices) return
@@ -469,6 +486,19 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setAlternatives(enabled: Boolean) =
         container.settings.update { it.copy(searchAlternatives = enabled) }
+
+    /**
+     * Keep the route off motorways.
+     *
+     * Goes through [scheduleRecalc] like the profile and curviness do: changing
+     * what the route may use, while a route is on screen, has to change the
+     * route - otherwise the rider flips the switch, sees nothing happen and
+     * concludes it does not work.
+     */
+    fun setAvoidMotorways(enabled: Boolean) {
+        container.settings.update { it.copy(avoidMotorways = enabled) }
+        scheduleRecalc()
+    }
 
     fun completeOnboarding() = container.settings.update { it.copy(onboardingDone = true) }
 

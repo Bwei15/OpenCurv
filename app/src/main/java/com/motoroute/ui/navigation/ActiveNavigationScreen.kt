@@ -2,11 +2,10 @@ package com.motoroute.ui.navigation
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.background
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +19,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -32,28 +33,46 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.motoroute.R
 import com.motoroute.domain.NavigationState
 import com.motoroute.domain.cameras.SpeedCameraWarning
 import com.motoroute.ui.theme.LocalRideColors
 import com.motoroute.ui.theme.Motion
+import com.motoroute.ui.theme.Radius
 import com.motoroute.ui.theme.RideTargetGap
+import com.motoroute.ui.theme.Scrim
 import com.motoroute.ui.theme.Space
 import com.motoroute.ui.theme.TapTargetSize
+import com.motoroute.ui.theme.TypeScale
 
 /**
  * The riding HUD.
  *
- *   maneuver bar   top, compact - arrow, distance, the one after it
+ *   maneuver card  top - a floating plate: arrow, distance, the one after it,
+ *                  and the X that ends the ride
+ *   pill           centred under the card - news that must not move anything
  *   centre         the map, heading-up, owned by the caller
- *   right edge     speed + limit, between the maneuver bar and the button stack
+ *   right edge     speed + limit
  *   bottom left    arrival + remaining distance, one compact chip
- *   bottom right   Centre, a menu button, and the three buttons it tucks away
+ *   bottom right   Centre, plus mute and recalculate behind a menu button
+ *   bottom sheet   the ride's stops, pulled up when the rider wants them
  *
  * Everything is drawn over the map rather than beside it, because on a phone
  * clamped to a handlebar the map is what the rider looks at and the numbers are
  * what they glance at.
+ *
+ * ## What the September 2026 ride report changed
+ *
+ * The maneuver bar ran edge to edge with square corners and shared the top of
+ * the screen with a full-width status strip; every time that strip appeared the
+ * whole HUD below it jumped down 44 dp. The bar is now a rounded plate like the
+ * clock and distance chips it sits above, the distance is bigger (64 sp), and
+ * the strip is a [StatusPill] overlay that changes nobody else's position.
+ *
+ * Ending the ride used to be a red button in the tucked-away menu, next to
+ * mute and recalculate. It is now an X in the maneuver card's top-right corner,
+ * where closing a thing lives in every other app, and the menu is free to be
+ * what it should have been: the list of stops on this ride.
  */
 @Composable
 fun ActiveNavigationScreen(
@@ -66,10 +85,11 @@ fun ActiveNavigationScreen(
     following: Boolean,
     isDemo: Boolean,
     modifier: Modifier = Modifier,
-    // No camera-detection source is wired up yet (see SpeedCameraAlert.kt);
-    // this stays null until AppContainer exposes one, so the HUD already knows
-    // how to render a warning the day it does.
     cameraWarning: SpeedCameraWarning? = null,
+    /** The ride's stops, start first and destination last - see [RideStopSheet]. */
+    stops: List<RideStop> = emptyList(),
+    onAddStop: (() -> Unit)? = null,
+    onRemoveStop: ((Int) -> Unit)? = null,
     map: @Composable (() -> Unit)? = null,
 ) {
     val colors = LocalRideColors.current
@@ -83,23 +103,27 @@ fun ActiveNavigationScreen(
                 .fillMaxSize()
                 .windowInsetsPadding(WindowInsets.safeDrawing),
         ) {
-            // The one thing that must never disappear mid-ride, so it is a
-            // sibling of the camera-alert overlay below rather than something
-            // the overlay could ever cover.
-            ManeuverBar(state)
-
-            if (isDemo) {
-                StatusBanner(stringResource(R.string.nav_demo_running), colors.route)
-            }
-            if (state.isRerouting) {
-                StatusBanner(stringResource(R.string.rerouting), colors.warning)
-            } else if (state.isOffRoute) {
-                StatusBanner(stringResource(R.string.off_route), colors.danger)
-            } else if (state.hasArrived) {
-                StatusBanner(stringResource(R.string.arrived), colors.ok)
-            }
+            // The one thing that must never disappear mid-ride.
+            ManeuverCard(
+                state = state,
+                onStop = onStop,
+                modifier = Modifier.padding(horizontal = Space.Md, vertical = Space.Sm),
+            )
 
             Box(modifier = Modifier.weight(1f).fillMaxSize()) {
+                // News, as an overlay: it hangs just under the maneuver card
+                // and moves nothing. Only one at a time, most urgent first -
+                // a rider who is off route does not also need to be told the
+                // route is being recalculated.
+                RidePill(
+                    state = state,
+                    isDemo = isDemo,
+                    cameraWarning = cameraWarning,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = Space.Sm),
+                )
+
                 // Arrival + remaining distance: bottom-left, out of the thumb's way.
                 EtaDistanceChip(
                     etaEpochMillis = state.etaEpochMillis,
@@ -109,16 +133,15 @@ fun ActiveNavigationScreen(
                         .padding(Space.Lg),
                 )
 
-                // Speed + limit: right edge, between the maneuver bar above
-                // (outside this box) and the button stack pinned to the
-                // bottom of this same box.
+                // Speed + limit: right edge, clear of the pill above and the
+                // button stack pinned to the bottom of this same box.
                 SpeedLimitStack(
                     speedKmh = state.speedKmh,
                     limitKmh = state.speedLimitKmh,
                     speeding = state.isSpeeding,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(top = Space.Lg, end = Space.Md),
+                        .padding(top = SPEED_STACK_TOP, end = Space.Md),
                 )
 
                 Column(
@@ -128,20 +151,15 @@ fun ActiveNavigationScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(RideTargetGap),
                 ) {
-                    // Mute, recalculate and stop, tucked behind the menu
-                    // button so only Centre - the one control reached for
-                    // every time the map has drifted off the rider - is
-                    // always on screen. Grows upward, toward the thumb.
+                    // Mute and recalculate, tucked behind the menu button so
+                    // only Centre - the one control reached for every time the
+                    // map has drifted off the rider - is always on screen.
+                    // Stopping the ride is not in here any more: it is the X on
+                    // the maneuver card.
                     AnimatedVisibility(
                         visible = menuExpanded,
-                        enter = expandVertically(
-                            animationSpec = tween(Motion.Fast, easing = Motion.Standard_),
-                            expandFrom = Alignment.Bottom,
-                        ) + fadeIn(tween(Motion.Fast)),
-                        exit = shrinkVertically(
-                            animationSpec = tween(Motion.Fast, easing = Motion.Exit),
-                            shrinkTowards = Alignment.Bottom,
-                        ) + fadeOut(tween(Motion.Fast)),
+                        enter = fadeIn(tween(Motion.Fast)) + scaleIn(tween(Motion.Fast), initialScale = 0.9f),
+                        exit = fadeOut(tween(Motion.Fast)) + scaleOut(tween(Motion.Fast), targetScale = 0.9f),
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(RideTargetGap)) {
                             GloveButton(
@@ -160,14 +178,6 @@ fun ActiveNavigationScreen(
                                 iconRes = R.drawable.ic_action_reroute,
                                 contentDescription = stringResource(R.string.action_reroute),
                                 onClick = onForceReroute,
-                                size = TapTargetSize,
-                            )
-                            GloveButton(
-                                iconRes = R.drawable.ic_action_stop,
-                                contentDescription = stringResource(R.string.action_stop),
-                                onClick = onStop,
-                                background = colors.danger,
-                                tint = Color.Black,
                                 size = TapTargetSize,
                             )
                         }
@@ -195,74 +205,190 @@ fun ActiveNavigationScreen(
                         tint = if (following) colors.hudForeground else Color.Black,
                     )
                 }
-
-                SpeedCameraAlert(
-                    warning = cameraWarning,
-                    modifier = Modifier.fillMaxSize(),
-                )
             }
+        }
+
+        // The stop list, pulled up over everything. Last in the Box so it wins
+        // the z-order it needs, and only present when there is a list to show.
+        if (stops.isNotEmpty()) {
+            RideStopSheet(
+                stops = stops,
+                etaEpochMillis = state.etaEpochMillis,
+                remainingMeters = state.remainingDistanceMeters,
+                onAddStop = onAddStop,
+                onRemoveStop = onRemoveStop,
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
         }
     }
 }
 
 /**
- * Top bar: the next maneuver, how far away it is, and a preview of the one
- * after. The preview is what makes a "left then immediately right" rideable.
+ * Top plate: the next maneuver, how far away it is, a preview of the one after,
+ * and the X that ends the ride.
+ *
+ * The preview is what makes a "left then immediately right" rideable. The X is
+ * deliberately the smallest target on the plate - it is the one control on the
+ * riding path whose accidental press costs the rider their navigation, so it
+ * sits in the corner furthest from the thumb rather than in the button stack
+ * where a mis-grab lands.
  */
 @Composable
-private fun ManeuverBar(state: NavigationState) {
+private fun ManeuverCard(
+    state: NavigationState,
+    onStop: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val colors = LocalRideColors.current
     val current = state.current
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 140.dp)
-            .background(colors.hudBackground.copy(alpha = 0.92f)),
+    Surface(
+        color = colors.hudBackground.copy(alpha = Scrim.FloatingControl),
+        shape = RoundedCornerShape(Radius.Xl),
+        modifier = modifier.fillMaxWidth(),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = Space.Lg, vertical = Space.Sm),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (current != null) {
-                ManeuverIcon(current.maneuver, size = 104.dp)
-                Spacer(Modifier.width(16.dp))
-                Column {
+        Box {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = MANEUVER_CARD_MIN_HEIGHT)
+                    .padding(start = Space.Md, end = CLOSE_BUTTON_GUTTER, top = Space.Md, bottom = Space.Md),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (current != null) {
+                    ManeuverIcon(
+                        maneuver = current.maneuver,
+                        size = MANEUVER_ICON_SIZE,
+                        roundaboutExit = current.roundaboutExit,
+                    )
+                    Spacer(Modifier.width(Space.Md))
+                    // The exit number used to be a 16 sp line of text next to
+                    // the arrow; it now lives inside the ring the arrow draws,
+                    // which is why nothing but the distance is left here.
                     DistanceReadout(state.distanceToManeuverMeters)
-                    if (current.roundaboutExit > 0) {
+                } else {
+                    Text(
+                        text = stringResource(R.string.nav_waiting_gps),
+                        color = colors.hudForeground,
+                        fontSize = TypeScale.HudSecondary,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+
+                Spacer(Modifier.weight(1f))
+
+                state.next?.let { next ->
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(end = Space.Sm),
+                    ) {
+                        ManeuverIcon(
+                            maneuver = next.maneuver,
+                            size = NEXT_ICON_SIZE,
+                            tint = colors.hudMuted,
+                            roundaboutExit = next.roundaboutExit,
+                        )
+                        val (value, unit) = formatDistance(state.distanceBetweenManeuversMeters)
                         Text(
-                            text = stringResource(R.string.nav_exit, current.roundaboutExit),
-                            color = colors.muted,
-                            fontSize = 16.sp,
+                            text = if (unit.isEmpty()) value else "$value $unit",
+                            color = colors.hudMuted,
+                            fontSize = TypeScale.Label,
                             fontWeight = FontWeight.Bold,
                         )
                     }
                 }
-            } else {
-                Text(
-                    text = stringResource(R.string.nav_waiting_gps),
-                    color = colors.hudForeground,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                )
             }
 
-            Spacer(Modifier.weight(1f))
-
-            state.next?.let { next ->
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    ManeuverIcon(next.maneuver, size = 52.dp, tint = colors.muted)
-                    val (value, unit) = formatDistance(state.distanceBetweenManeuversMeters)
-                    Text(
-                        text = if (unit.isEmpty()) value else "$value $unit",
-                        color = colors.muted,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-            }
+            CloseRideButton(
+                onClick = onStop,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(Space.Sm),
+            )
         }
     }
 }
+
+/** The X in the maneuver card's corner: ends the ride. */
+@Composable
+private fun CloseRideButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = LocalRideColors.current
+    GloveButton(
+        iconRes = R.drawable.ic_action_close,
+        contentDescription = stringResource(R.string.action_stop),
+        onClick = onClick,
+        background = colors.hudForeground.copy(alpha = 0.14f),
+        tint = colors.hudForeground,
+        size = CLOSE_BUTTON_SIZE,
+        modifier = modifier,
+    )
+}
+
+/**
+ * Whichever single piece of news is most urgent, as a pill.
+ *
+ * Order matters and is the whole design: a rider off route does not also need
+ * "recalculating", and a camera 300 m away outranks a demo notice. One pill,
+ * never a stack - two pills would start moving each other around, which is the
+ * problem the pill exists to solve.
+ */
+@Composable
+private fun RidePill(
+    state: NavigationState,
+    isDemo: Boolean,
+    cameraWarning: SpeedCameraWarning?,
+    modifier: Modifier = Modifier,
+) {
+    val colors = LocalRideColors.current
+    val pill: Pair<String, Color>? = when {
+        cameraWarning != null -> {
+            val limit = cameraWarning.maxSpeedKmh
+            val distance = formatCameraDistance(cameraWarning.distanceMeters)
+            val text = if (limit != null) {
+                stringResource(R.string.pill_speed_camera_with_limit, distance, limit)
+            } else {
+                stringResource(R.string.pill_speed_camera, distance)
+            }
+            text to colors.warning
+        }
+        state.hasArrived -> stringResource(R.string.arrived) to colors.ok
+        state.isOffRoute -> stringResource(R.string.off_route) to colors.danger
+        state.isRerouting -> stringResource(R.string.rerouting) to colors.warning
+        isDemo -> stringResource(R.string.nav_demo_running) to colors.route
+        else -> null
+    }
+
+    AnimatedVisibility(
+        visible = pill != null,
+        // A pill appearing is news, not a control being pressed, so it may
+        // animate - but only its own opacity and scale, never anyone's layout.
+        enter = fadeIn(tween(Motion.Fast)) + scaleIn(tween(Motion.Standard), initialScale = 0.85f),
+        exit = fadeOut(tween(Motion.Fast)) + scaleOut(tween(Motion.Fast), targetScale = 0.9f),
+        modifier = modifier,
+    ) {
+        // Can go null exactly as the exit animation starts; keep showing what
+        // it was about rather than popping to nothing mid-fade.
+        val shown = pill ?: return@AnimatedVisibility
+        StatusPill(
+            text = shown.first,
+            dotColor = shown.second,
+            iconRes = R.drawable.ic_poi_camera.takeIf { cameraWarning != null },
+        )
+    }
+}
+
+/** Plate height that fits the 112 dp arrow with its own breathing room. */
+private val MANEUVER_CARD_MIN_HEIGHT = 144.dp
+
+/** Raised from 104 dp with the distance: the arrow is read before the number. */
+private val MANEUVER_ICON_SIZE = 112.dp
+
+private val NEXT_ICON_SIZE = 56.dp
+
+private val CLOSE_BUTTON_SIZE = 48.dp
+
+/** Keeps the "then" preview clear of the X above it. */
+private val CLOSE_BUTTON_GUTTER = 64.dp
+
+/** Below the pill's lane, so a pill never covers the speed. */
+private val SPEED_STACK_TOP = 72.dp

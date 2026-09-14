@@ -1,0 +1,612 @@
+<title>OpenCurv UI-Werkstatt</title>
+<style>
+  /*
+   * A paper prototype for the OpenCurv redesign.
+   *
+   * There is no Android emulator in the workspace, so this is where a layout
+   * gets looked at before it is written in Compose. The colours are the real
+   * tokens from ui/theme/Color.kt and the sizes are the real dp values from
+   * Dimens.kt read as px, so what is decided here transfers one-to-one.
+   *
+   * Open it in a browser, or with the Compose code next to it as a reference.
+   */
+  :root {
+    /* ---- tokens: ui/theme/Color.kt ---- */
+    --canvas: #F1EFE8;
+    --plate: #FFFFFF;
+    --sunken: #E9E5DB;
+    --rim: #6B655833;
+    --ink: #14181F;
+    --muted: #4F5A66;
+    --faint: #6B7480;
+    --route: #2F4BFF;
+    --indigo: #2440D9;
+    --indigo-light: #8AA6FF;
+    --magenta: #B31D6B;
+    --ok: #0F7A34;
+    --warning: #8A5200;
+    --danger: #C0172B;
+    --hud: #0D1219;
+    --hud-ink: #FFFFFF;
+    --hud-muted: #AEB8C4;
+
+    /* ---- tokens: ui/theme/Dimens.kt (Radius) ---- */
+    --r-xs: 8px;
+    --r-sm: 12px;
+    --r-md: 16px;
+    --r-lg: 20px;
+    --r-xl: 28px;
+    --r-full: 999px;
+
+    /* ---- tokens: ui/theme/Dimens.kt (Space) ---- */
+    --s-xs: 4px;
+    --s-sm: 8px;
+    --s-md: 12px;
+    --s-lg: 16px;
+    --s-xl: 24px;
+
+    /* Soft shadows instead of hard lines - the single biggest thing that
+     * separates "finished" from "assembled" (see Design_Trends_2026.md 5). */
+    --lift-1: 0 1px 2px rgba(20, 24, 31, .06), 0 2px 8px rgba(20, 24, 31, .06);
+    --lift-2: 0 2px 4px rgba(20, 24, 31, .07), 0 8px 24px rgba(20, 24, 31, .10);
+    --lift-3: 0 4px 8px rgba(20, 24, 31, .10), 0 18px 48px rgba(20, 24, 31, .16);
+  }
+
+  body {
+    background: #DAD6CC;
+    color: var(--ink);
+    font: 14px/1.45 -apple-system, "Segoe UI", Roboto, system-ui, sans-serif;
+    padding: 20px 16px 64px;
+  }
+
+  h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: -.2px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: #5A5546; margin: 28px 0 10px; }
+  .lede { color: #4A4636; max-width: 62ch; margin: 0 0 8px; }
+
+  .row { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+
+  /* A phone. 400 x 780 keeps the aspect of a modern handset at 1 dp = 1 px. */
+  .phone {
+    width: 400px; height: 780px; position: relative; overflow: hidden;
+    border-radius: 34px; background: var(--canvas);
+    box-shadow: var(--lift-3); flex: 0 0 auto;
+  }
+  .phone > .label {
+    position: absolute; inset: auto 0 0 0; z-index: 40;
+    background: #14181FE6; color: #fff; font-size: 11px; padding: 5px 10px;
+    letter-spacing: .04em;
+  }
+
+  /* Stand-in for the map. Not art - just enough texture to judge contrast. */
+  .map {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(120% 80% at 20% 15%, #E7EEDF 0%, #DDE7D4 40%, #D3DFC9 100%);
+  }
+  .map svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+  .safe-top { height: 44px; }
+
+  /* ---------- resting screen ---------- */
+
+  .searchbar {
+    display: flex; align-items: center; gap: var(--s-md);
+    height: 56px; padding: 0 var(--s-lg);
+    background: var(--plate); border-radius: var(--r-md);
+    box-shadow: var(--lift-2);
+  }
+  .searchbar .glyph { width: 22px; height: 22px; flex: 0 0 auto; opacity: .75; }
+  .searchbar .text { font-weight: 600; color: var(--faint); }
+  .searchbar .text.set { color: var(--ink); font-weight: 700; }
+
+  .fabcol { display: flex; flex-direction: column; gap: var(--s-md); }
+  .fab {
+    width: 48px; height: 48px; border-radius: var(--r-md);
+    background: var(--plate); box-shadow: var(--lift-2);
+    display: grid; place-items: center;
+  }
+  .fab.big { width: 56px; height: 56px; border-radius: var(--r-md); }
+  .fab.accent { background: var(--route); }
+  .fab svg { width: 22px; height: 22px; }
+
+  /* ---------- sheet ---------- */
+
+  .sheet {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 20;
+    background: var(--plate);
+    border-radius: var(--r-xl) var(--r-xl) 0 0;
+    box-shadow: 0 -2px 6px rgba(20,24,31,.06), 0 -14px 44px rgba(20,24,31,.18);
+    padding: 0 var(--s-lg) var(--s-xl);
+  }
+  .handle-area { height: 26px; display: grid; place-items: center; }
+  .handle { width: 44px; height: 5px; border-radius: var(--r-full); background: #C9C4B8; }
+
+  .peek { display: flex; align-items: center; gap: var(--s-md); min-height: 64px; }
+  .peek .big { font-size: 30px; font-weight: 800; letter-spacing: -.5px; line-height: 1.05; }
+  .peek .sub { color: var(--muted); font-size: 13px; }
+  .go {
+    width: 64px; height: 64px; border-radius: var(--r-full); background: var(--magenta);
+    display: grid; place-items: center; box-shadow: 0 6px 18px rgba(179,29,107,.34);
+    flex: 0 0 auto;
+  }
+  .go svg { width: 26px; height: 26px; }
+
+  /* Stop tiles: the Apple-Maps shape the brief asks for. */
+  .tiles { display: flex; flex-direction: column; gap: var(--s-sm); margin-top: var(--s-lg); }
+  .tile {
+    display: flex; align-items: center; gap: var(--s-md);
+    background: var(--sunken); border-radius: var(--r-md);
+    padding: 10px var(--s-md); min-height: 56px;
+  }
+  .tile.endpoint { background: #fff; box-shadow: inset 0 0 0 1.5px #E3DFD4; }
+  .tile .grip { width: 20px; color: #9A9487; flex: 0 0 auto; letter-spacing: -2px; font-size: 15px; }
+  .tile .pip {
+    width: 26px; height: 26px; border-radius: var(--r-full); flex: 0 0 auto;
+    display: grid; place-items: center; font-size: 12px; font-weight: 800; color: #fff;
+    background: var(--indigo);
+  }
+  .tile .pip.start { background: var(--ok); }
+  .tile .pip.end { background: var(--magenta); }
+  .tile .body { flex: 1 1 auto; min-width: 0; }
+  .tile .name { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile .kind { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+  .tile .x {
+    width: 34px; height: 34px; border-radius: var(--r-full); flex: 0 0 auto;
+    display: grid; place-items: center; background: #FFFFFF; color: var(--muted);
+    box-shadow: var(--lift-1); font-size: 15px;
+  }
+  .tile .plus { background: var(--indigo); color: #fff; box-shadow: none; }
+
+  .addtile {
+    display: flex; align-items: center; gap: var(--s-md);
+    border: 1.5px dashed #C9C4B8; border-radius: var(--r-md);
+    padding: 10px var(--s-md); min-height: 56px; color: var(--indigo); font-weight: 700;
+  }
+  .addtile .plus {
+    width: 34px; height: 34px; border-radius: var(--r-full);
+    display: grid; place-items: center; background: var(--indigo); color: #fff; font-size: 18px;
+  }
+
+  /* Round trip belongs high up, as a real choice, not a checkbox at the bottom. */
+  .segmented {
+    display: flex; gap: 4px; background: var(--sunken); border-radius: var(--r-full);
+    padding: 4px; margin-top: var(--s-md);
+  }
+  .segmented > div {
+    flex: 1 1 0; text-align: center; padding: 11px 8px; border-radius: var(--r-full);
+    font-weight: 700; font-size: 14px; color: var(--muted);
+  }
+  .segmented > div.on { background: var(--plate); color: var(--ink); box-shadow: var(--lift-1); }
+
+  .optrow {
+    display: flex; align-items: center; gap: var(--s-md); margin-top: var(--s-md);
+    background: var(--plate); border-radius: var(--r-md); padding: 14px var(--s-md);
+    box-shadow: inset 0 0 0 1.5px #EDE9DE;
+  }
+  .optrow .lead { flex: 1 1 auto; }
+  .optrow .lead b { display: block; font-size: 15px; }
+  .optrow .lead span { color: var(--muted); font-size: 12px; }
+  .optrow .chev { color: var(--faint); font-size: 18px; }
+
+  .chips { display: flex; gap: var(--s-sm); flex-wrap: wrap; margin-top: var(--s-sm); }
+  .chip {
+    padding: 12px 16px; border-radius: var(--r-full); background: var(--sunken);
+    font-weight: 700; font-size: 14px; color: var(--muted);
+  }
+  .chip.on { background: var(--indigo); color: #fff; }
+
+  .switch { width: 46px; height: 28px; border-radius: var(--r-full); background: #CFCABE; position: relative; flex: 0 0 auto; }
+  .switch.on { background: var(--indigo); }
+  .switch::after {
+    content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px;
+    border-radius: var(--r-full); background: #fff; box-shadow: var(--lift-1);
+  }
+  .switch.on::after { left: 21px; }
+
+  .sectiontitle { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--faint); font-weight: 800; margin-top: var(--s-lg); }
+
+  /* ---------- riding HUD ---------- */
+
+  .hudwrap { position: absolute; inset: 0; display: flex; flex-direction: column; }
+  .hudpad { padding: 10px var(--s-md) 0; }
+
+  /* The maneuver banner: rounded like the other readouts, bigger than before. */
+  .maneuver {
+    display: flex; align-items: center; gap: var(--s-lg);
+    background: #0D1219F2; color: var(--hud-ink);
+    border-radius: var(--r-xl); padding: var(--s-lg) var(--s-lg);
+    box-shadow: 0 10px 30px rgba(0,0,0,.35);
+  }
+  .maneuver .arrow { width: 104px; height: 104px; flex: 0 0 auto; }
+  .maneuver .dist { font-size: 62px; font-weight: 800; line-height: .95; letter-spacing: -2px; }
+  .maneuver .dist small { font-size: 26px; font-weight: 700; margin-left: 4px; }
+  .maneuver .street { color: var(--hud-muted); font-size: 17px; font-weight: 700; margin-top: 2px; }
+  .maneuver .then { text-align: center; color: var(--hud-muted); margin-left: auto; }
+  .maneuver .then svg { width: 46px; height: 46px; }
+  .maneuver .then div { font-size: 13px; font-weight: 700; margin-top: 2px; }
+  .maneuver .close {
+    position: absolute; top: 14px; right: 14px; width: 40px; height: 40px;
+    border-radius: var(--r-full); background: #FFFFFF1F; color: #fff;
+    display: grid; place-items: center; font-size: 17px;
+  }
+
+  /* Dynamic-Island style pill: floats, does not push the HUD around. */
+  .pill {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    display: inline-flex; align-items: center; gap: var(--s-sm);
+    padding: 9px 16px; border-radius: var(--r-full);
+    background: #0D1219F2; color: #fff; font-weight: 800; font-size: 14px;
+    box-shadow: 0 8px 22px rgba(0,0,0,.4); white-space: nowrap; z-index: 30;
+  }
+  .pill .dot { width: 9px; height: 9px; border-radius: var(--r-full); background: var(--indigo-light); }
+  .pill.warn .dot { background: #FFB84D; }
+  .pill.bad  .dot { background: #FF6B7A; }
+
+  .speedstack { position: absolute; right: var(--s-md); display: flex; flex-direction: column; align-items: center; gap: var(--s-sm); }
+  .limit {
+    width: 58px; height: 58px; border-radius: var(--r-full); background: #D32F2F;
+    display: grid; place-items: center; box-shadow: var(--lift-2);
+  }
+  .limit > div { width: 44px; height: 44px; border-radius: var(--r-full); background: #fff; display: grid; place-items: center; font-weight: 800; font-size: 20px; }
+  .speed {
+    min-width: 78px; border-radius: var(--r-lg); background: #0D1219E0; color: #fff;
+    text-align: center; padding: 8px 12px;
+  }
+  .speed b { display: block; font-size: 36px; font-weight: 800; line-height: 1; }
+  .speed span { font-size: 12px; color: var(--hud-muted); font-weight: 700; }
+
+  .etachip {
+    position: absolute; left: var(--s-lg); bottom: var(--s-lg);
+    background: #0D1219E0; color: #fff; border-radius: var(--r-lg);
+    padding: 10px var(--s-lg); font-weight: 700; font-size: 21px;
+  }
+  .ridecol { position: absolute; right: var(--s-md); bottom: var(--s-lg); display: flex; flex-direction: column; gap: var(--s-md); align-items: center; }
+  .glove { width: 84px; height: 84px; border-radius: var(--r-md); background: #0D1219DB; display: grid; place-items: center; }
+  .glove.critical { width: 96px; height: 96px; }
+  .glove.lit { background: var(--route); }
+  .glove svg { width: 40px; height: 40px; }
+
+  /* The expanded ride menu: the stop list, and nothing else. */
+  .ridesheet {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 25;
+    background: #0F151DF7; color: #fff;
+    border-radius: var(--r-xl) var(--r-xl) 0 0; padding: 0 var(--s-lg) var(--s-xl);
+    box-shadow: 0 -14px 44px rgba(0,0,0,.5);
+  }
+  .ridesheet .handle { background: #FFFFFF3D; }
+  .ridesheet .tile { background: #FFFFFF14; }
+  .ridesheet .tile .name { color: #fff; }
+  .ridesheet .tile .kind { color: var(--hud-muted); }
+  .ridesheet .tile .x { background: #FFFFFF1F; color: #fff; box-shadow: none; }
+  .ridesheet .addtile { border-color: #FFFFFF33; color: var(--indigo-light); }
+
+  /* ---------- roundabout icon study ---------- */
+  .iconrow { display: flex; gap: 18px; align-items: center; background: var(--hud); padding: 20px; border-radius: var(--r-xl); }
+  .iconrow figure { margin: 0; text-align: center; color: var(--hud-muted); font-size: 12px; }
+  .iconrow svg { display: block; margin: 0 auto 6px; }
+
+  .note { background: #FFFFFFAD; border-radius: var(--r-md); padding: 12px 14px; max-width: 400px; box-shadow: var(--lift-1); }
+  .note b { display: block; margin-bottom: 4px; }
+  .note ul { margin: 0; padding-left: 18px; }
+  .note li { margin: 2px 0; }
+</style>
+
+<h1>OpenCurv UI-Werkstatt</h1>
+<p class="lede">
+  Papier-Prototyp für den Umbau. Farben und Abstände sind die echten Tokens aus
+  <code>ui/theme/Color.kt</code> und <code>ui/theme/Dimens.kt</code>, 1&nbsp;dp = 1&nbsp;px —
+  was hier passt, passt auch in Compose. Kein Emulator im Workspace, deshalb wird hier geschaut,
+  bevor etwas in die App wandert.
+</p>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <g id="g-search"><path d="M10 2a8 8 0 105.3 14L21 21.7 22.4 20.3 16.7 14.6A8 8 0 0010 2zm0 2a6 6 0 110 12A6 6 0 0110 4z" fill="currentColor"/></g>
+    <g id="g-locate"><path d="M12 2v3.1A7 7 0 005.1 12H2v2h3.1A7 7 0 0012 20.9V24h2v-3.1A7 7 0 0020.9 14H24v-2h-3.1A7 7 0 0014 5.1V2h-2zm1 5a5 5 0 110 10 5 5 0 010-10zm0 3a2 2 0 100 4 2 2 0 000-4z" fill="currentColor"/></g>
+    <g id="g-layers"><path d="M12 3 3 8l9 5 9-5-9-5zm0 7.8L5.6 7.3 12 3.8l6.4 3.5L12 10.8zM3 12l9 5 9-5-1.9-1L12 15 4.9 11 3 12zm0 4 9 5 9-5-1.9-1L12 19 4.9 15 3 16z" fill="currentColor"/></g>
+    <g id="g-gear"><path d="M12 8a4 4 0 100 8 4 4 0 000-8zm0 2a2 2 0 110 4 2 2 0 010-4zM11 2h2l.4 2.5 1.9.8 2-1.6 1.4 1.4-1.6 2 .8 1.9L20.5 11v2l-2.5.4-.8 1.9 1.6 2-1.4 1.4-2-1.6-1.9.8L13 20.5h-2l-.4-2.5-1.9-.8-2 1.6-1.4-1.4 1.6-2-.8-1.9L3.5 13v-2l2.5-.4.8-1.9-1.6-2 1.4-1.4 2 1.6 1.9-.8L11 2z" fill="currentColor"/></g>
+    <g id="g-play"><path d="M7 4l14 8-14 8V4z" fill="currentColor"/></g>
+    <g id="g-left"><path d="M52 92V44a14 14 0 0114-14h18V12l24 24-24 24V44H72a6 6 0 00-6 6v42H52z" fill="currentColor" transform="scale(-1,1) translate(-124,0)"/></g>
+    <g id="g-right"><path d="M52 92V44a14 14 0 0114-14h18V12l24 24-24 24V44H72a6 6 0 00-6 6v42H52z" fill="currentColor"/></g>
+    <g id="g-mute"><path d="M4 9h4l5-4v14l-5-4H4V9zm14.5-1.5 1.4 1.4a6 6 0 010 6.2l-1.4 1.4a8 8 0 000-9z" fill="currentColor"/></g>
+    <g id="g-reroute"><path d="M12 4V1L8 5l4 4V6a6 6 0 11-6 6H4a8 8 0 108-8z" fill="currentColor"/></g>
+  </defs>
+</svg>
+
+<h2>1 — Ruhezustand: Suchfeld, schwebende Regler, Sheet im Peek</h2>
+<div class="row">
+
+  <!-- A: rest, collapsed sheet -->
+  <div class="phone">
+    <div class="map">
+      <svg viewBox="0 0 400 780" preserveAspectRatio="none">
+        <path d="M-20 250 C 90 220 130 330 220 340 S 360 300 420 380" fill="none" stroke="#C7CFBB" stroke-width="16"/>
+        <path d="M-20 520 C 110 480 200 560 300 520 S 380 470 420 500" fill="none" stroke="#CFD6C4" stroke-width="10"/>
+        <path d="M60 -20 C 90 160 40 320 120 470 S 200 640 180 800" fill="none" stroke="#D2D9C7" stroke-width="8"/>
+        <path d="M-20 250 C 90 220 130 330 220 340 S 360 300 420 380" fill="none" stroke="#2F4BFF" stroke-width="9" stroke-linecap="round" opacity=".9"/>
+        <circle cx="220" cy="340" r="11" fill="#2440D9" stroke="#fff" stroke-width="3.5"/>
+      </svg>
+    </div>
+    <div class="hudpad" style="position:relative;z-index:10">
+      <div class="safe-top"></div>
+      <div style="display:flex;gap:var(--s-md);align-items:center">
+        <div class="searchbar" style="flex:1">
+          <svg class="glyph" viewBox="0 0 24 24"><use href="#g-search"/></svg>
+          <div class="text">Wohin geht's?</div>
+        </div>
+        <div class="fab big accent"><svg viewBox="0 0 26 26" style="color:#fff"><use href="#g-locate"/></svg></div>
+      </div>
+    </div>
+    <div class="fabcol" style="position:absolute;right:var(--s-md);bottom:190px;z-index:10">
+      <div class="fab"><svg viewBox="0 0 24 24"><use href="#g-gear"/></svg></div>
+      <div class="fab"><svg viewBox="0 0 24 24"><use href="#g-layers"/></svg></div>
+    </div>
+    <div class="sheet">
+      <div class="handle-area"><div class="handle"></div></div>
+      <div class="peek">
+        <div style="flex:1">
+          <div class="big">1 h 52 min</div>
+          <div class="sub">148 km · Ankunft 16:24 · 0 km Autobahn</div>
+        </div>
+        <div class="go"><svg viewBox="0 0 24 24" style="color:#fff"><use href="#g-play"/></svg></div>
+      </div>
+    </div>
+    <div class="label">A · Ruhezustand, Sheet im Peek — kleine Regler (48/56 dp), nur der Peek zeigt Zahlen</div>
+  </div>
+
+  <!-- B: rest, expanded sheet with stop tiles -->
+  <div class="phone">
+    <div class="map">
+      <svg viewBox="0 0 400 780" preserveAspectRatio="none">
+        <path d="M-20 150 C 90 120 130 230 220 240 S 360 200 420 280" fill="none" stroke="#C7CFBB" stroke-width="16"/>
+        <path d="M-20 150 C 90 120 130 230 220 240 S 360 200 420 280" fill="none" stroke="#2F4BFF" stroke-width="9" stroke-linecap="round" opacity=".9"/>
+      </svg>
+    </div>
+    <div class="sheet" style="top:96px;border-radius:var(--r-xl)">
+      <div class="handle-area"><div class="handle"></div></div>
+      <div class="peek">
+        <div style="flex:1">
+          <div class="big">1 h 52 min</div>
+          <div class="sub">148 km · Ankunft 16:24 · 0 km Autobahn</div>
+        </div>
+        <div class="go"><svg viewBox="0 0 24 24" style="color:#fff"><use href="#g-play"/></svg></div>
+      </div>
+
+      <div class="segmented">
+        <div class="on">Zum Ziel</div>
+        <div>Rundtour</div>
+      </div>
+
+      <div class="sectiontitle">Route</div>
+      <div class="tiles">
+        <div class="tile endpoint">
+          <div class="grip">⠿</div>
+          <div class="pip start">A</div>
+          <div class="body"><div class="name">Mein Standort</div><div class="kind">Start</div></div>
+        </div>
+        <div class="tile">
+          <div class="grip">⠿</div>
+          <div class="pip">1</div>
+          <div class="body"><div class="name">Externsteine</div><div class="kind">Stopp</div></div>
+          <div class="x">✕</div>
+        </div>
+        <div class="tile">
+          <div class="grip">⠿</div>
+          <div class="pip">2</div>
+          <div class="body"><div class="name">Hermannsdenkmal</div><div class="kind">Stopp</div></div>
+          <div class="x">✕</div>
+        </div>
+        <div class="tile endpoint">
+          <div class="grip">⠿</div>
+          <div class="pip end">Z</div>
+          <div class="body"><div class="name">Bad Pyrmont</div><div class="kind">Ziel</div></div>
+          <div class="x">✕</div>
+        </div>
+        <div class="addtile"><div class="plus">+</div> Stopp hinzufügen</div>
+      </div>
+
+      <div class="optrow">
+        <div class="lead"><b>Routenoptionen</b><span>Kurvig · Autobahn meiden · Alternativen</span></div>
+        <div class="chev">›</div>
+      </div>
+    </div>
+    <div class="label">B · Sheet aufgezogen — Stopps als Kacheln mit Griff und ✕, Rundtour weit oben, Optionen als eigene Zeile</div>
+  </div>
+
+  <!-- C: route options submenu -->
+  <div class="phone" style="background:var(--canvas)">
+    <div class="hudpad">
+      <div class="safe-top"></div>
+      <div style="display:flex;align-items:center;gap:var(--s-md);padding:4px 0 var(--s-lg)">
+        <div class="fab" style="width:44px;height:44px;box-shadow:none;background:var(--sunken)">‹</div>
+        <div style="font-size:22px;font-weight:800;letter-spacing:-.3px">Routenoptionen</div>
+      </div>
+
+      <div class="sectiontitle" style="margin-top:0">Fahrstil</div>
+      <div class="chips">
+        <div class="chip on">Kurvig</div>
+        <div class="chip">Schnell</div>
+        <div class="chip">Enduro</div>
+      </div>
+
+      <div class="sectiontitle">Kurvenhunger</div>
+      <div style="background:var(--plate);border-radius:var(--r-md);padding:14px var(--s-md);box-shadow:var(--lift-1)">
+        <div style="display:flex;justify-content:space-between;font-weight:700"><span>Ausgewogen</span><span style="color:var(--muted)">1,0</span></div>
+        <div style="height:6px;border-radius:var(--r-full);background:var(--sunken);margin:12px 0 6px;position:relative">
+          <div style="position:absolute;left:0;top:0;bottom:0;width:50%;border-radius:var(--r-full);background:linear-gradient(90deg,#2440D9,#B31D6B)"></div>
+          <div style="position:absolute;left:50%;top:-8px;width:22px;height:22px;margin-left:-11px;border-radius:var(--r-full);background:#fff;box-shadow:var(--lift-2)"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;color:var(--faint);font-size:11px"><span>Direkt</span><span>Maximal</span></div>
+      </div>
+
+      <div class="sectiontitle">Meiden</div>
+      <div class="optrow" style="margin-top:var(--s-sm)">
+        <div class="lead"><b>Autobahn</b><span>Macht auf dem Motorrad keinen Spaß</span></div>
+        <div class="switch on"></div>
+      </div>
+      <div class="optrow" style="margin-top:var(--s-sm)">
+        <div class="lead"><b>Unbefestigte Wege</b><span>Schotter und Feldwege</span></div>
+        <div class="switch on"></div>
+      </div>
+      <div class="optrow" style="margin-top:var(--s-sm)">
+        <div class="lead"><b>Fähren</b><span></span></div>
+        <div class="switch"></div>
+      </div>
+
+      <div class="sectiontitle">Suche</div>
+      <div class="optrow" style="margin-top:var(--s-sm)">
+        <div class="lead"><b>Alternativen prüfen</b><span>Dauert länger, findet mehr Kurven</span></div>
+        <div class="switch on"></div>
+      </div>
+    </div>
+    <div class="label">C · Untermenü Routenoptionen — alles, was vorher unten im Sheet verstreut war</div>
+  </div>
+</div>
+
+<h2>2 — Fahrzustand: Manöver-Banner, Pille, Klappmenü</h2>
+<div class="row">
+
+  <!-- D: riding HUD -->
+  <div class="phone">
+    <div class="map" style="background:radial-gradient(120% 80% at 50% 20%, #DDE6D2 0%, #CFDAC3 60%, #C3D0B6 100%)">
+      <svg viewBox="0 0 400 780" preserveAspectRatio="none">
+        <path d="M200 780 C 205 620 150 540 200 430 S 260 320 250 200" fill="none" stroke="#B9C3AB" stroke-width="30"/>
+        <path d="M200 780 C 205 620 150 540 200 430 S 260 320 250 200" fill="none" stroke="#2F4BFF" stroke-width="16" stroke-linecap="round"/>
+        <polygon points="200,620 214,652 200,644 186,652" fill="#2440D9" stroke="#fff" stroke-width="3"/>
+      </svg>
+    </div>
+    <div class="hudwrap">
+      <div class="hudpad" style="position:relative">
+        <div class="safe-top"></div>
+        <div class="maneuver" style="position:relative">
+          <svg class="arrow" viewBox="0 0 124 104" style="color:#fff"><use href="#g-left"/></svg>
+          <div>
+            <div class="dist">450<small>m</small></div>
+            <div class="street">L 712 → Schwalenberg</div>
+          </div>
+          <div class="then">
+            <svg viewBox="0 0 124 104"><use href="#g-right"/></svg>
+            <div>dann 120 m</div>
+          </div>
+          <div class="close">✕</div>
+        </div>
+      </div>
+      <div class="speedstack" style="top:250px">
+        <div class="limit"><div>70</div></div>
+        <div class="speed"><b>64</b><span>km/h</span></div>
+      </div>
+      <div class="etachip">16:24 · 38 km</div>
+      <div class="ridecol">
+        <div class="glove"><svg viewBox="0 0 24 24" style="color:#fff"><use href="#g-mute"/></svg></div>
+        <div class="glove"><svg viewBox="0 0 24 24" style="color:#fff"><use href="#g-reroute"/></svg></div>
+        <div class="glove critical lit"><svg viewBox="0 0 24 24" style="color:#000"><use href="#g-locate"/></svg></div>
+      </div>
+    </div>
+    <div class="label">D · Fahr-HUD — Banner abgerundet, Distanz 62 sp, Pfeil 104 dp, ✕ statt Stop-Button im Stapel</div>
+  </div>
+
+  <!-- E: pill states -->
+  <div class="phone">
+    <div class="map" style="background:radial-gradient(120% 80% at 50% 20%, #DDE6D2 0%, #CFDAC3 60%, #C3D0B6 100%)">
+      <svg viewBox="0 0 400 780" preserveAspectRatio="none">
+        <path d="M200 780 C 205 620 150 540 200 430 S 260 320 250 200" fill="none" stroke="#B9C3AB" stroke-width="30"/>
+        <path d="M200 780 C 205 620 150 540 200 430 S 260 320 250 200" fill="none" stroke="#2F4BFF" stroke-width="16" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="hudwrap">
+      <div class="hudpad" style="position:relative">
+        <div class="safe-top"></div>
+        <div class="maneuver" style="position:relative">
+          <svg class="arrow" viewBox="0 0 124 104" style="color:#fff"><use href="#g-right"/></svg>
+          <div>
+            <div class="dist">1,2<small>km</small></div>
+            <div class="street">B 239 → Lemgo</div>
+          </div>
+          <div class="close">✕</div>
+        </div>
+        <!-- The pill overlaps the banner's lower edge and floats: nothing below moves. -->
+        <div class="pill" style="top:168px"><span class="dot"></span> Neu berechnet</div>
+      </div>
+      <div class="speedstack" style="top:250px">
+        <div class="limit"><div>100</div></div>
+        <div class="speed"><b>96</b><span>km/h</span></div>
+      </div>
+      <div class="pill warn" style="top:330px">⚑ Blitzer · 500 m · erlaubt 70</div>
+      <div class="pill bad" style="top:392px"><span class="dot"></span> Nicht auf der Route</div>
+      <div class="etachip">16:24 · 38 km</div>
+      <div class="ridecol">
+        <div class="glove critical lit"><svg viewBox="0 0 24 24" style="color:#000"><use href="#g-locate"/></svg></div>
+      </div>
+    </div>
+    <div class="label">E · Pillen-Zustände (hier alle drei übereinander gezeigt) — schweben mittig, schieben nichts</div>
+  </div>
+
+  <!-- F: ride menu expanded -->
+  <div class="phone">
+    <div class="map" style="background:radial-gradient(120% 80% at 50% 20%, #DDE6D2 0%, #CFDAC3 60%, #C3D0B6 100%)"></div>
+    <div class="hudwrap">
+      <div class="hudpad">
+        <div class="safe-top"></div>
+        <div class="maneuver" style="position:relative">
+          <svg class="arrow" viewBox="0 0 124 104" style="color:#fff"><use href="#g-left"/></svg>
+          <div><div class="dist">450<small>m</small></div><div class="street">L 712</div></div>
+          <div class="close">✕</div>
+        </div>
+      </div>
+    </div>
+    <div class="ridesheet">
+      <div class="handle-area"><div class="handle"></div></div>
+      <div style="display:flex;align-items:baseline;gap:8px;padding-bottom:var(--s-sm)">
+        <div style="font-size:24px;font-weight:800">16:24</div>
+        <div style="color:var(--hud-muted);font-weight:700">· 38 km · 2 Stopps</div>
+      </div>
+      <div class="tiles">
+        <div class="tile"><div class="pip start">●</div><div class="body"><div class="name">Aktuelle Position</div><div class="kind">jetzt</div></div></div>
+        <div class="tile"><div class="pip">1</div><div class="body"><div class="name">Externsteine</div><div class="kind">in 12 km · 16:02</div></div><div class="x">✕</div></div>
+        <div class="tile"><div class="pip end">Z</div><div class="body"><div class="name">Bad Pyrmont</div><div class="kind">in 38 km · 16:24</div></div></div>
+        <div class="addtile"><div class="plus">+</div> Stopp hinzufügen</div>
+      </div>
+    </div>
+    <div class="label">F · Klappmenü im Fahrbetrieb — Position → Stopps → Ziel, sonst nichts</div>
+  </div>
+</div>
+
+<h2>3 — Kreisverkehr: Kreis mit Ausfahrtnummer in der Mitte</h2>
+<div class="row">
+  <div class="iconrow">
+    <figure>
+      <svg width="104" height="104" viewBox="0 0 104 104">
+        <!-- The reload-style ring: a gap at the entry, an arrowhead at the exit. -->
+        <path d="M52 22a30 30 0 1 1-26 15" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round"/>
+        <polygon points="52,10 66,24 38,24" fill="#fff"/>
+        <text x="52" y="52" text-anchor="middle" dominant-baseline="central" font-size="38" font-weight="800" fill="#fff" font-family="system-ui">2</text>
+      </svg>
+      2. Ausfahrt
+    </figure>
+    <figure>
+      <svg width="104" height="104" viewBox="0 0 104 104">
+        <path d="M52 22a30 30 0 1 0 26 15" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round"/>
+        <polygon points="52,10 38,24 66,24" fill="#fff"/>
+        <text x="52" y="52" text-anchor="middle" dominant-baseline="central" font-size="38" font-weight="800" fill="#fff" font-family="system-ui">3</text>
+      </svg>
+      links herum, 3.
+    </figure>
+    <figure>
+      <svg width="52" height="52" viewBox="0 0 104 104">
+        <path d="M52 22a30 30 0 1 1-26 15" fill="none" stroke="#AEB8C4" stroke-width="11" stroke-linecap="round"/>
+        <polygon points="52,8 68,24 36,24" fill="#AEB8C4"/>
+        <text x="52" y="54" text-anchor="middle" dominant-baseline="central" font-size="44" font-weight="800" fill="#AEB8C4" font-family="system-ui">1</text>
+      </svg>
+      klein (Vorschau)
+    </figure>
+  </div>
+  <div class="note">
+    <b>Warum so</b>
+    <ul>
+      <li>Der Ring liest sich wie ein Neulade-Symbol: offen an der Einfahrt, Pfeilspitze an der Ausfahrt.</li>
+      <li>Die Nummer steht innen, weil sie die eigentliche Anweisung ist — vorher stand sie als Text daneben.</li>
+      <li>Eine Nummer muss auch bei 52&nbsp;dp noch lesbar sein, deshalb Strichstärke und Ziffer mitskalieren.</li>
+      <li>Kein Tempolimit-Rot: die Ausfahrtnummer ist keine Warnung.</li>
+    </ul>
+  </div>
+</div>

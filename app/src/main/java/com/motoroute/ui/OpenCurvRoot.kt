@@ -329,6 +329,10 @@ private fun MapRoot(
             onMapTap = if (navigating) null else viewModel::onMapTap,
             onMapLongPress = if (navigating) null else viewModel::onMapLongPress,
             onPoiTap = if (navigating) null else viewModel::selectPoi,
+            speedMps = navigationState.speedMps,
+            // Only while riding: a parked phone has nothing to extrapolate and
+            // no reason to redraw the map every frame.
+            interpolatePosition = navigating,
         )
     }
 

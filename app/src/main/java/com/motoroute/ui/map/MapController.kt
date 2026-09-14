@@ -709,6 +709,16 @@ class MapController(private val offlineData: OfflineDataRepository) {
         zoom: Double?,
         headingUp: Boolean,
         tiltDegrees: Float = 0f,
+        /**
+         * False for a per-frame update from [com.motoroute.domain.PositionInterpolator].
+         *
+         * The eased move exists to smooth out one-per-second GPS fixes. Once the
+         * caller is already producing a smooth stream at the display's own rate,
+         * easing on top of it means every frame starts a new 900 ms animation
+         * that the next frame cancels - the camera then lags metres behind the
+         * puck and never catches up.
+         */
+        animate: Boolean = true,
     ) {
         val map = mapLibreMap ?: return
         if (position == null) return
@@ -733,7 +743,11 @@ class MapController(private val offlineData: OfflineDataRepository) {
             .padding(doubleArrayOf(0.0, topPadding, 0.0, 0.0))
             .build()
 
-        map.easeCamera(CameraUpdateFactory.newCameraPosition(target), FOLLOW_EASE_MS)
+        if (animate) {
+            map.easeCamera(CameraUpdateFactory.newCameraPosition(target), FOLLOW_EASE_MS)
+        } else {
+            map.moveCamera(CameraUpdateFactory.newCameraPosition(target))
+        }
         cameraPlaced = true
     }
 

@@ -59,8 +59,12 @@ jobs:
       # compile ships green. Deliberately not `assembleDebug`: the APK job was
       # removed on purpose (commit bd91125), and compiling plus testing is what
       # catches mistakes, not packaging them.
+      # `gradle`, not `./gradlew`: the wrapper re-downloads the distribution on
+      # every run, which timed out on the first green-field run of this job. The
+      # setup-gradle action already provides a matching Gradle, and the logic job
+      # above has used it all along.
       - name: Run the app unit tests
-        run: ./gradlew testDebugUnitTest --no-daemon
+        run: gradle testDebugUnitTest --no-daemon
 
       - name: Upload app test report
         if: always()

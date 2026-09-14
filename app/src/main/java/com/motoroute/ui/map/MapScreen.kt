@@ -9,6 +9,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
@@ -20,6 +21,7 @@ import com.motoroute.OpenCurvApp
 import com.motoroute.data.model.GeoPoint
 import com.motoroute.data.model.Route
 import com.motoroute.data.settings.MapStyle
+import com.motoroute.domain.PositionInterpolator
 import com.motoroute.ui.theme.LocalRideColors
 
 /**
@@ -54,6 +56,14 @@ fun MapScreen(
     onMapTap: ((GeoPoint) -> Unit)? = null,
     onMapLongPress: ((GeoPoint) -> Unit)? = null,
     onPoiTap: ((PoiHit) -> Unit)? = null,
+    /**
+     * Speed in m/s and heading rate, used to carry the puck forward between GPS
+     * fixes. Zero (the default) keeps the old behaviour: the puck is drawn where
+     * the last fix put it and nowhere else.
+     */
+    speedMps: Double = 0.0,
+    /** Off while planning: there is nothing to dead-reckon when the bike is parked. */
+    interpolatePosition: Boolean = false,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -110,20 +120,74 @@ fun MapScreen(
         controller.showStart(start, rideColors.ok.toArgb())
     }
 
-    LaunchedEffect(position, headingDegrees, rideColors) {
-        controller.showPosition(position, headingDegrees, rideColors.rider.toArgb())
+    // ---- the puck ---------------------------------------------------------
+    //
+    // Two paths, deliberately. While riding, the interpolator carries the puck
+    // forward between the one-per-second fixes and the map is redrawn every
+    // frame (see PositionInterpolator for why a fix rate of 1 Hz cannot be
+    // drawn directly). While planning, there is nothing to extrapolate, so the
+    // puck is simply drawn where the fix says - and no frame loop runs, which
+    // keeps a parked phone from rendering the map 60 times a second.
+
+    val interpolator = remember(controller) { PositionInterpolator() }
+
+    LaunchedEffect(interpolatePosition) {
+        if (!interpolatePosition) interpolator.reset()
     }
 
-    LaunchedEffect(position, headingDegrees, zoom, headingUp, follow, perspectiveTilt) {
-        if (follow && position != null) {
-            controller.follow(position, headingDegrees, zoom, headingUp, perspectiveTilt)
-        } else if (!headingUp) {
-            // Also covers the moment a ride (or the demo) ends: NavigationController.stop()
-            // resets to a fresh NavigationState, so position drops to null while follow can
-            // still be true - controller.follow() would then no-op above and leave the camera
-            // exactly as tilted/rotated as the ride left it. Falling through here puts it back
-            // flat and north-up instead of waiting for the rider to pan by hand.
-            controller.resetRotation()
+    LaunchedEffect(position, headingDegrees, speedMps) {
+        val p = position ?: return@LaunchedEffect
+        interpolator.onFix(p, headingDegrees, speedMps, System.currentTimeMillis())
+    }
+
+    if (interpolatePosition) {
+        // Read through rememberUpdatedState rather than as effect keys: zoom and
+        // tilt change on every fix, and keying the loop on them would cancel and
+        // relaunch the coroutine once a second for no reason.
+        val liveZoom by rememberUpdatedState(zoom)
+        val liveHeadingUp by rememberUpdatedState(headingUp)
+        val liveFollow by rememberUpdatedState(follow)
+        val liveTilt by rememberUpdatedState(perspectiveTilt)
+        val livePuckColor by rememberUpdatedState(rideColors.rider.toArgb())
+
+        LaunchedEffect(Unit) {
+            while (true) {
+                // Paced by the display, and suspended entirely while the app is
+                // not drawing - so there is no timer to cancel.
+                withFrameMillis { }
+                val pose = interpolator.poseAt(System.currentTimeMillis()) ?: continue
+                controller.showPosition(pose.point, pose.headingDegrees, livePuckColor)
+                if (liveFollow) {
+                    controller.follow(
+                        position = pose.point,
+                        headingDegrees = pose.headingDegrees,
+                        zoom = liveZoom,
+                        headingUp = liveHeadingUp,
+                        tiltDegrees = liveTilt,
+                        // Already smooth: easing on top would fight the frame loop.
+                        animate = false,
+                    )
+                }
+            }
+        }
+    } else {
+        LaunchedEffect(position, headingDegrees, rideColors) {
+            controller.showPosition(position, headingDegrees, rideColors.rider.toArgb())
+        }
+
+        LaunchedEffect(position, headingDegrees, zoom, headingUp, follow, perspectiveTilt) {
+            if (follow && position != null) {
+                controller.follow(position, headingDegrees, zoom, headingUp, perspectiveTilt)
+            } else if (!headingUp) {
+                // Also covers the moment a ride (or the demo) ends:
+                // NavigationController.stop() resets to a fresh NavigationState, so
+                // position drops to null while follow can still be true -
+                // controller.follow() would then no-op above and leave the camera
+                // exactly as tilted/rotated as the ride left it. Falling through here
+                // puts it back flat and north-up instead of waiting for the rider to
+                // pan by hand.
+                controller.resetRotation()
+            }
         }
     }
 

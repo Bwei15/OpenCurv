@@ -228,6 +228,16 @@ fun OpenCurvRoot(
                 onSpeedCameraWarnings = { enabled ->
                     speedCameraContainer.settings.update { it.copy(speedCameraWarnings = enabled) }
                 },
+                onTrafficCredentials = { key, url ->
+                    speedCameraContainer.settings.update {
+                        it.copy(trafficApiKey = key, trafficFeedUrl = url)
+                    }
+                    // Without this the rider would wait up to half an hour to
+                    // find out whether the token works: the cache-age gate
+                    // counts the last *successful* motorway fetch, which is
+                    // minutes old at this point.
+                    speedCameraContainer.trafficUpdater.refreshNow()
+                },
             )
         }
 

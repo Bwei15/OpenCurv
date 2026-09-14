@@ -264,7 +264,18 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 calculateRoute()
                 val result = container.navigation.planning.first { it !is PlanningState.Calculating }
-                if (result is PlanningState.Ready || attempt == ROUND_TRIP_ATTEMPTS - 1) break
+                val lastAttempt = attempt == ROUND_TRIP_ATTEMPTS - 1
+                // A loop that spends a third of its length on the Autobahn is
+                // not a motorcycle tour, and that is what the ride report
+                // showed. The profile prices a motorway as a last resort, but
+                // RoundTripPlanner's via points are pure geometry: one can land
+                // next to an Autobahn and get snapped straight onto it, which no
+                // cost can undo. Measuring the result and moving the points is
+                // the only fix that reaches that case.
+                val tooMuchMotorway = (result as? PlanningState.Ready)
+                    ?.route?.motorwayShare?.let { it > Route.MAX_MOTORWAY_SHARE } == true
+                if (result is PlanningState.Ready && !tooMuchMotorway) break
+                if (lastAttempt) break
                 points = points.map { RoundTripPlanner.nudgeTowardStart(it, start) }
             }
         }

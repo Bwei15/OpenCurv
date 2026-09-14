@@ -15,9 +15,15 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -55,6 +61,7 @@ fun SettingsScreen(
     onTestVoice: () -> Unit,
     onOpenData: () -> Unit,
     onSpeedCameraWarnings: (Boolean) -> Unit = {},
+    onTrafficCredentials: (String, String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalRideColors.current
@@ -173,6 +180,45 @@ fun SettingsScreen(
             }
 
             PanelCard {
+                CardTitle(stringResource(R.string.settings_traffic_section))
+                Text(
+                    text = stringResource(R.string.settings_traffic_hint),
+                    color = colors.muted,
+                    fontSize = 13.sp,
+                )
+                // Local edit state, committed on the button: writing every
+                // keystroke through to SharedPreferences would also kick off a
+                // refresh attempt per character.
+                var key by remember(settings.trafficApiKey) { mutableStateOf(settings.trafficApiKey) }
+                var url by remember(settings.trafficFeedUrl) { mutableStateOf(settings.trafficFeedUrl) }
+                Field(
+                    value = key,
+                    onValueChange = { key = it },
+                    label = stringResource(R.string.settings_traffic_key),
+                )
+                Field(
+                    value = url,
+                    onValueChange = { url = it },
+                    label = stringResource(R.string.settings_traffic_url),
+                )
+                Text(
+                    text = if (settings.trafficApiKey.isBlank()) {
+                        stringResource(R.string.settings_traffic_inactive)
+                    } else {
+                        stringResource(R.string.settings_traffic_active)
+                    },
+                    color = if (settings.trafficApiKey.isBlank()) colors.muted else colors.ok,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                PrimaryButton(
+                    label = stringResource(R.string.settings_traffic_save),
+                    onClick = { onTrafficCredentials(key.trim(), url.trim()) },
+                    height = 52.dp,
+                )
+            }
+
+            PanelCard {
                 CardTitle(stringResource(R.string.settings_speed_camera_section))
                 SwitchRow(
                     title = stringResource(R.string.settings_speed_camera_warnings),
@@ -214,6 +260,29 @@ private fun Choice(label: String, selected: Boolean, onClick: () -> Unit) {
             selectedContainerColor = colors.route,
             selectedLabelColor = Color.Black,
             labelColor = colors.onPanel,
+        ),
+    )
+}
+
+@Composable
+private fun Field(value: String, onValueChange: (String) -> Unit, label: String) {
+    val colors = LocalRideColors.current
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label, fontSize = 13.sp) },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+        colors = TextFieldDefaults.colors(
+            focusedTextColor = colors.onPanel,
+            unfocusedTextColor = colors.onPanel,
+            focusedContainerColor = Color.Transparent,
+            unfocusedContainerColor = Color.Transparent,
+            focusedLabelColor = colors.route,
+            unfocusedLabelColor = colors.muted,
+            focusedIndicatorColor = colors.route,
+            unfocusedIndicatorColor = colors.panelRim,
+            cursorColor = colors.route,
         ),
     )
 }

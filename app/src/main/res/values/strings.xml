@@ -195,6 +195,13 @@
     <string name="settings_about">OpenCurv · offline motorcycle navigation · map data © OpenStreetMap contributors</string>
 
     <!-- speed camera warnings -->
+    <string name="settings_traffic_section">Live traffic (Mobilithek)</string>
+    <string name="settings_traffic_hint">Closures and roadworks on motorways come from the keyless Autobahn GmbH feed and always work. Bundes- and Landesstraßen are published through the Mobilithek, the federal ministry\'s data portal, which needs your own subscription: paste its token and download URL here and both feeds are used when a route is calculated.</string>
+    <string name="settings_traffic_key">Mobilithek token</string>
+    <string name="settings_traffic_url">Subscription download URL (optional)</string>
+    <string name="settings_traffic_save">Save and fetch now</string>
+    <string name="settings_traffic_active">Active — Bundes-/Landesstraßen are included.</string>
+    <string name="settings_traffic_inactive">Inactive — motorways only.</string>
     <string name="settings_speed_camera_section">Speed camera warnings</string>
     <string name="settings_speed_camera_warnings">Warn about speed cameras</string>
     <string name="settings_speed_camera_warnings_hint">In Germany, devices that warn of speed camera locations while driving are prohibited under StVO §23 Abs. 1c. Off by default — enable only where this is legal for you.</string>

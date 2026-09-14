@@ -305,7 +305,13 @@ class NavigationController(
             waypoints = waypoints,
             profile = profile.file,
             segmentDir = offlineData.segmentDir,
-            profileParams = mapOf("curviness" to current.curviness.toString()),
+            profileParams = mapOf(
+                "curviness" to current.curviness.toString(),
+                // The .brf files carry their own default for this; passing it
+                // explicitly is what makes the rider's switch in the route
+                // options actually reach BRouter.
+                "avoid_motorways" to current.avoidMotorways.toString(),
+            ),
             memoryClassMb = MEMORY_CLASS_MB,
             noGos = NoGoFilter.near(trafficRepository?.activeNoGoAreas() ?: emptyList(), waypoints),
         )

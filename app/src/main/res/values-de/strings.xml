@@ -191,6 +191,13 @@
     <string name="settings_about">OpenCurv · Offline-Motorradnavigation · Kartendaten © OpenStreetMap-Mitwirkende</string>
 
     <!-- Blitzerwarnung -->
+    <string name="settings_traffic_section">Verkehrslage (Mobilithek)</string>
+    <string name="settings_traffic_hint">Sperrungen und Baustellen auf Autobahnen kommen aus dem schlüssellosen Dienst der Autobahn GmbH und funktionieren immer. Bundes- und Landesstraßen veröffentlicht die Mobilithek, das Datenportal des Bundesverkehrsministeriums — dafür brauchst du ein eigenes Abo: Token und Download-Adresse hier einsetzen, dann fließen beide Quellen in die Routenberechnung ein.</string>
+    <string name="settings_traffic_key">Mobilithek-Token</string>
+    <string name="settings_traffic_url">Download-Adresse des Abos (optional)</string>
+    <string name="settings_traffic_save">Speichern und jetzt laden</string>
+    <string name="settings_traffic_active">Aktiv — Bundes-/Landesstraßen sind dabei.</string>
+    <string name="settings_traffic_inactive">Inaktiv — nur Autobahnen.</string>
     <string name="settings_speed_camera_section">Blitzerwarnung</string>
     <string name="settings_speed_camera_warnings">Vor Blitzern warnen</string>
     <string name="settings_speed_camera_warnings_hint">In Deutschland ist die Nutzung von Geräten, die während der Fahrt vor Blitzern warnen, nach §23 Abs. 1c StVO untersagt. Standardmäßig aus — nur aktivieren, wo das für dich zulässig ist.</string>

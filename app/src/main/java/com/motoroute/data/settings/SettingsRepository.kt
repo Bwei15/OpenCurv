@@ -42,6 +42,27 @@ data class Settings(
      * rider makes, not a default - see `1.Doku/Blitzer.md`.
      */
     val speedCameraWarnings: Boolean = false,
+    /**
+     * Keep the route off motorways. Feeds the .brf `avoid_motorways`
+     * parameter, which prices an Autobahn as a last resort rather than
+     * forbidding it outright (see `motorcycle_curvy.brf`). On by default: a
+     * motorcycle tour has nothing to gain from an Autobahn, and the ride report
+     * that prompted this was a Rundtour that ran down one for a third of its
+     * length.
+     */
+    val avoidMotorways: Boolean = true,
+    /**
+     * Token for a Mobilithek subscription, pasted in by the rider.
+     *
+     * The Mobilithek is the federal ministry's national access point and the
+     * only way to get closures and roadworks for Bundes-/Landesstraßen; unlike
+     * the Autobahn API it needs an account, so this cannot ship with a key.
+     * Blank means the feature is simply off and only the keyless motorway feed
+     * is used - see `1.Doku/Verkehrsdaten.md`.
+     */
+    val trafficApiKey: String = "",
+    /** The subscription's own download URL; blank uses [com.motoroute.data.traffic.MobilithekTrafficSource.DEFAULT_FEED_URL]. */
+    val trafficFeedUrl: String = "",
 )
 
 /**
@@ -74,6 +95,9 @@ class SettingsRepository(context: Context) {
             .getOrDefault(MapStyle.COLOUR),
         onboardingDone = prefs.getBoolean(KEY_ONBOARDING, false),
         speedCameraWarnings = prefs.getBoolean(KEY_SPEED_CAMERA_WARNINGS, false),
+        avoidMotorways = prefs.getBoolean(KEY_AVOID_MOTORWAYS, true),
+        trafficApiKey = prefs.getString(KEY_TRAFFIC_API_KEY, null).orEmpty(),
+        trafficFeedUrl = prefs.getString(KEY_TRAFFIC_FEED_URL, null).orEmpty(),
     )
 
     fun update(transform: (Settings) -> Settings) {
@@ -91,6 +115,9 @@ class SettingsRepository(context: Context) {
             .putString(KEY_MAP_STYLE, updated.mapStyle.name)
             .putBoolean(KEY_ONBOARDING, updated.onboardingDone)
             .putBoolean(KEY_SPEED_CAMERA_WARNINGS, updated.speedCameraWarnings)
+            .putBoolean(KEY_AVOID_MOTORWAYS, updated.avoidMotorways)
+            .putString(KEY_TRAFFIC_API_KEY, updated.trafficApiKey)
+            .putString(KEY_TRAFFIC_FEED_URL, updated.trafficFeedUrl)
             .apply()
         _settings.value = updated
     }
@@ -108,5 +135,8 @@ class SettingsRepository(context: Context) {
         const val KEY_MAP_STYLE = "map_style"
         const val KEY_ONBOARDING = "onboarding_done"
         const val KEY_SPEED_CAMERA_WARNINGS = "speed_camera_warnings"
+        const val KEY_AVOID_MOTORWAYS = "avoid_motorways"
+        const val KEY_TRAFFIC_API_KEY = "traffic_api_key"
+        const val KEY_TRAFFIC_FEED_URL = "traffic_feed_url"
     }
 }

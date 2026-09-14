@@ -92,11 +92,32 @@ class AppContainer(context: Context) {
         cacheFile = java.io.File(appContext.filesDir, "traffic_cache.json"),
     )
 
-    /** Fetches from the BMDV/Autobahn GmbH API when online and the cache is stale; see TrafficUpdater. */
+    /**
+     * Fetches when online and the cache is stale; see TrafficUpdater.
+     *
+     * Two feeds, merged: the keyless BMDV/Autobahn GmbH API for motorways, and
+     * the Mobilithek for the Bundes-/Landesstraßen a tour actually rides - the
+     * latter only once the rider has pasted their own subscription token into
+     * settings, which is why the source list is rebuilt on every refresh rather
+     * than once here.
+     */
     val trafficUpdater = com.motoroute.data.traffic.TrafficUpdater(
         context = appContext,
         repository = traffic,
         scope = scope,
+        sourceProvider = {
+            val current = settings.current
+            val sources = mutableListOf<com.motoroute.data.traffic.TrafficSource>(
+                com.motoroute.data.traffic.AutobahnTrafficSource(),
+            )
+            if (current.trafficApiKey.isNotBlank()) {
+                sources += com.motoroute.data.traffic.MobilithekTrafficSource(
+                    apiKey = current.trafficApiKey,
+                    feedUrl = current.trafficFeedUrl,
+                )
+            }
+            com.motoroute.data.traffic.CompositeTrafficSource(sources)
+        },
     )
     /** Stationary speed cameras: bundled starter data plus whatever a region download adds. */
     val speedCameraRepository = SpeedCameraRepository(appContext, offlineData.camerasDir)

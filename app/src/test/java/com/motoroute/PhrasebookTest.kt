@@ -142,4 +142,45 @@ class PhrasebookTest {
         assertTrue(GermanPhrasebook.testAnnouncement.contains("Sprachansage"))
         assertTrue(EnglishPhrasebook.testAnnouncement.contains("Voice guidance"))
     }
+
+    // ---- speed cameras ----------------------------------------------------
+
+    private fun camera(meters: Int, limitKmh: Int? = null) = VoiceAnnouncement(
+        kind = AnnouncementKind.SPEED_CAMERA,
+        distanceMeters = meters,
+        speedCameraLimitKmh = limitKmh,
+    )
+
+    @Test
+    fun `a camera warning says how far and how fast`() {
+        // The first version said "Achtung, Blitzer, 70" - neither how far away
+        // it was nor what the 70 referred to.
+        assertEquals(
+            "Blitzer in 500 Metern, erlaubt 70",
+            GermanPhrasebook.announce(camera(500, 70)),
+        )
+        assertEquals(
+            "Speed camera in 500 metres, limit 70",
+            EnglishPhrasebook.announce(camera(500, 70)),
+        )
+    }
+
+    @Test
+    fun `a camera with no known limit still says the distance`() {
+        assertEquals("Blitzer in 250 Metern", GermanPhrasebook.announce(camera(250)))
+        assertEquals("Speed camera in 250 metres", EnglishPhrasebook.announce(camera(250)))
+    }
+
+    @Test
+    fun `a camera with no distance falls back to a plain warning`() {
+        assertEquals("Blitzer voraus", GermanPhrasebook.announce(camera(0)))
+        assertEquals("Speed camera ahead", EnglishPhrasebook.announce(camera(0)))
+    }
+
+    @Test
+    fun `camera distances are rounded the same way manoeuvre distances are`() {
+        // "in 1180 Metern" is noise at speed; the existing rounding turns it
+        // into a number a rider can hear.
+        assertEquals("Blitzer in einem Kilometer", GermanPhrasebook.announce(camera(1180)))
+    }
 }

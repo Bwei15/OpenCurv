@@ -126,4 +126,20 @@ object Geo {
         val dLon = meters * sin(rad) / metersPerDegLon(from.latitude)
         return GeoPoint(from.latitude + dLat, from.longitude + dLon)
     }
+
+    /**
+     * A point [fraction] of the way from [a] to [b], 0 giving [a] and 1 giving [b].
+     *
+     * Straight-line in lat/lon, which is what [distanceMeters] assumes too: over
+     * the tens of metres this is used for (see
+     * [com.motoroute.domain.PositionInterpolator]) the difference from a great
+     * circle is far below a pixel.
+     */
+    fun interpolate(a: GeoPoint, b: GeoPoint, fraction: Double): GeoPoint {
+        val t = fraction.coerceIn(0.0, 1.0)
+        return GeoPoint(
+            latitude = a.latitude + (b.latitude - a.latitude) * t,
+            longitude = a.longitude + (b.longitude - a.longitude) * t,
+        )
+    }
 }

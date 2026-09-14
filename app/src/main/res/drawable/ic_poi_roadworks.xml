@@ -1,0 +1,22 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24"
+    android:tint="#FFFFFFFF">
+    <!-- Roadworks: a traffic cone.
+         Drawn rather than reused because every traffic report used to share the
+         one "closed" ring, which is how 3200 construction sites and 650 real
+         closures ended up looking identical on the map (see 1.Doku/Map_Design.md
+         and the D8 note in Welle9_Status.md). A cone is the one roadside object
+         that means "works" to every rider without a legend, and at 26 dp it
+         survives as a silhouette: wide base, two bands, narrow tip. -->
+    <path
+        android:pathData="M11.05 3h1.9l4.9 15.2h-2.1L11.05 3z"
+        android:fillColor="#FFFFFFFF" />
+    <path
+        android:pathData="M13.0 3h-2L6.15 18.2h2.1L13.0 3z"
+        android:fillColor="#FFFFFFFF" />
+    <!-- The base plate, which is what makes it read as a cone and not an arrow. -->
+    <path
+        android:pathData="M3.5 19.2h17v2.3h-17z"
+        android:fillColor="#FFFFFFFF" />
+</vector>

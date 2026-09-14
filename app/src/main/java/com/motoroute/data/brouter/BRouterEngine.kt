@@ -225,6 +225,7 @@ class BRouterEngine(
             estimatedSeconds = OpenCurvTrackAccess.totalSeconds(track),
             ascendMeters = track.ascend,
             speedLimitsKmh = readSpeedLimits(track, points.size),
+            motorwayMeters = readMotorwayMeters(track, points),
         )
         return route
     }
@@ -326,6 +327,36 @@ class BRouterEngine(
         }
         return if (found) limits else null
     }
+
+    /**
+     * How many metres of this track run on a motorway or one of its ramps.
+     *
+     * Same mechanism as [readSpeedLimits]: BRouter exports every tag the
+     * profile references, and the profiles reference `highway` throughout, so
+     * the road class is already in the per-section way description. Sections
+     * without a description keep the previous class (forward-filled), because
+     * BRouter only emits one where something changed.
+     *
+     * Returns 0 for a track with no descriptions at all - a hand-made or
+     * pre-`highway` tile, where "unknown" has to read as "no motorway" rather
+     * than reject every route.
+     */
+    private fun readMotorwayMeters(track: OsmTrack, points: List<GeoPoint>): Double {
+        val descriptions = OpenCurvTrackAccess.wayDescriptions(track)
+        if (descriptions.isEmpty()) return 0.0
+
+        var meters = 0.0
+        var onMotorway = false
+        for (i in points.indices) {
+            descriptions.getOrNull(i)?.let { onMotorway = isMotorway(it) }
+            if (i > 0 && onMotorway) meters += Geo.distanceMeters(points[i - 1], points[i])
+        }
+        return meters
+    }
+
+    /** True for `highway=motorway` and `highway=motorway_link`. */
+    private fun isMotorway(description: String): Boolean =
+        description.contains("highway=motorway")
 
     private fun parseMaxSpeed(description: String): Int? {
         val marker = description.indexOf("maxspeed=")

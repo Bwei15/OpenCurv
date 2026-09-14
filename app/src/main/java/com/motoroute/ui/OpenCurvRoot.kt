@@ -48,6 +48,7 @@ import com.motoroute.R
 import com.motoroute.data.settings.MapTheme
 import com.motoroute.domain.CameraController
 import com.motoroute.domain.PlanningState
+import com.motoroute.domain.RideItinerary
 import com.motoroute.service.DownloadService
 import com.motoroute.service.NavigationService
 import com.motoroute.ui.data.MapDownloadScreen
@@ -56,20 +57,25 @@ import com.motoroute.ui.map.MapScreen
 import com.motoroute.ui.map.MapViewModel
 import com.motoroute.ui.map.PoiHit
 import com.motoroute.ui.map.PoiKind
+import com.motoroute.ui.components.StopRole
 import com.motoroute.ui.navigation.ActiveNavigationScreen
 import com.motoroute.ui.navigation.GloveButton
+import com.motoroute.ui.navigation.RideStop
 import com.motoroute.ui.navigation.SpeedCameraBanner
 import com.motoroute.ui.onboarding.OnboardingScreen
 import com.motoroute.ui.plan.MissingDataCard
 import com.motoroute.ui.plan.PEEK_HEIGHT_DESTINATION
 import com.motoroute.ui.plan.PEEK_HEIGHT_EMPTY
+import com.motoroute.ui.plan.RouteOptionsScreen
 import com.motoroute.ui.plan.RoutePlanSheet
 import com.motoroute.ui.search.SearchMode
 import com.motoroute.ui.search.SearchScreen
 import com.motoroute.ui.settings.SettingsScreen
+import com.motoroute.ui.theme.Radius
+import com.motoroute.ui.theme.Elevation
 import com.motoroute.ui.theme.LocalRideColors
 
-private enum class Screen { MAP, SEARCH, DATA, DOWNLOAD, SETTINGS }
+private enum class Screen { MAP, SEARCH, DATA, DOWNLOAD, SETTINGS, ROUTE_OPTIONS }
 
 /**
  * Top-level composition.
@@ -187,6 +193,7 @@ fun OpenCurvRoot(
                 zoom = zoom,
                 onOpenData = { screen = Screen.DATA },
                 onOpenSettings = { screen = Screen.SETTINGS },
+                onOpenRouteOptions = { screen = Screen.ROUTE_OPTIONS },
                 onOpenSearch = { mode ->
                     viewModel.prepareSearch()
                     searchMode = mode
@@ -214,6 +221,16 @@ fun OpenCurvRoot(
                 onBack = { screen = Screen.DATA },
             )
 
+            Screen.ROUTE_OPTIONS -> RouteOptionsScreen(
+                settings = settings,
+                profiles = viewModel.profiles(),
+                onBack = { screen = Screen.MAP },
+                onProfileChange = viewModel::setProfile,
+                onCurvinessChange = viewModel::setCurviness,
+                onAlternativesChange = viewModel::setAlternatives,
+                onAvoidMotorwaysChange = viewModel::setAvoidMotorways,
+            )
+
             Screen.SETTINGS -> SettingsScreen(
                 settings = settings,
                 onBack = { screen = Screen.MAP },
@@ -227,6 +244,16 @@ fun OpenCurvRoot(
                 onOpenData = { screen = Screen.DATA },
                 onSpeedCameraWarnings = { enabled ->
                     speedCameraContainer.settings.update { it.copy(speedCameraWarnings = enabled) }
+                },
+                onTrafficCredentials = { key, url ->
+                    speedCameraContainer.settings.update {
+                        it.copy(trafficApiKey = key, trafficFeedUrl = url)
+                    }
+                    // Without this the rider would wait up to half an hour to
+                    // find out whether the token works: the cache-age gate
+                    // counts the last *successful* motorway fetch, which is
+                    // minutes old at this point.
+                    speedCameraContainer.trafficUpdater.refreshNow()
                 },
             )
         }
@@ -270,9 +297,10 @@ private fun MapRoot(
     manualZoom: Boolean,
     demoRunning: Boolean,
     speedCameraWarning: com.motoroute.domain.cameras.SpeedCameraWarning?,
-    zoom: Int,
+    zoom: Double,
     onOpenData: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenRouteOptions: () -> Unit,
     onOpenSearch: (SearchMode) -> Unit,
     onRequestPermission: () -> Unit,
 ) {
@@ -303,6 +331,10 @@ private fun MapRoot(
             onMapTap = if (navigating) null else viewModel::onMapTap,
             onMapLongPress = if (navigating) null else viewModel::onMapLongPress,
             onPoiTap = if (navigating) null else viewModel::selectPoi,
+            speedMps = navigationState.speedMps,
+            // Only while riding: a parked phone has nothing to extrapolate and
+            // no reason to redraw the map every frame.
+            interpolatePosition = navigating,
         )
     }
 
@@ -327,6 +359,13 @@ private fun MapRoot(
                 following = follow,
                 isDemo = demoRunning,
                 cameraWarning = speedCameraWarning,
+                // The ride menu is the route now, not a drawer of buttons.
+                stops = rideStops(
+                    selection = selection,
+                    state = navigationState,
+                ),
+                onAddStop = { onOpenSearch(SearchMode.STOP) },
+                onRemoveStop = viewModel::removeStop,
             )
         } else {
             Column(
@@ -442,19 +481,15 @@ private fun MapRoot(
             via = selection.via,
             roundTrip = selection.roundTrip,
             recentTrips = recentTrips,
-            onProfileChange = viewModel::setProfile,
-            onCurvinessChange = viewModel::setCurviness,
-            onAlternativesChange = viewModel::setAlternatives,
             onRoundTripChange = viewModel::setRoundTrip,
             onSuggestRoundTrip = viewModel::suggestRoundTrip,
             onAddStop = { onOpenSearch(SearchMode.STOP) },
-            onMoveStopUp = viewModel::moveStopUp,
-            onMoveStopDown = viewModel::moveStopDown,
+            onMoveStop = viewModel::moveStop,
             onRemoveStop = viewModel::removeStop,
             onPickRecentTrip = viewModel::loadHistoryTrip,
+            onOpenOptions = onOpenRouteOptions,
             onCalculate = viewModel::calculateRoute,
             onStart = viewModel::startNavigation,
-            onDemo = viewModel::startDemo,
             onClear = viewModel::clearSelection,
             modifier = Modifier.align(Alignment.BottomCenter),
         )
@@ -468,7 +503,12 @@ private fun SearchBar(text: String?, onClick: () -> Unit, modifier: Modifier = M
     val colors = LocalRideColors.current
     Surface(
         color = colors.panel.copy(alpha = 0.96f),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(Radius.Lg),
+        // Depth, not separation - the plate still carries its own casing where
+        // one is needed (Design_System.md, Regel 2). A search bar with no lift
+        // at all is the single thing that most made the resting screen read as
+        // "assembled" rather than "designed".
+        shadowElevation = Elevation.Floating,
         modifier = modifier
             .height(64.dp)
             .clickable(onClick = onClick),
@@ -526,15 +566,16 @@ private fun PoiCard(
 
     Surface(
         color = colors.panel,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(Radius.Md),
         border = BorderStroke(1.dp, colors.panelRim),
+        shadowElevation = Elevation.Floating,
         modifier = modifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Surface(
                     color = if (isBarrier) colors.danger else colors.primary,
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(Radius.Sm),
                 ) {
                     Icon(
                         painter = painterResource(iconRes),
@@ -572,7 +613,7 @@ private fun PoiCard(
                 ) {
                     Surface(
                         color = colors.primary,
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(Radius.Sm),
                         modifier = Modifier
                             .weight(1f)
                             .clickable { onDestination(hit) },
@@ -589,7 +630,7 @@ private fun PoiCard(
                     }
                     Surface(
                         color = colors.panelSunken,
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(Radius.Sm),
                         border = BorderStroke(1.dp, colors.panelRim),
                         modifier = Modifier
                             .weight(1f)
@@ -693,4 +734,64 @@ private fun OfflineDataRoot(
         onDeleteFile = viewModel::deleteFile,
         onBack = onBack,
     )
+}
+
+/**
+ * The ride's stops as the HUD sheet wants them: current position first, the
+ * remaining stops with distance and arrival, the destination last.
+ *
+ * Stops already behind the rider are dropped rather than greyed out - a list of
+ * places you have been is a logbook, and mid-ride the sheet is for what is
+ * still coming. The arithmetic is [RideItinerary]'s, which is unit tested; this
+ * only chooses what to show.
+ */
+@Composable
+private fun rideStops(
+    selection: com.motoroute.ui.map.PlanSelection,
+    state: com.motoroute.domain.NavigationState,
+): List<RideStop> {
+    val route = state.route ?: return emptyList()
+    val travelled = (route.distanceMeters - state.remainingDistanceMeters).coerceAtLeast(0.0)
+    val speed = state.speedMps.takeIf { it > RideItinerary.MIN_ETA_SPEED_MPS }
+        ?: RideItinerary.averageSpeedMps(route)
+    val itinerary = remember(route, selection.via, travelled) {
+        RideItinerary.stopsAhead(
+            route = route,
+            viaPoints = selection.via.map { it.point },
+            travelledMeters = travelled,
+            nowMillis = System.currentTimeMillis(),
+            speedMps = speed,
+        )
+    }
+
+    val onMapLabel = stringResource(R.string.plan_stop_on_map)
+    val stops = mutableListOf(
+        RideStop(
+            name = stringResource(R.string.ride_stop_current_position),
+            role = StopRole.START,
+        ),
+    )
+    var number = 1
+    selection.via.forEachIndexed { index, stop ->
+        val leg = itinerary.getOrNull(index) ?: return@forEachIndexed
+        if (leg.isPassed) return@forEachIndexed
+        stops += RideStop(
+            name = stop.name ?: onMapLabel,
+            role = StopRole.VIA,
+            number = number++,
+            distanceMeters = leg.distanceAheadMeters,
+            etaEpochMillis = leg.etaEpochMillis,
+        )
+    }
+    stops += RideStop(
+        name = if (selection.roundTrip) {
+            stringResource(R.string.plan_stop_roundtrip_destination)
+        } else {
+            selection.destinationName ?: stringResource(R.string.plan_destination_pin)
+        },
+        role = StopRole.DESTINATION,
+        distanceMeters = state.remainingDistanceMeters,
+        etaEpochMillis = state.etaEpochMillis,
+    )
+    return stops
 }

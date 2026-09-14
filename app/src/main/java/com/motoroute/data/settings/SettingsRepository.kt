@@ -42,7 +42,44 @@ data class Settings(
      * rider makes, not a default - see `1.Doku/Blitzer.md`.
      */
     val speedCameraWarnings: Boolean = false,
-)
+    /**
+     * Keep the route off motorways. Feeds the .brf `avoid_motorways`
+     * parameter, which prices an Autobahn as a last resort rather than
+     * forbidding it outright (see `motorcycle_curvy.brf`). On by default: a
+     * motorcycle tour has nothing to gain from an Autobahn, and the ride report
+     * that prompted this was a Rundtour that ran down one for a third of its
+     * length.
+     */
+    val avoidMotorways: Boolean = true,
+    /**
+     * Token for a Mobilithek subscription, pasted in by the rider.
+     *
+     * The Mobilithek is the federal ministry's national access point and the
+     * only way to get closures and roadworks for Bundes-/Landesstraßen; unlike
+     * the Autobahn API it needs an account, so this cannot ship with a key.
+     * Blank means the feature is simply off and only the keyless motorway feed
+     * is used - see `1.Doku/Verkehrsdaten.md`.
+     */
+    val trafficApiKey: String = "",
+    /** The subscription's own download URL; blank uses [com.motoroute.data.traffic.MobilithekTrafficSource.DEFAULT_FEED_URL]. */
+    val trafficFeedUrl: String = "",
+    /**
+     * Where the map was last centred, so a cold start can show the right place
+     * before the GPS has a fix.
+     *
+     * The ride report: up to five seconds of looking at the wrong part of the
+     * country after opening the app. A cold GNSS fix takes that long and more -
+     * nothing in the app can speed it up - but the map does not have to wait for
+     * it to show where the rider was standing when they closed it. 0.0/0.0 means
+     * unset (it is in the Atlantic, so it is not a position anyone loses).
+     */
+    val lastLatitude: Double = 0.0,
+    val lastLongitude: Double = 0.0,
+) {
+    /** The remembered position, or null when there is none yet. */
+    val lastPosition: Pair<Double, Double>?
+        get() = if (lastLatitude == 0.0 && lastLongitude == 0.0) null else lastLatitude to lastLongitude
+}
 
 /**
  * Settings live in SharedPreferences: a handful of scalars, read on every
@@ -74,6 +111,12 @@ class SettingsRepository(context: Context) {
             .getOrDefault(MapStyle.COLOUR),
         onboardingDone = prefs.getBoolean(KEY_ONBOARDING, false),
         speedCameraWarnings = prefs.getBoolean(KEY_SPEED_CAMERA_WARNINGS, false),
+        avoidMotorways = prefs.getBoolean(KEY_AVOID_MOTORWAYS, true),
+        trafficApiKey = prefs.getString(KEY_TRAFFIC_API_KEY, null).orEmpty(),
+        trafficFeedUrl = prefs.getString(KEY_TRAFFIC_FEED_URL, null).orEmpty(),
+        // Stored as bits because SharedPreferences has no putDouble.
+        lastLatitude = Double.fromBits(prefs.getLong(KEY_LAST_LAT, 0L)),
+        lastLongitude = Double.fromBits(prefs.getLong(KEY_LAST_LON, 0L)),
     )
 
     fun update(transform: (Settings) -> Settings) {
@@ -91,6 +134,11 @@ class SettingsRepository(context: Context) {
             .putString(KEY_MAP_STYLE, updated.mapStyle.name)
             .putBoolean(KEY_ONBOARDING, updated.onboardingDone)
             .putBoolean(KEY_SPEED_CAMERA_WARNINGS, updated.speedCameraWarnings)
+            .putBoolean(KEY_AVOID_MOTORWAYS, updated.avoidMotorways)
+            .putString(KEY_TRAFFIC_API_KEY, updated.trafficApiKey)
+            .putString(KEY_TRAFFIC_FEED_URL, updated.trafficFeedUrl)
+            .putLong(KEY_LAST_LAT, updated.lastLatitude.toRawBits())
+            .putLong(KEY_LAST_LON, updated.lastLongitude.toRawBits())
             .apply()
         _settings.value = updated
     }
@@ -108,5 +156,10 @@ class SettingsRepository(context: Context) {
         const val KEY_MAP_STYLE = "map_style"
         const val KEY_ONBOARDING = "onboarding_done"
         const val KEY_SPEED_CAMERA_WARNINGS = "speed_camera_warnings"
+        const val KEY_AVOID_MOTORWAYS = "avoid_motorways"
+        const val KEY_TRAFFIC_API_KEY = "traffic_api_key"
+        const val KEY_TRAFFIC_FEED_URL = "traffic_feed_url"
+        const val KEY_LAST_LAT = "last_latitude_bits"
+        const val KEY_LAST_LON = "last_longitude_bits"
     }
 }

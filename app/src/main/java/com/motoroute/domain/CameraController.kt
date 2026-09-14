@@ -1,72 +1,104 @@
 package com.motoroute.domain
 
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
- * Picks the map zoom from the current speed.
+ * Picks the map zoom from the current speed - as a continuous value, not a
+ * band.
  *
  * Slow means junctions and villages, where the rider needs to see which of
  * five exits to take. Fast means open road, where the rider needs to see what
- * is coming in half a kilometre. The bands come straight from the spec:
+ * is coming in half a kilometre. The first version of this class snapped to
+ * whole zoom levels with a hysteresis band around each edge; the ride report
+ * was that the map sits too close for most of a tour ("man kann effektiv nicht
+ * so viel sehen"), and that the band edges still read as jumps.
  *
- *   < 40 km/h  -> 17..18   town, junctions
- *   40..90     -> 15..16   country roads and curves
- *   > 90       -> 13..14   long sight lines
+ * So two things changed:
  *
- * Within each band the zoom interpolates, and a hysteresis band stops the map
- * from flapping between two levels while the rider hovers at 40 km/h.
+ *  * the whole curve moved out by roughly one level - a rider at 70 km/h now
+ *    gets the overview a rider at 100 km/h used to get, which is the view that
+ *    actually shows the next bend coming;
+ *  * zoom is a `Double` interpolated between anchor speeds and then eased
+ *    towards the target on every fix, so there is no edge to flap across and
+ *    no snap to a whole level. MapLibre takes fractional zoom natively.
+ *
+ * The anchors ([ZOOM_ANCHORS]) read as: what does the rider need to see at
+ * this speed? Below is roughly a 12-second-of-travel sight line, which is what
+ * the anchors were tuned against.
  */
 class CameraController(
-    private val hysteresisKmh: Double = 4.0,
+    /**
+     * How much of the remaining gap to the target zoom is closed per fix.
+     *
+     * One GPS fix per second and 0.25 means a full level of zoom change takes
+     * about three seconds to settle: fast enough to follow an on-ramp, slow
+     * enough that a gust of GPS speed noise never reads as a zoom pump.
+     */
+    private val easing: Double = 0.25,
 ) {
 
-    private var currentZoom = 16
+    private var currentZoom = DEFAULT_ZOOM
 
-    /** Zoom for [speedKmh], honouring hysteresis around the band edges. */
-    fun zoomFor(speedKmh: Double): Int {
-        val target = rawZoomFor(speedKmh)
-        if (target == currentZoom) return currentZoom
-
-        // Only move if the speed is clearly past the boundary that separates
-        // the current zoom from the new one.
-        val boundarySpeed = boundaryBetween(currentZoom, target)
-        if (boundarySpeed != null && kotlin.math.abs(speedKmh - boundarySpeed) < hysteresisKmh) {
-            return currentZoom
-        }
-        currentZoom = target
+    /**
+     * Zoom for [speedKmh], eased from the previous value.
+     *
+     * Call once per location fix. The returned value is fractional on purpose;
+     * pass it to the map as-is.
+     */
+    fun zoomFor(speedKmh: Double): Double {
+        val target = targetZoomFor(speedKmh)
+        val gap = target - currentZoom
+        currentZoom = if (abs(gap) <= SETTLE_EPSILON) target else currentZoom + gap * easing
         return currentZoom
     }
 
-    fun reset(zoom: Int = 16) {
-        currentZoom = zoom
+    fun reset(zoom: Double = DEFAULT_ZOOM) {
+        currentZoom = zoom.coerceIn(MIN_ZOOM, MAX_ZOOM)
     }
 
-    private fun rawZoomFor(speedKmh: Double): Int = when {
-        speedKmh < 20 -> 18
-        speedKmh < 40 -> 17
-        speedKmh < 65 -> 16
-        speedKmh <= 90 -> 15
-        speedKmh <= 120 -> 14
-        else -> 13
-    }
+    /** The zoom the current speed asks for, before easing. Visible for tests. */
+    fun targetZoomFor(speedKmh: Double): Double {
+        val speed = speedKmh.coerceAtLeast(0.0)
+        val anchors = ZOOM_ANCHORS
+        if (speed <= anchors.first().first) return anchors.first().second
+        if (speed >= anchors.last().first) return anchors.last().second
 
-    private fun boundaryBetween(a: Int, b: Int): Double? {
-        val lo = minOf(a, b)
-        val hi = maxOf(a, b)
-        if (hi - lo != 1) return null
-        return when (lo) {
-            17 -> 20.0
-            16 -> 40.0
-            15 -> 65.0
-            14 -> 90.0
-            13 -> 120.0
-            else -> null
+        for (i in 0 until anchors.size - 1) {
+            val (loSpeed, loZoom) = anchors[i]
+            val (hiSpeed, hiZoom) = anchors[i + 1]
+            if (speed in loSpeed..hiSpeed) {
+                val t = (speed - loSpeed) / (hiSpeed - loSpeed)
+                return loZoom + t * (hiZoom - loZoom)
+            }
         }
+        return anchors.last().second
     }
 
     companion object {
-        const val MIN_ZOOM = 8
-        const val MAX_ZOOM = 19
+        const val MIN_ZOOM = 8.0
+        const val MAX_ZOOM = 19.0
+
+        /** Where the riding camera starts before the first fix arrives. */
+        const val DEFAULT_ZOOM = 15.5
+
+        /** Snap to the target once the remaining gap is below one screen-invisible step. */
+        private const val SETTLE_EPSILON = 0.01
+
+        /**
+         * (km/h, zoom) pairs, ascending by speed, linearly interpolated in
+         * between. One level out from the original bands throughout, because
+         * the original sat too close to read the road ahead.
+         */
+        private val ZOOM_ANCHORS: List<Pair<Double, Double>> = listOf(
+            0.0 to 16.6,    // stopped at a junction: still see every exit
+            30.0 to 16.0,   // through a village
+            50.0 to 15.2,   // town limit / slow country road
+            70.0 to 14.5,   // Landstraße, the bread and butter of a tour
+            100.0 to 13.8,  // fast country road
+            130.0 to 13.2,  // Autobahn
+            180.0 to 12.6,  // as far out as the riding camera ever goes
+        )
 
         /**
          * Map tilt in degrees while navigating (0 outside navigation - see `OpenCurvRoot.kt`'s

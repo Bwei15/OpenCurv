@@ -41,7 +41,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
+import com.motoroute.ui.theme.Elevation
 import com.motoroute.ui.theme.Motion
+import com.motoroute.ui.theme.Radius
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -98,6 +100,22 @@ private const val FLING_VELOCITY_DP = 600f
  * horizontal curviness slider is unaffected: its own drag detector is
  * orientation-locked to the other axis, so it never competes for the same
  * gesture.
+ *
+ * ## One gesture does one job
+ *
+ * The ride report: scrolling down inside an opened sheet made the sheet
+ * disappear. The chain was real but wrong - a downward swipe that started
+ * halfway down the content scrolled the content to its top and then handed
+ * the leftover movement (and the leftover fling velocity) to the sheet, so a
+ * single flick both scrolled *and* closed. Reading a list and losing it is
+ * not a gesture anyone asked for.
+ *
+ * So the sheet only follows a downward drag while the content is already at
+ * its top: [contentScrolledThisGesture] records whether the child consumed
+ * anything during this gesture, and while it has, the sheet stays put and the
+ * fling belongs entirely to the content. Push down again from the top and the
+ * sheet goes - which is the behaviour on every phone map, and what the report
+ * asked for ("es muss dafuer an der obersten Stelle sein").
  */
 @Composable
 fun DraggableSheet(
@@ -126,6 +144,19 @@ fun DraggableSheet(
     // correct answer.
     var restState by remember { mutableStateOf(SheetTarget.COLLAPSED) }
     val scope = rememberCoroutineScope()
+
+    // Hoisted so the nested-scroll connection can ask "is the content at its
+    // top?" - the question that decides whether a downward drag belongs to the
+    // content or to the sheet. See the class doc.
+    val scrollState = rememberScrollState()
+
+    /**
+     * True once the content has consumed scroll during the current gesture.
+     *
+     * Reset on the release (onPreFling/onPostFling), which is the only moment a
+     * NestedScrollConnection reliably learns that a gesture ended.
+     */
+    var contentScrolledThisGesture by remember { mutableStateOf(false) }
 
     suspend fun settleTo(target: SheetTarget) {
         val value = if (target == SheetTarget.COLLAPSED) maxOffset else 0f
@@ -178,8 +209,17 @@ fun DraggableSheet(
                 source: NestedScrollSource,
             ): Offset {
                 if (source != NestedScrollSource.UserInput) return Offset.Zero
+                if (consumed.y != 0f) contentScrolledThisGesture = true
                 val delta = available.y
-                if (delta > 0f && offset.value < maxOffset) {
+                // Downward, and the content has nothing left to give: the sheet
+                // may move - but only if this gesture did not start as a scroll.
+                // Otherwise one flick would scroll the list and then close the
+                // sheet out from under it.
+                if (delta > 0f &&
+                    offset.value < maxOffset &&
+                    !contentScrolledThisGesture &&
+                    scrollState.value == 0
+                ) {
                     val moved = (offset.value + delta).coerceIn(0f, maxOffset) - offset.value
                     dragBy(moved)
                     return Offset(0f, moved)
@@ -188,6 +228,11 @@ fun DraggableSheet(
             }
 
             override suspend fun onPreFling(available: Velocity): Velocity {
+                val scrolled = contentScrolledThisGesture
+                contentScrolledThisGesture = false
+                // The gesture was a content scroll; its momentum is the
+                // content's, not an invitation to close the sheet.
+                if (scrolled) return Velocity.Zero
                 val velocityDp = available.y / density.density
                 // At an extreme already and flinging further that way: there
                 // is nothing left for the sheet to do, so let the content's
@@ -204,13 +249,14 @@ fun DraggableSheet(
             }
 
             override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
-                // The content flung itself to its own top with speed to
-                // spare: hand the rest to the sheet so it finishes the
-                // collapse instead of stopping dead at the boundary.
-                val velocityDp = available.y / density.density
-                if (velocityDp > 0f && offset.value < maxOffset) {
-                    settleTo(SheetTarget.COLLAPSED)
-                }
+                // Deliberately does nothing but clear the flag. This used to
+                // hand a content fling's leftover velocity to the sheet so a
+                // flick from mid-list would carry on into a collapse; that is
+                // exactly the behaviour the ride report called a bug. A
+                // downward drag that starts at the top never reaches here -
+                // onPostScroll moves the sheet directly and onPreFling settles
+                // it - so nothing is lost by leaving this inert.
+                contentScrolledThisGesture = false
                 return Velocity.Zero
             }
         }
@@ -218,8 +264,9 @@ fun DraggableSheet(
 
     Surface(
         color = background,
-        shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
+        shape = RoundedCornerShape(topStart = Radius.Xl, topEnd = Radius.Xl),
         border = BorderStroke(1.dp, handleColor),
+        shadowElevation = Elevation.Sheet,
         modifier = modifier
             .fillMaxWidth()
             .offset { IntOffset(0, offset.value.roundToInt()) }
@@ -260,7 +307,7 @@ fun DraggableSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .nestedScroll(nestedScrollConnection)
-                    .verticalScroll(rememberScrollState()),
+                    .verticalScroll(scrollState),
                 content = content,
             )
         }

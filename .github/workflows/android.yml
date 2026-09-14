@@ -38,3 +38,39 @@ jobs:
           path: tools/verifier/build/reports/tests/test
           if-no-files-found: ignore
 
+  android:
+    name: App unit tests (Android SDK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Compiles the Compose UI and runs the app's own unit tests. The verifier
+      # job above deliberately excludes everything Android - ui/, service/,
+      # voice/, di/ - so without this job a Compose change that does not
+      # compile ships green. Deliberately not `assembleDebug`: the APK job was
+      # removed on purpose (commit bd91125), and compiling plus testing is what
+      # catches mistakes, not packaging them.
+      # `gradle`, not `./gradlew`: the wrapper re-downloads the distribution on
+      # every run, which timed out on the first green-field run of this job. The
+      # setup-gradle action already provides a matching Gradle, and the logic job
+      # above has used it all along.
+      - name: Run the app unit tests
+        run: gradle testDebugUnitTest --no-daemon
+
+      - name: Upload app test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-test-report
+          path: app/build/reports/tests/testDebugUnitTest
+          if-no-files-found: ignore
+

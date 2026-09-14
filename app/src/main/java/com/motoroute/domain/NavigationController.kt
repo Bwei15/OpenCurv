@@ -69,8 +69,13 @@ class NavigationController(
     private val _lastFix = MutableStateFlow<FilteredFix?>(null)
     val lastFix: StateFlow<FilteredFix?> = _lastFix.asStateFlow()
 
-    private val _zoom = MutableStateFlow(16)
-    val recommendedZoom: StateFlow<Int> = _zoom.asStateFlow()
+    private val _zoom = MutableStateFlow(CameraController.DEFAULT_ZOOM)
+
+    /**
+     * The zoom the riding camera wants right now - fractional, eased, and
+     * updated on every fix. See [CameraController] for the curve.
+     */
+    val recommendedZoom: StateFlow<Double> = _zoom.asStateFlow()
 
     private val _demoRunning = MutableStateFlow(false)
 
@@ -93,6 +98,9 @@ class NavigationController(
      */
     private var planJob: Job? = null
 
+    /** Wall clock of the last [rememberPosition] write. */
+    private var lastPositionSavedAtMillis = 0L
+
     private val rerouting = ReroutingEngine(
         scope = scope,
         calculate = { from, to, via -> runCatching { calculate(listOf(from) + via + to) } },
@@ -113,6 +121,11 @@ class NavigationController(
                 voice.speak(
                     VoiceAnnouncement(
                         kind = AnnouncementKind.SPEED_CAMERA,
+                        // The distance is what turns "Achtung, Blitzer" into
+                        // something a rider can act on, and it is why the
+                        // warner now fires once per tier instead of once per
+                        // camera - see domain/cameras/CameraWarningTiming.kt.
+                        distanceMeters = it.distanceMeters.toInt(),
                         speedCameraLimitKmh = it.maxSpeedKmh,
                     ),
                 )
@@ -137,6 +150,7 @@ class NavigationController(
     private fun onFix(fix: FilteredFix, allowReroute: Boolean = true) {
         _lastFix.value = fix
         _zoom.value = camera.zoomFor(fix.speedMps * 3.6)
+        rememberPosition(fix)
 
         // Runs on every fix regardless of navigation state - the whole point
         // of the feature is to warn even when just riding around with the map
@@ -284,6 +298,25 @@ class NavigationController(
         }
     }
 
+    /**
+     * Writes the current position to settings now and then, so the next cold
+     * start can show the right part of the map before the GPS has a fix (see
+     * [com.motoroute.data.settings.Settings.lastPosition]).
+     *
+     * Throttled hard: a fix arrives every second and this is a SharedPreferences
+     * commit. Every 30 seconds is often enough - the value only has to be good
+     * enough to frame a map, and a rider who moved 30 seconds' worth is still
+     * within a screen of it.
+     */
+    private fun rememberPosition(fix: FilteredFix) {
+        val now = System.currentTimeMillis()
+        if (now - lastPositionSavedAtMillis < POSITION_SAVE_INTERVAL_MILLIS) return
+        lastPositionSavedAtMillis = now
+        settings.update {
+            it.copy(lastLatitude = fix.point.latitude, lastLongitude = fix.point.longitude)
+        }
+    }
+
     fun setVoiceEnabled(enabled: Boolean) {
         voice.enabled = enabled
         if (!enabled) voice.stop()
@@ -300,7 +333,13 @@ class NavigationController(
             waypoints = waypoints,
             profile = profile.file,
             segmentDir = offlineData.segmentDir,
-            profileParams = mapOf("curviness" to current.curviness.toString()),
+            profileParams = mapOf(
+                "curviness" to current.curviness.toString(),
+                // The .brf files carry their own default for this; passing it
+                // explicitly is what makes the rider's switch in the route
+                // options actually reach BRouter.
+                "avoid_motorways" to current.avoidMotorways.toString(),
+            ),
             memoryClassMb = MEMORY_CLASS_MB,
             noGos = NoGoFilter.near(trafficRepository?.activeNoGoAreas() ?: emptyList(), waypoints),
         )
@@ -321,5 +360,8 @@ class NavigationController(
 
         /** Demo fixes arrive twice a second, like a good GPS on a fast bike. */
         const val DEMO_TICK_MILLIS = 500L
+
+        /** How often the position is persisted for the next cold start. */
+        const val POSITION_SAVE_INTERVAL_MILLIS = 30_000L
     }
 }

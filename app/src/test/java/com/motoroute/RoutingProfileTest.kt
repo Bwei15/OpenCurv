@@ -101,6 +101,73 @@ class RoutingProfileTest {
         assertTrue(p.cost("highway" to "secondary") > tertiary)
     }
 
+    /**
+     * The ride report this exists for: a suggested Rundtour ran down the
+     * Autobahn for a third of its length. An Autobahn is the one road a
+     * motorcycle tour gains nothing from, so avoiding it has to be a near-ban,
+     * not a mild preference - a detour of a few tens of kilometres must still
+     * come out cheaper than the motorway.
+     */
+    @Test
+    fun `avoiding motorways is a near-ban, not a mild preference`() {
+        val p = profile("motorcycle_curvy.brf")
+        val tertiary = p.cost("highway" to "tertiary")
+        val motorway = p.cost("highway" to "motorway")
+        assertTrue(
+            "motorway cost $motorway is only ${motorway / tertiary}x a country road",
+            motorway > 400 * tertiary,
+        )
+        // ... but still routable, so a destination that snaps onto a motorway
+        // node does not become "no route found".
+        assertTrue("a motorway must stay passable, cost was $motorway", motorway < 10_000)
+    }
+
+    @Test
+    fun `an on-ramp is cheaper than the motorway it leads to`() {
+        // Same reason: a waypoint can land on a link, and reaching it must work.
+        val p = profile("motorcycle_curvy.brf")
+        assertTrue(
+            p.cost("highway" to "motorway_link") < p.cost("highway" to "motorway"),
+        )
+    }
+
+    @Test
+    fun `a Kraftfahrstrasse is punished but not treated as unusable`() {
+        // Plenty of ordinary German B-roads are tagged trunk; banning those
+        // outright produces absurd detours, so this sits far below the motorway.
+        val p = profile("motorcycle_curvy.brf")
+        val trunk = p.cost("highway" to "trunk")
+        val motorway = p.cost("highway" to "motorway")
+        val tertiary = p.cost("highway" to "tertiary")
+        assertTrue("trunk $trunk", trunk > 15 * tertiary)
+        assertTrue("trunk $trunk vs motorway $motorway", trunk < motorway / 10)
+    }
+
+    @Test
+    fun `entering a motorway carries a one-off surcharge on top of the distance`() {
+        // What kills the short "dip onto the A2 for eight kilometres" hop that
+        // the per-metre cost alone can still justify on a long route.
+        val p = profile("motorcycle_curvy.brf")
+        p.cost("highway" to "motorway")
+        val motorwayEntry = p.way.initialcost.toDouble()
+        p.cost("highway" to "tertiary")
+        val ordinaryEntry = p.way.initialcost.toDouble()
+        assertTrue(
+            "motorway entry $motorwayEntry vs ordinary $ordinaryEntry",
+            motorwayEntry > 100 * maxOf(ordinaryEntry, 1.0),
+        )
+    }
+
+    @Test
+    fun `the fast profile leaves motorways alone until the rider says otherwise`() {
+        // motorcycle_fast is the "get me there" profile: its own default for
+        // avoid_motorways is false, and the strengthened penalty must not leak
+        // into it just because the expression is shared.
+        val fast = profile("motorcycle_fast.brf")
+        val tertiary = fast.cost("highway" to "tertiary")
+        assertTrue(fast.cost("highway" to "motorway") < 30 * tertiary)
+    }
+
     @Test
     fun `the curvy profile still prefers a proper road over a residential grid`() {
         val p = profile("motorcycle_curvy.brf")
@@ -157,6 +224,15 @@ class RoutingProfileTest {
      * carries in the track, which only happens if the profile references the
      * maxspeed tag. This test is what stops that reference being "cleaned up".
      */
+    @Test
+    fun `the way description carries the road class`() {
+        // What makes a per-segment "how much of this route is motorway" metric
+        // possible at all: BRouter only exports tags the profile references.
+        val p = profile("motorcycle_curvy.brf")
+        val description = p.description("highway" to "motorway")
+        assertTrue("way description was '$description'", description.contains("highway=motorway"))
+    }
+
     @Test
     fun `maxspeed is exported so the speed limit display works`() {
         val p = profile("motorcycle_curvy.brf")

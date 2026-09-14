@@ -52,7 +52,8 @@
     <string name="plan_clear">Zurücksetzen</string>
     <string name="plan_options">Routenoptionen</string>
     <string name="plan_curviness">Kurvenhunger: %1$s</string>
-    <string name="plan_alternatives">Alternativen vergleichen, kurvigste behalten</string>
+    <string name="plan_alternatives">Alternativen vergleichen</string>
+    <string name="plan_alternatives_hint">Dauert länger, findet mehr Kurven.</string>
     <string name="plan_distance">Strecke</string>
     <string name="plan_time">Fahrzeit</string>
     <string name="plan_climb">Anstieg</string>
@@ -191,6 +192,13 @@
     <string name="settings_about">OpenCurv · Offline-Motorradnavigation · Kartendaten © OpenStreetMap-Mitwirkende</string>
 
     <!-- Blitzerwarnung -->
+    <string name="settings_traffic_section">Verkehrslage (Mobilithek)</string>
+    <string name="settings_traffic_hint">Sperrungen und Baustellen auf Autobahnen kommen aus dem schlüssellosen Dienst der Autobahn GmbH und funktionieren immer. Bundes- und Landesstraßen veröffentlicht die Mobilithek, das Datenportal des Bundesverkehrsministeriums — dafür brauchst du ein eigenes Abo: Token und Download-Adresse hier einsetzen, dann fließen beide Quellen in die Routenberechnung ein.</string>
+    <string name="settings_traffic_key">Mobilithek-Token</string>
+    <string name="settings_traffic_url">Download-Adresse des Abos (optional)</string>
+    <string name="settings_traffic_save">Speichern und jetzt laden</string>
+    <string name="settings_traffic_active">Aktiv — Bundes-/Landesstraßen sind dabei.</string>
+    <string name="settings_traffic_inactive">Inaktiv — nur Autobahnen.</string>
     <string name="settings_speed_camera_section">Blitzerwarnung</string>
     <string name="settings_speed_camera_warnings">Vor Blitzern warnen</string>
     <string name="settings_speed_camera_warnings_hint">In Deutschland ist die Nutzung von Geräten, die während der Fahrt vor Blitzern warnen, nach §23 Abs. 1c StVO untersagt. Standardmäßig aus — nur aktivieren, wo das für dich zulässig ist.</string>
@@ -221,4 +229,24 @@
     <!-- Berechtigungen -->
     <string name="perm_location_rationale">OpenCurv braucht deine Position zum Navigieren. Sie verlässt das Gerät nie: die Navigation läuft komplett offline, und das einzige, wofür die App ins Netz geht, ist das Herunterladen der Karten von zwei festen Servern.</string>
     <string name="perm_grant">Standortzugriff erlauben</string>
+    <string name="pill_speed_camera">Blitzer in %1$s</string>
+    <string name="pill_speed_camera_with_limit">Blitzer in %1$s · %2$d km/h</string>
+    <string name="ride_stop_count">%1$d Stopps</string>
+    <string name="ride_stop_in">in %1$s</string>
+    <string name="ride_stop_here">jetzt</string>
+    <string name="plan_options_open">Routenoptionen</string>
+    <string name="plan_options_summary">%1$s · %2$s</string>
+    <string name="plan_options_avoid_section">Meiden</string>
+    <string name="plan_options_avoid_motorways">Autobahn</string>
+    <string name="plan_options_avoid_motorways_hint">Keine Kurven, keine Aussicht — macht auf dem Motorrad keinen Spaß.</string>
+    <string name="plan_options_search_section">Suche</string>
+    <string name="plan_options_style_section">Fahrstil</string>
+    <string name="plan_options_curviness_section">Kurvenhunger</string>
+    <string name="plan_mode_to_destination">Zum Ziel</string>
+    <string name="plan_mode_round_trip">Rundtour</string>
+    <string name="plan_route_section">Route</string>
+    <string name="plan_motorway_share">%1$d km Autobahn</string>
+    <string name="plan_motorway_none">keine Autobahn</string>
+    <string name="plan_reorder_hint">Stopp gedrückt halten, um ihn zu verschieben.</string>
+    <string name="ride_stop_current_position">Aktuelle Position</string>
 </resources>

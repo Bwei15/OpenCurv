@@ -13,7 +13,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
- * Keeps [TrafficRepository] fresh from [AutobahnTrafficSource] whenever the
+ * Keeps [TrafficRepository] fresh from its traffic sources whenever the
  * device has validated internet - and does nothing at all otherwise, because
  * the whole point of the offline-first cache is that a rider without signal
  * still gets the last known closures rather than an error.
@@ -34,7 +34,12 @@ class TrafficUpdater(
     context: Context,
     private val repository: TrafficRepository,
     private val scope: CoroutineScope,
-    private val source: TrafficSource = AutobahnTrafficSource(),
+    /**
+     * Resolved on every refresh rather than injected once, because the rider
+     * can paste a Mobilithek token into settings at any time and the next
+     * refresh has to pick it up without an app restart - see [refreshNow].
+     */
+    private val sourceProvider: () -> TrafficSource = { AutobahnTrafficSource() },
     private val minIntervalMillis: Long = REFRESH_INTERVAL_MS,
 ) {
     private val appContext = context.applicationContext
@@ -44,9 +49,35 @@ class TrafficUpdater(
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var periodicJob: Job? = null
 
-    /** Call once, from [com.motoroute.OpenCurvApp.onCreate]. Non-blocking. */
+    /**
+     * Refreshes now, ignoring the cache-age gate - but still only when there is
+     * validated internet.
+     *
+     * This is what a settings change calls: having just pasted an API key, a
+     * rider would otherwise wait up to 30 minutes to find out whether it works,
+     * because the last *successful* fetch (from the keyless motorway feed) is
+     * younger than the interval.
+     */
+    fun refreshNow(reason: String = "settings-changed") {
+        refreshIfDue(reason = reason, ignoreCacheAge = true)
+    }
+
+    /**
+     * Call once, from [com.motoroute.OpenCurvApp.onCreate]. Non-blocking.
+     *
+     * The first refresh waits [STARTUP_DELAY_MILLIS] rather than firing
+     * immediately. A refresh is roughly 330 HTTP requests (see
+     * `1.Doku/Verkehrsdaten.md`), and doing that in the same second the app is
+     * inflating its first frame, loading a map style and asking for a GPS fix is
+     * how a cold start comes to take five seconds to show the rider where they
+     * are. Nothing about traffic data is urgent in those first seconds: the
+     * route it feeds is not calculated yet.
+     */
     fun start() {
-        refreshIfDue(reason = "start")
+        scope.launch {
+            delay(STARTUP_DELAY_MILLIS)
+            refreshIfDue(reason = "start")
+        }
         registerNetworkCallback()
         startPeriodicTimer()
     }
@@ -98,7 +129,7 @@ class TrafficUpdater(
             caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     }
 
-    private fun refreshIfDue(reason: String) {
+    private fun refreshIfDue(reason: String, ignoreCacheAge: Boolean = false) {
         if (repository.isRefreshing.value) return
         if (!hasValidatedInternet()) {
             Log.d(TAG, "skip refresh ($reason): no validated internet")
@@ -106,12 +137,12 @@ class TrafficUpdater(
         }
         val lastFetch = prefs.getLong(KEY_LAST_FETCH, 0L)
         val age = System.currentTimeMillis() - lastFetch
-        if (lastFetch > 0L && age < minIntervalMillis) {
+        if (!ignoreCacheAge && lastFetch > 0L && age < minIntervalMillis) {
             Log.d(TAG, "skip refresh ($reason): cache is ${age / 1000}s old")
             return
         }
         scope.launch {
-            repository.refreshFrom(source)
+            repository.refreshFrom(sourceProvider())
                 .onSuccess { count ->
                     prefs.edit().putLong(KEY_LAST_FETCH, System.currentTimeMillis()).apply()
                     Log.i(TAG, "refreshed ($reason): $count incidents")
@@ -127,5 +158,8 @@ class TrafficUpdater(
         private const val PREFS_NAME = "traffic_updater"
         private const val KEY_LAST_FETCH = "last_fetch_epoch_millis"
         const val REFRESH_INTERVAL_MS = 30 * 60 * 1000L
+
+        /** How long the first refresh yields to the cold start. See [start]. */
+        const val STARTUP_DELAY_MILLIS = 6_000L
     }
 }

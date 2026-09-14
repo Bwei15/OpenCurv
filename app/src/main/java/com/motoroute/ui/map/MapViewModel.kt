@@ -71,7 +71,7 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     val navigationState: StateFlow<NavigationState> = container.navigation.state
     val planningState: StateFlow<PlanningState> = container.navigation.planning
     val settings: StateFlow<Settings> = container.settings.settings
-    val recommendedZoom: StateFlow<Int> = container.navigation.recommendedZoom
+    val recommendedZoom: StateFlow<Double> = container.navigation.recommendedZoom
     val demoRunning: StateFlow<Boolean> = container.navigation.demoRunning
 
     private val _selection = MutableStateFlow(PlanSelection())
@@ -212,6 +212,23 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         moveStopUp(index + 1)
     }
 
+    /**
+     * Moves the stop at [from] to [to], shifting the ones in between.
+     *
+     * A drag past two tiles is one move, not two swaps: swapping repeatedly
+     * would leave the intermediate stops in the wrong order whenever the finger
+     * crossed more than one slot between frames. See
+     * [com.motoroute.ui.components.ReorderableStopColumn].
+     */
+    fun moveStop(from: Int, to: Int) {
+        val via = _selection.value.via
+        if (from !in via.indices || to !in via.indices || from == to) return
+        val mutable = via.toMutableList()
+        mutable.add(to, mutable.removeAt(from))
+        _selection.value = _selection.value.copy(via = mutable)
+        scheduleRecalc()
+    }
+
     fun removeStop(index: Int) {
         val via = _selection.value.via
         if (index !in via.indices) return
@@ -264,7 +281,18 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 calculateRoute()
                 val result = container.navigation.planning.first { it !is PlanningState.Calculating }
-                if (result is PlanningState.Ready || attempt == ROUND_TRIP_ATTEMPTS - 1) break
+                val lastAttempt = attempt == ROUND_TRIP_ATTEMPTS - 1
+                // A loop that spends a third of its length on the Autobahn is
+                // not a motorcycle tour, and that is what the ride report
+                // showed. The profile prices a motorway as a last resort, but
+                // RoundTripPlanner's via points are pure geometry: one can land
+                // next to an Autobahn and get snapped straight onto it, which no
+                // cost can undo. Measuring the result and moving the points is
+                // the only fix that reaches that case.
+                val tooMuchMotorway = (result as? PlanningState.Ready)
+                    ?.route?.motorwayShare?.let { it > Route.MAX_MOTORWAY_SHARE } == true
+                if (result is PlanningState.Ready && !tooMuchMotorway) break
+                if (lastAttempt) break
                 points = points.map { RoundTripPlanner.nudgeTowardStart(it, start) }
             }
         }
@@ -459,6 +487,19 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     fun setAlternatives(enabled: Boolean) =
         container.settings.update { it.copy(searchAlternatives = enabled) }
 
+    /**
+     * Keep the route off motorways.
+     *
+     * Goes through [scheduleRecalc] like the profile and curviness do: changing
+     * what the route may use, while a route is on screen, has to change the
+     * route - otherwise the rider flips the switch, sees nothing happen and
+     * concludes it does not work.
+     */
+    fun setAvoidMotorways(enabled: Boolean) {
+        container.settings.update { it.copy(avoidMotorways = enabled) }
+        scheduleRecalc()
+    }
+
     fun completeOnboarding() = container.settings.update { it.copy(onboardingDone = true) }
 
     // ---- offline destination search ---------------------------------------
@@ -526,8 +567,39 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /** Puts the camera on the downloaded data when there is no fix to follow. */
+    /**
+     * Puts the map where the rider is, as soon as anything at all knows where
+     * that is.
+     *
+     * The ride report: up to five seconds staring at the wrong part of the
+     * country after opening the app. A cold GNSS fix genuinely takes that long,
+     * and no app can shorten it - but three cheaper answers exist and none of
+     * them was being used. In order of how good they are:
+     *
+     *  1. a live fix, if navigation already has one (nothing to do);
+     *  2. the platform's last known location - free, instant, and usually
+     *     minutes old at worst because another app asked for it;
+     *  3. where this app was last centred, remembered in settings;
+     *  4. the offline index's first entry, which is what it did before - a
+     *     position somewhere in the downloaded region, better than the Atlantic
+     *     but not by much.
+     *
+     * The first three are synchronous, so the map is framed in the first frame
+     * rather than after a suspend and a disk read.
+     */
     fun centerOnDataIfIdle() {
         if (container.navigation.lastFix.value != null) return
+
+        container.locationProvider.lastKnown()?.let { location ->
+            mapController.centerOn(GeoPoint(location.latitude, location.longitude), STARTUP_ZOOM)
+            return
+        }
+
+        container.settings.current.lastPosition?.let { (latitude, longitude) ->
+            mapController.centerOn(GeoPoint(latitude, longitude), STARTUP_ZOOM)
+            return
+        }
+
         viewModelScope.launch {
             container.placeSearch.mapStartPosition()?.let { mapController.centerOn(it) }
         }
@@ -682,7 +754,16 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         private const val SEARCH_DEBOUNCE_MILLIS = 220L
 
         /** Close enough to see the streets around a chosen destination. */
-        private const val DESTINATION_ZOOM = 14
+        private const val DESTINATION_ZOOM = 14.0
+
+        /**
+         * Zoom for the "here is roughly where you are" frame at startup.
+         *
+         * Deliberately wider than [DESTINATION_ZOOM]: the position it is built
+         * on may be minutes old, and a wide frame that contains the rider beats
+         * a tight one centred next to them.
+         */
+        private const val STARTUP_ZOOM = 13.0
 
         /** Initial suggestion plus this many nudge-and-retry rounds for [suggestRoundTrip]. */
         private const val ROUND_TRIP_ATTEMPTS = 3

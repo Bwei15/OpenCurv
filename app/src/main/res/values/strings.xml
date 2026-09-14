@@ -53,7 +53,8 @@
     <string name="plan_clear">Clear</string>
     <string name="plan_options">Route options</string>
     <string name="plan_curviness">Curve appetite: %1$s</string>
-    <string name="plan_alternatives">Compare alternatives, keep the twistiest</string>
+    <string name="plan_alternatives">Compare alternatives</string>
+    <string name="plan_alternatives_hint">Takes longer, finds more curves.</string>
     <string name="plan_distance">distance</string>
     <string name="plan_time">riding time</string>
     <string name="plan_climb">climb</string>
@@ -195,6 +196,13 @@
     <string name="settings_about">OpenCurv · offline motorcycle navigation · map data © OpenStreetMap contributors</string>
 
     <!-- speed camera warnings -->
+    <string name="settings_traffic_section">Live traffic (Mobilithek)</string>
+    <string name="settings_traffic_hint">Closures and roadworks on motorways come from the keyless Autobahn GmbH feed and always work. Bundes- and Landesstraßen are published through the Mobilithek, the federal ministry\'s data portal, which needs your own subscription: paste its token and download URL here and both feeds are used when a route is calculated.</string>
+    <string name="settings_traffic_key">Mobilithek token</string>
+    <string name="settings_traffic_url">Subscription download URL (optional)</string>
+    <string name="settings_traffic_save">Save and fetch now</string>
+    <string name="settings_traffic_active">Active — Bundes-/Landesstraßen are included.</string>
+    <string name="settings_traffic_inactive">Inactive — motorways only.</string>
     <string name="settings_speed_camera_section">Speed camera warnings</string>
     <string name="settings_speed_camera_warnings">Warn about speed cameras</string>
     <string name="settings_speed_camera_warnings_hint">In Germany, devices that warn of speed camera locations while driving are prohibited under StVO §23 Abs. 1c. Off by default — enable only where this is legal for you.</string>
@@ -225,4 +233,24 @@
     <!-- permissions -->
     <string name="perm_location_rationale">OpenCurv needs your location to navigate. Your position never leaves the device: navigation runs entirely offline, and the only network access the app has is downloading maps from two fixed servers.</string>
     <string name="perm_grant">Grant location access</string>
+    <string name="pill_speed_camera">Speed camera in %1$s</string>
+    <string name="pill_speed_camera_with_limit">Speed camera in %1$s · %2$d km/h</string>
+    <string name="ride_stop_count">%1$d stops</string>
+    <string name="ride_stop_in">in %1$s</string>
+    <string name="ride_stop_here">now</string>
+    <string name="plan_options_open">Route options</string>
+    <string name="plan_options_summary">%1$s · %2$s</string>
+    <string name="plan_options_avoid_section">Avoid</string>
+    <string name="plan_options_avoid_motorways">Motorways</string>
+    <string name="plan_options_avoid_motorways_hint">No bends, no view, no fun on a motorcycle.</string>
+    <string name="plan_options_search_section">Search</string>
+    <string name="plan_options_style_section">Riding style</string>
+    <string name="plan_options_curviness_section">Appetite for curves</string>
+    <string name="plan_mode_to_destination">To a destination</string>
+    <string name="plan_mode_round_trip">Round trip</string>
+    <string name="plan_route_section">Route</string>
+    <string name="plan_motorway_share">%1$d km motorway</string>
+    <string name="plan_motorway_none">no motorway</string>
+    <string name="plan_reorder_hint">Press and hold a stop to move it.</string>
+    <string name="ride_stop_current_position">Current position</string>
 </resources>

@@ -2,6 +2,7 @@ package com.motoroute
 
 import com.motoroute.data.cameras.SpeedCamera
 import com.motoroute.data.model.GeoPoint
+import com.motoroute.domain.cameras.CameraWarningTiming
 import com.motoroute.domain.cameras.SpeedCameraGrid
 import com.motoroute.domain.cameras.SpeedCameraWarner
 import com.motoroute.domain.cameras.SpeedCameraWarning
@@ -182,26 +183,97 @@ class SpeedCameraWarnerTest {
         warner.onFix(riderNear(cam.point, 0.0, 500.0), headingDegrees = 0.0, speedMps = 20.0, enabled = true, nowMillis = 0L)
         assertNotNull(warner.warning.value)
 
-        val far = riderNear(cam.point, 0.0, 1300.0)
+        // Past the release radius, which is derived from the widest warning
+        // tier rather than being a number of its own - see CameraWarningTiming.
+        val far = riderNear(cam.point, 0.0, SpeedCameraWarner.RELEASE_RADIUS_M + 100.0)
         warner.onFix(far, headingDegrees = 0.0, speedMps = 20.0, enabled = true, nowMillis = 1000L)
 
         assertNull(warner.warning.value)
     }
 
+    /**
+     * The ride report asked for staged warnings - roughly 1000, 500 and 250 m -
+     * instead of the single call this used to make at whatever distance the
+     * camera happened to be first seen.
+     */
     @Test
-    fun `one announcement per approach`() {
+    fun `a camera is announced once per tier as the rider closes in`() {
         val cam = camera(maxSpeedKmh = 70)
         val warner = warnerFor(cam)
 
         val announcements = collectAnnouncements(warner) {
-            // Several fixes while still approaching within one continuous pass.
-            warner.onFix(riderNear(cam.point, 0.0, 900.0), 0.0, 20.0, true, 0L)
-            warner.onFix(riderNear(cam.point, 0.0, 600.0), 0.0, 20.0, true, 5_000L)
-            warner.onFix(riderNear(cam.point, 0.0, 300.0), 0.0, 20.0, true, 10_000L)
+            // 28 m/s is 100 km/h, where the tiers sit at about 1000/500/250 m.
+            warner.onFix(riderNear(cam.point, 0.0, 1200.0), 0.0, 28.0, true, 0L)
+            warner.onFix(riderNear(cam.point, 0.0, 950.0), 0.0, 28.0, true, 5_000L)
+            warner.onFix(riderNear(cam.point, 0.0, 700.0), 0.0, 28.0, true, 10_000L)
+            warner.onFix(riderNear(cam.point, 0.0, 480.0), 0.0, 28.0, true, 15_000L)
+            warner.onFix(riderNear(cam.point, 0.0, 300.0), 0.0, 28.0, true, 20_000L)
+            warner.onFix(riderNear(cam.point, 0.0, 200.0), 0.0, 28.0, true, 25_000L)
+        }
+
+        assertEquals(
+            "expected one call per tier, got ${announcements.map { it.distanceMeters.toInt() }}",
+            CameraWarningTiming.TIER_COUNT,
+            announcements.size,
+        )
+        // Each call is closer than the one before, and every one carries the limit.
+        announcements.map { it.distanceMeters }.zipWithNext { farther, nearer ->
+            assertTrue("distances were ${announcements.map { it.distanceMeters }}", nearer < farther)
+        }
+        assertTrue(announcements.all { it.maxSpeedKmh == 70 })
+    }
+
+    @Test
+    fun `a tier never repeats within one approach`() {
+        val cam = camera()
+        val warner = warnerFor(cam)
+
+        val announcements = collectAnnouncements(warner) {
+            // Four fixes, all inside the widest tier and none reaching the next:
+            // one call, not four.
+            warner.onFix(riderNear(cam.point, 0.0, 900.0), 0.0, 28.0, true, 0L)
+            warner.onFix(riderNear(cam.point, 0.0, 880.0), 0.0, 28.0, true, 1_000L)
+            warner.onFix(riderNear(cam.point, 0.0, 860.0), 0.0, 28.0, true, 2_000L)
+            warner.onFix(riderNear(cam.point, 0.0, 840.0), 0.0, 28.0, true, 3_000L)
         }
 
         assertEquals(1, announcements.size)
-        assertEquals(70, announcements.first().maxSpeedKmh)
+    }
+
+    @Test
+    fun `crossing two tiers between fixes announces the nearer one only`() {
+        // At 130 km/h a second of GPS silence covers 36 m, and a lost fix can
+        // cover several hundred - firing both tiers a second apart would be the
+        // "die Ansagen kommen mehrfach" complaint all over again.
+        val cam = camera()
+        val warner = warnerFor(cam)
+
+        val announcements = collectAnnouncements(warner) {
+            warner.onFix(riderNear(cam.point, 0.0, 1500.0), 0.0, 28.0, true, 0L)
+            warner.onFix(riderNear(cam.point, 0.0, 300.0), 0.0, 28.0, true, 5_000L)
+        }
+
+        assertEquals(1, announcements.size)
+        assertTrue(announcements.single().distanceMeters < 400.0)
+    }
+
+    @Test
+    fun `tiers reach further out the faster the bike is going`() {
+        val town = CameraWarningTiming.triggerDistanceMeters(0, 50 / 3.6)
+        val rural = CameraWarningTiming.triggerDistanceMeters(0, 100 / 3.6)
+        val fast = CameraWarningTiming.triggerDistanceMeters(0, 130 / 3.6)
+        assertTrue("town $town, rural $rural", rural > town)
+        assertTrue("rural $rural, fast $fast", fast > rural)
+        // The distances the ride report named, at the speed it named them for.
+        assertTrue("rural was $rural m", rural in 900.0..1100.0)
+        assertTrue(
+            "middle tier was ${CameraWarningTiming.triggerDistanceMeters(1, 100 / 3.6)} m",
+            CameraWarningTiming.triggerDistanceMeters(1, 100 / 3.6) in 440.0..560.0,
+        )
+        assertTrue(
+            "last tier was ${CameraWarningTiming.triggerDistanceMeters(2, 100 / 3.6)} m",
+            CameraWarningTiming.triggerDistanceMeters(2, 100 / 3.6) in 220.0..280.0,
+        )
     }
 
     @Test

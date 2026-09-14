@@ -42,6 +42,7 @@ import com.motoroute.data.download.RegionDownloadProgress
 import com.motoroute.data.download.byRegion
 import com.motoroute.ui.components.ScreenHeader
 import com.motoroute.ui.components.formatSize
+import com.motoroute.ui.theme.Radius
 import com.motoroute.ui.theme.LocalRideColors
 
 /**
@@ -105,7 +106,7 @@ fun MapDownloadScreen(
             )
 
             blockedReason?.let {
-                Surface(color = colors.warning, shape = RoundedCornerShape(12.dp)) {
+                Surface(color = colors.warning, shape = RoundedCornerShape(Radius.Sm)) {
                     Text(
                         text = it,
                         color = Color.Black,
@@ -226,7 +227,7 @@ private fun QueueCard(
 
     Surface(
         color = colors.panel,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(Radius.Md),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
@@ -291,7 +292,7 @@ private fun QueueCard(
                 if (isRunning && !progress.isFinished) {
                     Button(
                         onClick = onCancel,
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(Radius.Sm),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = colors.danger,
                             contentColor = Color.Black,
@@ -304,7 +305,7 @@ private fun QueueCard(
                 if (progress.filesFailed > 0) {
                     Button(
                         onClick = onRetry,
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(Radius.Sm),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = colors.route,
                             contentColor = Color.Black,

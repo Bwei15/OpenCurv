@@ -33,8 +33,14 @@ object TypeScale {
 
     // ---- riding register: read at 650 mm, in motion ----------------------
 
-    /** Distance to the next maneuver. 56 sp = 33.9', the biggest thing on screen. */
-    val HudDisplay: TextUnit = 56.sp
+    /**
+     * Distance to the next maneuver - the biggest thing on screen.
+     *
+     * 64 sp = 38.7' at 650 mm. Raised from 56 sp after a ride report: "in 300
+     * Metern" is the one number read at a glance without turning the head, and
+     * at 56 sp it was competing with the speed readout instead of dominating it.
+     */
+    val HudDisplay: TextUnit = 64.sp
 
     /** Current speed. 44 sp = 26.6', above the ISO 15008 preferred value. */
     val HudPrimary: TextUnit = 44.sp
@@ -42,8 +48,8 @@ object TypeScale {
     /** Remaining distance, arrival, curviness. 34 sp = 20.6', at the floor. */
     val HudSecondary: TextUnit = 34.sp
 
-    /** Unit suffix riding along with a display number ("km", "m"). */
-    val HudUnit: TextUnit = 26.sp
+    /** Unit suffix riding along with a display number ("km", "m"). Scaled with [HudDisplay]. */
+    val HudUnit: TextUnit = 30.sp
 
     /** Banner text. 20 sp is under the floor, which is why a banner is also a colour. */
     val HudBanner: TextUnit = 20.sp

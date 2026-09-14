@@ -53,6 +53,18 @@ class Route(
      * separate speed database.
      */
     val speedLimitsKmh: IntArray? = null,
+    /**
+     * How much of this route runs on a motorway (including its ramps), in
+     * metres.
+     *
+     * Read out of the routing tiles like the speed limits, and for the same
+     * kind of reason: the profile prices an Autobahn as a last resort, but a
+     * waypoint can still *snap* onto one, so the only way to tell whether a
+     * suggested Rundtour actually stays off the motorway is to measure the
+     * result. [com.motoroute.ui.map.MapViewModel.suggestRoundTrip] rejects a
+     * loop over [MAX_MOTORWAY_SHARE] and tries again with different via points.
+     */
+    val motorwayMeters: Double = 0.0,
 ) {
     val cumulativeDistances: DoubleArray = DoubleArray(points.size).also { acc ->
         for (i in 1 until points.size) {
@@ -104,7 +116,19 @@ class Route(
     fun remainingFrom(index: Int, alongSegment: Double): Double =
         (distanceMeters - distanceAt(index) - alongSegment).coerceAtLeast(0.0)
 
+    /** Fraction of the route that runs on a motorway, 0..1. */
+    val motorwayShare: Double
+        get() = if (distanceMeters < 1.0) 0.0 else (motorwayMeters / distanceMeters).coerceIn(0.0, 1.0)
+
     companion object {
         val EMPTY = Route(emptyList(), emptyList(), "", 0)
+
+        /**
+         * More motorway than this and a suggested round trip is not a
+         * motorcycle tour any more, so the suggestion is retried with different
+         * via points. Not zero: a start or destination that genuinely sits next
+         * to an Autobahn will always contribute a little.
+         */
+        const val MAX_MOTORWAY_SHARE = 0.12
     }
 }

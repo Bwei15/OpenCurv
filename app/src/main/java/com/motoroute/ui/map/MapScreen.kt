@@ -42,7 +42,7 @@ fun MapScreen(
     route: Route?,
     position: GeoPoint?,
     headingDegrees: Double,
-    zoom: Int?,
+    zoom: Double?,
     headingUp: Boolean,
     follow: Boolean,
     perspectiveTilt: Float,

@@ -270,7 +270,7 @@ private fun MapRoot(
     manualZoom: Boolean,
     demoRunning: Boolean,
     speedCameraWarning: com.motoroute.domain.cameras.SpeedCameraWarning?,
-    zoom: Int,
+    zoom: Double,
     onOpenData: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenSearch: (SearchMode) -> Unit,

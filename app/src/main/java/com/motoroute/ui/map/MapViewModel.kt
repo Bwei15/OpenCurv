@@ -71,7 +71,7 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     val navigationState: StateFlow<NavigationState> = container.navigation.state
     val planningState: StateFlow<PlanningState> = container.navigation.planning
     val settings: StateFlow<Settings> = container.settings.settings
-    val recommendedZoom: StateFlow<Int> = container.navigation.recommendedZoom
+    val recommendedZoom: StateFlow<Double> = container.navigation.recommendedZoom
     val demoRunning: StateFlow<Boolean> = container.navigation.demoRunning
 
     private val _selection = MutableStateFlow(PlanSelection())
@@ -682,7 +682,7 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         private const val SEARCH_DEBOUNCE_MILLIS = 220L
 
         /** Close enough to see the streets around a chosen destination. */
-        private const val DESTINATION_ZOOM = 14
+        private const val DESTINATION_ZOOM = 14.0
 
         /** Initial suggestion plus this many nudge-and-retry rounds for [suggestRoundTrip]. */
         private const val ROUND_TRIP_ATTEMPTS = 3

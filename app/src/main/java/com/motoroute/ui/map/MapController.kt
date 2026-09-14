@@ -136,7 +136,7 @@ class MapController(private val offlineData: OfflineDataRepository) {
 
     /** A camera move asked for while no map was ready yet. */
     private var pendingCenter: GeoPoint? = null
-    private var pendingZoom: Int? = null
+    private var pendingZoom: Double? = null
 
     private var tapCallback: ((GeoPoint) -> Unit)? = null
     private var longPressCallback: ((GeoPoint) -> Unit)? = null
@@ -186,8 +186,8 @@ class MapController(private val offlineData: OfflineDataRepository) {
 
         view.getMapAsync { map ->
             mapLibreMap = map
-            map.setMinZoomPreference(CameraController.MIN_ZOOM.toDouble())
-            map.setMaxZoomPreference(CameraController.MAX_ZOOM.toDouble())
+            map.setMinZoomPreference(CameraController.MIN_ZOOM)
+            map.setMaxZoomPreference(CameraController.MAX_ZOOM)
 
             // Our own buttons cover recentring and day/night; the built-in
             // chrome would be a second, uninvited set of controls on a screen
@@ -254,7 +254,7 @@ class MapController(private val offlineData: OfflineDataRepository) {
     fun detach() {
         mapLibreMap?.let {
             pendingCenter = center()
-            pendingZoom = it.cameraPosition.zoom.toInt()
+            pendingZoom = it.cameraPosition.zoom
         }
         style = null
         mapLibreMap = null
@@ -706,7 +706,7 @@ class MapController(private val offlineData: OfflineDataRepository) {
     fun follow(
         position: GeoPoint?,
         headingDegrees: Double,
-        zoom: Int?,
+        zoom: Double?,
         headingUp: Boolean,
         tiltDegrees: Float = 0f,
     ) {
@@ -715,7 +715,7 @@ class MapController(private val offlineData: OfflineDataRepository) {
 
         val level = zoom ?: DEFAULT_FOLLOW_ZOOM.takeIf { !riderZoomApplied }
         level?.let { riderZoomApplied = true }
-        val targetZoom = (level ?: map.cameraPosition.zoom.toInt())
+        val targetZoom = (level ?: map.cameraPosition.zoom)
             .coerceIn(CameraController.MIN_ZOOM, CameraController.MAX_ZOOM)
 
         // Tilted, the rider sits low in the frame so most of the screen shows
@@ -727,7 +727,7 @@ class MapController(private val offlineData: OfflineDataRepository) {
 
         val target = CameraPosition.Builder()
             .target(LatLng(position.latitude, position.longitude))
-            .zoom(targetZoom.toDouble())
+            .zoom(targetZoom)
             .bearing(if (headingUp) headingDegrees else 0.0)
             .tilt(tiltDegrees.toDouble())
             .padding(doubleArrayOf(0.0, topPadding, 0.0, 0.0))
@@ -737,7 +737,7 @@ class MapController(private val offlineData: OfflineDataRepository) {
         cameraPlaced = true
     }
 
-    fun centerOn(point: GeoPoint, zoom: Int? = null) {
+    fun centerOn(point: GeoPoint, zoom: Double? = null) {
         val map = mapLibreMap
         if (map == null) {
             pendingCenter = point
@@ -747,7 +747,7 @@ class MapController(private val offlineData: OfflineDataRepository) {
         zoom?.let { riderZoomApplied = true }
         val target = CameraPosition.Builder()
             .target(LatLng(point.latitude, point.longitude))
-            .apply { zoom?.let { z -> zoom(z.coerceIn(CameraController.MIN_ZOOM, CameraController.MAX_ZOOM).toDouble()) } }
+            .apply { zoom?.let { z -> zoom(z.coerceIn(CameraController.MIN_ZOOM, CameraController.MAX_ZOOM)) } }
             .build()
         map.easeCamera(CameraUpdateFactory.newCameraPosition(target), CAMERA_EASE_MS)
         cameraPlaced = true
@@ -1053,7 +1053,7 @@ class MapController(private val offlineData: OfflineDataRepository) {
         const val PIN_DP = 30f
 
         /** Where the camera lands once it knows where the rider is. */
-        const val DEFAULT_FOLLOW_ZOOM = 14
+        const val DEFAULT_FOLLOW_ZOOM = 14.0
 
         /** Roughly one GPS fix apart - long enough to read as tracking, not a slideshow. */
         const val FOLLOW_EASE_MS = 900
@@ -1075,4 +1075,4 @@ fun LatLng.toGeoPoint(): GeoPoint = GeoPoint(latitude, longitude)
 fun GeoPoint.toLatLng(): LatLng = LatLng(latitude, longitude)
 
 /** Zoom clamped to what the renderer and the data can actually serve. */
-fun clampZoom(zoom: Int): Int = zoom.coerceIn(CameraController.MIN_ZOOM, CameraController.MAX_ZOOM)
+fun clampZoom(zoom: Double): Double = zoom.coerceIn(CameraController.MIN_ZOOM, CameraController.MAX_ZOOM)

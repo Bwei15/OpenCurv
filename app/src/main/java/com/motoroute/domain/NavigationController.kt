@@ -69,8 +69,13 @@ class NavigationController(
     private val _lastFix = MutableStateFlow<FilteredFix?>(null)
     val lastFix: StateFlow<FilteredFix?> = _lastFix.asStateFlow()
 
-    private val _zoom = MutableStateFlow(16)
-    val recommendedZoom: StateFlow<Int> = _zoom.asStateFlow()
+    private val _zoom = MutableStateFlow(CameraController.DEFAULT_ZOOM)
+
+    /**
+     * The zoom the riding camera wants right now - fractional, eased, and
+     * updated on every fix. See [CameraController] for the curve.
+     */
+    val recommendedZoom: StateFlow<Double> = _zoom.asStateFlow()
 
     private val _demoRunning = MutableStateFlow(false)
 

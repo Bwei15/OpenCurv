@@ -125,7 +125,8 @@ fun StopTile(
 @Composable
 fun AddStopTile(onClick: () -> Unit, label: String, modifier: Modifier = Modifier, onDark: Boolean = false) {
     val colors = LocalRideColors.current
-    val tint = if (onDark) colors.primary.let { colors.hudPrimary } else colors.primary
+    // The HUD's own lighter indigo on dark, where the resting primary would not carry.
+    val tint = if (onDark) colors.hudPrimary else colors.primary
     Box(
         modifier = modifier
             .fillMaxWidth()

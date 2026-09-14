@@ -1,0 +1,18 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24"
+    android:tint="#FFFFFFFF">
+    <!-- Hazard: the warning triangle, which is the one road sign shape that
+         means "something unexpected" to every rider in Europe without reading
+         it. Kept as a filled outline with the exclamation knocked out, so it
+         stays a triangle at 26 dp instead of collapsing into a blob. -->
+    <path
+        android:pathData="M12 2.8 23 21.2H1L12 2.8zm0 4.4L4.7 19.2h14.6L12 7.2z"
+        android:fillColor="#FFFFFFFF" />
+    <path
+        android:pathData="M11 10.2h2v5.2h-2z"
+        android:fillColor="#FFFFFFFF" />
+    <path
+        android:pathData="M11 16.3h2v2h-2z"
+        android:fillColor="#FFFFFFFF" />
+</vector>

@@ -44,6 +44,7 @@ import com.motoroute.ui.theme.Scrim
 import com.motoroute.ui.theme.Space
 import com.motoroute.ui.theme.TapTargetSize
 import com.motoroute.ui.theme.TypeScale
+import com.motoroute.ui.theme.rememberWindowShape
 
 /**
  * The riding HUD.
@@ -93,6 +94,7 @@ fun ActiveNavigationScreen(
     map: @Composable (() -> Unit)? = null,
 ) {
     val colors = LocalRideColors.current
+    val window = rememberWindowShape()
     var menuExpanded by remember { mutableStateOf(false) }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -107,6 +109,10 @@ fun ActiveNavigationScreen(
             ManeuverCard(
                 state = state,
                 onStop = onStop,
+                // A landscape phone on a handlebar has about 400 dp of height
+                // in total; the portrait card would take more than a third of
+                // it before the map got a look in.
+                compact = window.isShort,
                 modifier = Modifier.padding(horizontal = Space.Md, vertical = Space.Sm),
             )
 
@@ -141,7 +147,7 @@ fun ActiveNavigationScreen(
                     speeding = state.isSpeeding,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(top = SPEED_STACK_TOP, end = Space.Md),
+                        .padding(top = if (window.isShort) Space.Sm else SPEED_STACK_TOP, end = Space.Md),
                 )
 
                 Column(
@@ -238,9 +244,13 @@ private fun ManeuverCard(
     state: NavigationState,
     onStop: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Short window (landscape on a phone): same information, less height. */
+    compact: Boolean = false,
 ) {
     val colors = LocalRideColors.current
     val current = state.current
+    val iconSize = if (compact) MANEUVER_ICON_SIZE_COMPACT else MANEUVER_ICON_SIZE
+    val minHeight = if (compact) MANEUVER_CARD_MIN_HEIGHT_COMPACT else MANEUVER_CARD_MIN_HEIGHT
 
     Surface(
         color = colors.hudBackground.copy(alpha = Scrim.FloatingControl),
@@ -251,21 +261,21 @@ private fun ManeuverCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = MANEUVER_CARD_MIN_HEIGHT)
+                    .heightIn(min = minHeight)
                     .padding(start = Space.Md, end = CLOSE_BUTTON_GUTTER, top = Space.Md, bottom = Space.Md),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (current != null) {
                     ManeuverIcon(
                         maneuver = current.maneuver,
-                        size = MANEUVER_ICON_SIZE,
+                        size = iconSize,
                         roundaboutExit = current.roundaboutExit,
                     )
                     Spacer(Modifier.width(Space.Md))
                     // The exit number used to be a 16 sp line of text next to
                     // the arrow; it now lives inside the ring the arrow draws,
                     // which is why nothing but the distance is left here.
-                    DistanceReadout(state.distanceToManeuverMeters)
+                    DistanceReadout(state.distanceToManeuverMeters, compact = compact)
                 } else {
                     Text(
                         text = stringResource(R.string.nav_waiting_gps),
@@ -380,8 +390,13 @@ private fun RidePill(
 /** Plate height that fits the 112 dp arrow with its own breathing room. */
 private val MANEUVER_CARD_MIN_HEIGHT = 144.dp
 
+/** The same card on a landscape phone, where 144 dp is a third of the screen. */
+private val MANEUVER_CARD_MIN_HEIGHT_COMPACT = 96.dp
+
 /** Raised from 104 dp with the distance: the arrow is read before the number. */
 private val MANEUVER_ICON_SIZE = 112.dp
+
+private val MANEUVER_ICON_SIZE_COMPACT = 72.dp
 
 private val NEXT_ICON_SIZE = 56.dp
 

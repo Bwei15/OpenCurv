@@ -265,6 +265,12 @@ fun DistanceReadout(
     meters: Double,
     modifier: Modifier = Modifier,
     color: Color = LocalRideColors.current.hudForeground,
+    /**
+     * Landscape on a phone. One step down the riding scale, not off it: the
+     * distance stays the biggest thing on screen, it just stops being the
+     * tallest thing on a 400 dp window.
+     */
+    compact: Boolean = false,
 ) {
     val (value, unit) = formatDistance(meters)
     Row(modifier = modifier, verticalAlignment = Alignment.Bottom) {
@@ -274,7 +280,7 @@ fun DistanceReadout(
             // The tokens, not literals: these two used to be 56/26 sp written
             // out here, so raising the HUD display size in Type.kt did nothing
             // to the one number it was raised for.
-            fontSize = TypeScale.HudDisplay,
+            fontSize = if (compact) TypeScale.HudPrimary else TypeScale.HudDisplay,
             fontWeight = FontWeight.Black,
             maxLines = 1,
         )
@@ -282,7 +288,7 @@ fun DistanceReadout(
             Text(
                 text = unit,
                 color = color,
-                fontSize = TypeScale.HudUnit,
+                fontSize = if (compact) TypeScale.HudBanner else TypeScale.HudUnit,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(start = Space.Xs, bottom = 6.dp),
             )

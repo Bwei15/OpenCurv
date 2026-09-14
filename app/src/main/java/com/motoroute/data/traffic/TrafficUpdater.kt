@@ -62,9 +62,22 @@ class TrafficUpdater(
         refreshIfDue(reason = reason, ignoreCacheAge = true)
     }
 
-    /** Call once, from [com.motoroute.OpenCurvApp.onCreate]. Non-blocking. */
+    /**
+     * Call once, from [com.motoroute.OpenCurvApp.onCreate]. Non-blocking.
+     *
+     * The first refresh waits [STARTUP_DELAY_MILLIS] rather than firing
+     * immediately. A refresh is roughly 330 HTTP requests (see
+     * `1.Doku/Verkehrsdaten.md`), and doing that in the same second the app is
+     * inflating its first frame, loading a map style and asking for a GPS fix is
+     * how a cold start comes to take five seconds to show the rider where they
+     * are. Nothing about traffic data is urgent in those first seconds: the
+     * route it feeds is not calculated yet.
+     */
     fun start() {
-        refreshIfDue(reason = "start")
+        scope.launch {
+            delay(STARTUP_DELAY_MILLIS)
+            refreshIfDue(reason = "start")
+        }
         registerNetworkCallback()
         startPeriodicTimer()
     }
@@ -145,5 +158,8 @@ class TrafficUpdater(
         private const val PREFS_NAME = "traffic_updater"
         private const val KEY_LAST_FETCH = "last_fetch_epoch_millis"
         const val REFRESH_INTERVAL_MS = 30 * 60 * 1000L
+
+        /** How long the first refresh yields to the cold start. See [start]. */
+        const val STARTUP_DELAY_MILLIS = 6_000L
     }
 }

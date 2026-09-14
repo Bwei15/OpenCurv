@@ -21,6 +21,7 @@ import com.motoroute.ui.components.StopTile
 import com.motoroute.ui.theme.LocalRideColors
 import com.motoroute.ui.theme.Space
 import com.motoroute.ui.theme.TypeScale
+import com.motoroute.ui.theme.rememberWindowShape
 
 /**
  * One entry in the riding stop list.
@@ -62,12 +63,13 @@ fun RideStopSheet(
 ) {
     val colors = LocalRideColors.current
     val viaCount = stops.count { it.role == StopRole.VIA }
+    val window = rememberWindowShape()
 
     DraggableSheet(
         peekHeight = PEEK_HEIGHT,
         background = colors.hudBackground,
         handleColor = colors.hudDivider,
-        maxHeight = MAX_HEIGHT,
+        maxHeight = minOf(MAX_HEIGHT, window.maxSheetHeight),
         modifier = modifier,
     ) {
         Column(

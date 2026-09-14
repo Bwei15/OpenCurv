@@ -567,8 +567,39 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /** Puts the camera on the downloaded data when there is no fix to follow. */
+    /**
+     * Puts the map where the rider is, as soon as anything at all knows where
+     * that is.
+     *
+     * The ride report: up to five seconds staring at the wrong part of the
+     * country after opening the app. A cold GNSS fix genuinely takes that long,
+     * and no app can shorten it - but three cheaper answers exist and none of
+     * them was being used. In order of how good they are:
+     *
+     *  1. a live fix, if navigation already has one (nothing to do);
+     *  2. the platform's last known location - free, instant, and usually
+     *     minutes old at worst because another app asked for it;
+     *  3. where this app was last centred, remembered in settings;
+     *  4. the offline index's first entry, which is what it did before - a
+     *     position somewhere in the downloaded region, better than the Atlantic
+     *     but not by much.
+     *
+     * The first three are synchronous, so the map is framed in the first frame
+     * rather than after a suspend and a disk read.
+     */
     fun centerOnDataIfIdle() {
         if (container.navigation.lastFix.value != null) return
+
+        container.locationProvider.lastKnown()?.let { location ->
+            mapController.centerOn(GeoPoint(location.latitude, location.longitude), STARTUP_ZOOM)
+            return
+        }
+
+        container.settings.current.lastPosition?.let { (latitude, longitude) ->
+            mapController.centerOn(GeoPoint(latitude, longitude), STARTUP_ZOOM)
+            return
+        }
+
         viewModelScope.launch {
             container.placeSearch.mapStartPosition()?.let { mapController.centerOn(it) }
         }
@@ -724,6 +755,15 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
 
         /** Close enough to see the streets around a chosen destination. */
         private const val DESTINATION_ZOOM = 14.0
+
+        /**
+         * Zoom for the "here is roughly where you are" frame at startup.
+         *
+         * Deliberately wider than [DESTINATION_ZOOM]: the position it is built
+         * on may be minutes old, and a wide frame that contains the rider beats
+         * a tight one centred next to them.
+         */
+        private const val STARTUP_ZOOM = 13.0
 
         /** Initial suggestion plus this many nudge-and-retry rounds for [suggestRoundTrip]. */
         private const val ROUND_TRIP_ATTEMPTS = 3

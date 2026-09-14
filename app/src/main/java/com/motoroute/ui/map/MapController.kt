@@ -446,6 +446,16 @@ class MapController(private val offlineData: OfflineDataRepository) {
             )
             style.addLayer(
                 LineLayer(TRAFFIC_CORE_LAYER, TRAFFIC_SOURCE).apply {
+                    // Same reasoning as the icons: an orange line for every lane
+                    // restriction in the country is not information at zoom 8.
+                    // Closures keep their line at every zoom, because a closed
+                    // road is the one thing worth seeing from far out.
+                    setFilter(
+                        Expression.any(
+                            Expression.eq(Expression.get(PROP_IMPASSABLE), Expression.literal(true)),
+                            Expression.gte(Expression.zoom(), Expression.literal(TRAFFIC_MINOR_LINE_MIN_ZOOM)),
+                        ),
+                    )
                     setProperties(
                         PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
                         PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
@@ -466,14 +476,92 @@ class MapController(private val offlineData: OfflineDataRepository) {
                     )
                 },
             )
+            // Three layers, not one.
+            //
+            // Every traffic report used to be drawn with the same red "closed"
+            // ring, with overlap and placement checks switched off, from zoom 8
+            // upward. A real refresh is about 4100 reports, 3200 of them
+            // ordinary roadworks - so an Autobahn turned into a carpet of
+            // identical crosses in which the 650 actual closures were
+            // invisible. That is the ride report: "viel zu viel, was angezeigt
+            // wird ... sieht sehr verwirrend aus".
+            //
+            // What separates them now:
+            //  * the icon says what it is - a closed ring, a cone, a warning
+            //    triangle - so severity is readable without tapping;
+            //  * each kind appears at the zoom where it starts being useful. A
+            //    closure matters while looking at a whole region; a lane
+            //    restriction only matters once the rider is looking at the road
+            //    it is on;
+            //  * overlap and placement checks are ON, which is what actually
+            //    thins the carpet: MapLibre drops a symbol that would collide
+            //    with one already placed, so a cluster of ten reports 200 m
+            //    apart draws as one or two icons instead of ten.
+            //
+            // Closures are added first because symbol placement runs in layer
+            // order, so the layer added first wins a collision - which is the
+            // right way round: a closure must never be hidden by a cone.
+            style.addImage(
+                ROADWORKS_ICON,
+                poiBitmap(context, R.drawable.ic_poi_roadworks, WORKS_PLATE_ARGB, android.graphics.Color.WHITE, android.graphics.Color.WHITE, TRAFFIC_MINOR_DP),
+            )
+            style.addImage(
+                HAZARD_ICON,
+                poiBitmap(context, R.drawable.ic_poi_hazard, HAZARD_PLATE_ARGB, android.graphics.Color.WHITE, android.graphics.Color.WHITE, TRAFFIC_MINOR_DP),
+            )
+
             style.addLayer(
                 SymbolLayer(TRAFFIC_ICON_LAYER, TRAFFIC_SOURCE).apply {
-                    minZoom = TRAFFIC_ICON_MIN_ZOOM
-                    setFilter(Expression.eq(Expression.get(PROP_ROLE), Expression.literal(PROP_ROLE_ICON)))
+                    minZoom = TRAFFIC_CLOSURE_MIN_ZOOM
+                    setFilter(
+                        Expression.all(
+                            Expression.eq(Expression.get(PROP_ROLE), Expression.literal(PROP_ROLE_ICON)),
+                            Expression.eq(Expression.get(PROP_IMPASSABLE), Expression.literal(true)),
+                        ),
+                    )
                     setProperties(
                         PropertyFactory.iconImage(BARRIER_ICON),
-                        PropertyFactory.iconAllowOverlap(true),
-                        PropertyFactory.iconIgnorePlacement(true),
+                        PropertyFactory.iconAllowOverlap(false),
+                        PropertyFactory.iconIgnorePlacement(false),
+                        PropertyFactory.iconPadding(TRAFFIC_ICON_PADDING_DP),
+                    )
+                },
+            )
+            style.addLayer(
+                SymbolLayer(TRAFFIC_HAZARD_LAYER, TRAFFIC_SOURCE).apply {
+                    minZoom = TRAFFIC_HAZARD_MIN_ZOOM
+                    setFilter(
+                        Expression.all(
+                            Expression.eq(Expression.get(PROP_ROLE), Expression.literal(PROP_ROLE_ICON)),
+                            Expression.neq(Expression.get(PROP_IMPASSABLE), Expression.literal(true)),
+                            Expression.neq(Expression.get(PROP_TYPE), Expression.literal(TYPE_CONSTRUCTION)),
+                        ),
+                    )
+                    setProperties(
+                        PropertyFactory.iconImage(HAZARD_ICON),
+                        PropertyFactory.iconAllowOverlap(false),
+                        PropertyFactory.iconIgnorePlacement(false),
+                        PropertyFactory.iconPadding(TRAFFIC_ICON_PADDING_DP),
+                    )
+                },
+            )
+            style.addLayer(
+                SymbolLayer(TRAFFIC_WORKS_LAYER, TRAFFIC_SOURCE).apply {
+                    // The most numerous and the least urgent, so the last to be
+                    // placed and the last to appear.
+                    minZoom = TRAFFIC_WORKS_MIN_ZOOM
+                    setFilter(
+                        Expression.all(
+                            Expression.eq(Expression.get(PROP_ROLE), Expression.literal(PROP_ROLE_ICON)),
+                            Expression.neq(Expression.get(PROP_IMPASSABLE), Expression.literal(true)),
+                            Expression.eq(Expression.get(PROP_TYPE), Expression.literal(TYPE_CONSTRUCTION)),
+                        ),
+                    )
+                    setProperties(
+                        PropertyFactory.iconImage(ROADWORKS_ICON),
+                        PropertyFactory.iconAllowOverlap(false),
+                        PropertyFactory.iconIgnorePlacement(false),
+                        PropertyFactory.iconPadding(TRAFFIC_ICON_PADDING_DP),
                     )
                 },
             )
@@ -831,9 +919,11 @@ class MapController(private val offlineData: OfflineDataRepository) {
         map.queryRenderedFeatures(screenPoint, FOOD_LAYER).firstOrNull()?.let {
             return poiFeatureToHit(it, PoiKind.RESTAURANT)
         }
-        map.queryRenderedFeatures(screenPoint, TRAFFIC_ICON_LAYER).firstOrNull()?.let {
-            return barrierFeatureToHit(it)
-        }
+        // All three traffic layers, closures first: the tap answer should match
+        // what the rider sees on top.
+        map.queryRenderedFeatures(screenPoint, TRAFFIC_ICON_LAYER, TRAFFIC_HAZARD_LAYER, TRAFFIC_WORKS_LAYER)
+            .firstOrNull()
+            ?.let { return barrierFeatureToHit(it) }
         return null
     }
 
@@ -1019,6 +1109,10 @@ class MapController(private val offlineData: OfflineDataRepository) {
         const val TRAFFIC_CASING_LAYER = "opencurv-traffic-casing"
         const val TRAFFIC_CORE_LAYER = "opencurv-traffic-core"
         const val TRAFFIC_ICON_LAYER = "opencurv-traffic-icon"
+        const val TRAFFIC_HAZARD_LAYER = "opencurv-traffic-hazard"
+        const val TRAFFIC_WORKS_LAYER = "opencurv-traffic-works"
+        const val ROADWORKS_ICON = "opencurv-roadworks-icon"
+        const val HAZARD_ICON = "opencurv-hazard-icon"
         const val BARRIER_ICON = "opencurv-poi-barrier-icon"
 
         const val CAMERA_SOURCE = "opencurv-cameras"
@@ -1030,6 +1124,10 @@ class MapController(private val offlineData: OfflineDataRepository) {
         const val PROP_IMPASSABLE = "impassable"
         const val PROP_ROLE = "role"
         const val PROP_ROLE_ICON = "icon"
+
+        /** `properties.type`, i.e. IncidentType's own name - see 1.Doku/Verkehrsdaten.md. */
+        const val PROP_TYPE = "type"
+        const val TYPE_CONSTRUCTION = "CONSTRUCTION"
 
         /** Route line widths in dp - a dark casing under a bright core (Design_System.md §2.6). */
         const val ROUTE_CASING_WIDTH_DP = 10f
@@ -1054,7 +1152,31 @@ class MapController(private val offlineData: OfflineDataRepository) {
         const val TRAFFIC_CASING_WIDTH_DP = 9f
         const val TRAFFIC_CORE_WIDTH_IMPASSABLE_DP = 6f
         const val TRAFFIC_CORE_WIDTH_MINOR_DP = 3f
-        const val TRAFFIC_ICON_MIN_ZOOM = 8f
+        /**
+         * Zoom floors per severity - the heart of the decluttering.
+         *
+         * A closed road is worth seeing while planning across a region; a
+         * one-lane roadworks only once the rider is looking at that road. 8 is
+         * roughly a federal state on screen, 11 a city, 12 a few streets.
+         */
+        const val TRAFFIC_CLOSURE_MIN_ZOOM = 8f
+        const val TRAFFIC_HAZARD_MIN_ZOOM = 11f
+        const val TRAFFIC_WORKS_MIN_ZOOM = 12f
+
+        /** Same idea for the non-blocking lines drawn along the road. */
+        const val TRAFFIC_MINOR_LINE_MIN_ZOOM = 11f
+
+        /**
+         * Dead space each traffic icon claims, so MapLibre's collision check
+         * thins a cluster instead of stacking it. In icon pixels, not dp.
+         */
+        const val TRAFFIC_ICON_PADDING_DP = 6f
+
+        /** Amber plate for a non-blocking report, against the red used for closures. */
+        const val WORKS_PLATE_ARGB = 0xFFE8710A.toInt()
+
+        /** Cone and triangle sit a little smaller than the closure ring. */
+        const val TRAFFIC_MINOR_DP = 26f
         const val CAMERA_ICON_MIN_ZOOM = 11f
 
         const val POI_GLYPH_SCALE = 0.56f

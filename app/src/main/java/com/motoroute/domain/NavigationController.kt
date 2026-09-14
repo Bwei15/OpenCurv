@@ -98,6 +98,9 @@ class NavigationController(
      */
     private var planJob: Job? = null
 
+    /** Wall clock of the last [rememberPosition] write. */
+    private var lastPositionSavedAtMillis = 0L
+
     private val rerouting = ReroutingEngine(
         scope = scope,
         calculate = { from, to, via -> runCatching { calculate(listOf(from) + via + to) } },
@@ -147,6 +150,7 @@ class NavigationController(
     private fun onFix(fix: FilteredFix, allowReroute: Boolean = true) {
         _lastFix.value = fix
         _zoom.value = camera.zoomFor(fix.speedMps * 3.6)
+        rememberPosition(fix)
 
         // Runs on every fix regardless of navigation state - the whole point
         // of the feature is to warn even when just riding around with the map
@@ -294,6 +298,25 @@ class NavigationController(
         }
     }
 
+    /**
+     * Writes the current position to settings now and then, so the next cold
+     * start can show the right part of the map before the GPS has a fix (see
+     * [com.motoroute.data.settings.Settings.lastPosition]).
+     *
+     * Throttled hard: a fix arrives every second and this is a SharedPreferences
+     * commit. Every 30 seconds is often enough - the value only has to be good
+     * enough to frame a map, and a rider who moved 30 seconds' worth is still
+     * within a screen of it.
+     */
+    private fun rememberPosition(fix: FilteredFix) {
+        val now = System.currentTimeMillis()
+        if (now - lastPositionSavedAtMillis < POSITION_SAVE_INTERVAL_MILLIS) return
+        lastPositionSavedAtMillis = now
+        settings.update {
+            it.copy(lastLatitude = fix.point.latitude, lastLongitude = fix.point.longitude)
+        }
+    }
+
     fun setVoiceEnabled(enabled: Boolean) {
         voice.enabled = enabled
         if (!enabled) voice.stop()
@@ -337,5 +360,8 @@ class NavigationController(
 
         /** Demo fixes arrive twice a second, like a good GPS on a fast bike. */
         const val DEMO_TICK_MILLIS = 500L
+
+        /** How often the position is persisted for the next cold start. */
+        const val POSITION_SAVE_INTERVAL_MILLIS = 30_000L
     }
 }

@@ -57,6 +57,7 @@ import com.motoroute.ui.theme.Radius
 import com.motoroute.ui.theme.Space
 import com.motoroute.ui.theme.TapTargetSize
 import com.motoroute.ui.theme.TypeScale
+import com.motoroute.ui.theme.rememberWindowShape
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -121,11 +122,15 @@ fun RoutePlanSheet(
     // entirely - see ActiveNavigationScreen).
     val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val peekHeight = (if (hasDestination) PEEK_HEIGHT_DESTINATION else PEEK_HEIGHT_EMPTY) + navBarBottom
+    // Landscape on a phone is about 400 dp tall, and the sheet's own 460 dp
+    // ceiling is more than that - opened, it would cover the map completely.
+    val window = rememberWindowShape()
 
     DraggableSheet(
         peekHeight = peekHeight,
         background = colors.panel,
         handleColor = colors.panelRim,
+        maxHeight = window.maxSheetHeight,
         modifier = modifier,
     ) {
         Column(

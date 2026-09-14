@@ -41,7 +41,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
+import com.motoroute.ui.theme.Elevation
 import com.motoroute.ui.theme.Motion
+import com.motoroute.ui.theme.Radius
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -262,8 +264,9 @@ fun DraggableSheet(
 
     Surface(
         color = background,
-        shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
+        shape = RoundedCornerShape(topStart = Radius.Xl, topEnd = Radius.Xl),
         border = BorderStroke(1.dp, handleColor),
+        shadowElevation = Elevation.Sheet,
         modifier = modifier
             .fillMaxWidth()
             .offset { IntOffset(0, offset.value.roundToInt()) }

@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import com.motoroute.R
 import com.motoroute.domain.NavigationState
 import com.motoroute.domain.cameras.SpeedCameraWarning
+import com.motoroute.ui.theme.Elevation
 import com.motoroute.ui.theme.LocalRideColors
 import com.motoroute.ui.theme.Motion
 import com.motoroute.ui.theme.Radius
@@ -255,6 +256,7 @@ private fun ManeuverCard(
     Surface(
         color = colors.hudBackground.copy(alpha = Scrim.FloatingControl),
         shape = RoundedCornerShape(Radius.Xl),
+        shadowElevation = Elevation.Floating,
         modifier = modifier.fillMaxWidth(),
     ) {
         Box {

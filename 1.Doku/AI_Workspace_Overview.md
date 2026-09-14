@@ -355,3 +355,51 @@ Neue Pakete und Dateien, die oben noch fehlen:
 - **Pipeline** — `build_cameras.py`, `build_places.py`; Katalog-Arten `cameras`, `places`.
 - **Tests** — App 300, Verifier 267 (`tools/verifier/build.gradle.kts` schließt Android-/UI-Klassen und -Tests aus; Test-Ressourcen aus `app/src/test/resources`).
 - **Karten-Abhängigkeit** — Mapsforge ist vollständig entfernt; nur noch MapLibre Native.
+
+---
+
+## Nachtrag 14.09.2026 (Welle 9 — Fahrbericht)
+
+Vollständig in `1.Doku/Welle9_Status.md`; hier nur, was am Baum oben fehlt.
+
+**Neue Dateien**
+
+- `domain/PositionInterpolator.kt` — Koppelnavigation zwischen GPS-Fixes, damit
+  der Puck fließt statt zu springen. Gedeckelte Korrektur, Sprung ab 40 m Fehler.
+- `domain/RideItinerary.kt` — Wegpunkte → „in 12 km, 16:02" für die Stopp-Liste
+  während der Fahrt.
+- `domain/cameras/CameraWarningTiming.kt` — Blitzer-Stufen (1000/500/250 m bei
+  Landstraßentempo, in Sekunden definiert und geschwindigkeitsskaliert).
+- `data/traffic/Datex2Parser.kt`, `MobilithekTrafficSource.kt`,
+  `CompositeTrafficSource.kt` — Bundes-/Landesstraßen über die Mobilithek, mit
+  vom Fahrer eingetragenem Token; beide Quellen zusammengeführt.
+- `ui/components/StopTile.kt`, `ui/components/ReorderableStopColumn.kt` — Stopps
+  als Kacheln, per Finger sortierbar (langer Druck, dann ziehen).
+- `ui/plan/RouteOptionsScreen.kt` — Routenoptionen als eigener Bildschirm.
+- `ui/navigation/RideStopSheet.kt` — das Klappmenü im Fahrbetrieb ist jetzt die
+  Route, nicht eine Schublade mit Knöpfen.
+- `ui/theme/WindowSize.kt` — `WindowShape`, die einzige Stelle, die „Querformat?"
+  beantwortet.
+- `1.Doku/design/mockup/index.html` — Papier-Prototyp mit den echten Tokens.
+  Hier werden Layouts angesehen, bevor sie in Compose wandern (kein Emulator im
+  Workspace).
+- `1.Doku/Design_Trends_2026.md` — recherchierte Design-Leitlinie (Material 3
+  Expressive, Liquid Glass, was Apps „fertig" wirken lässt).
+
+**Geändertes Verhalten, das Annahmen bricht**
+
+- `CameraController.zoomFor` gibt **`Double`** zurück, nicht `Int` — ebenso
+  `recommendedZoom`, `MapScreen(zoom=)`, `MapController.follow/centerOn` und
+  `clampZoom`. MapLibre nahm gebrochenen Zoom die ganze Zeit.
+- `Settings` kennt `avoidMotorways`, `trafficApiKey`, `trafficFeedUrl`,
+  `lastLatitude`/`lastLongitude`.
+- `Route` kennt `motorwayMeters` (aus den Kacheln gelesen wie die Tempolimits).
+- `TrafficUpdater` nimmt einen `sourceProvider: () -> TrafficSource` statt einer
+  festen Quelle, damit ein neu eingetragener Token ohne Neustart greift, und hat
+  `refreshNow()`.
+- `MapViewModel.moveStopUp/moveStopDown` → **`moveStop(from, to)`**.
+- `SpeedCameraAlert` (roter Vollbildalarm) ist weg; die Warnung während der Fahrt
+  ist eine `StatusPill`.
+- `.github/workflows/android.yml` hat einen zweiten Job, der die Compose-UI
+  kompiliert und die App-Unit-Tests laufen lässt. Ohne ihn war eine
+  nicht-kompilierende UI-Änderung grün.

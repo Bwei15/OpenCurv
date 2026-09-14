@@ -71,6 +71,8 @@ import com.motoroute.ui.plan.RoutePlanSheet
 import com.motoroute.ui.search.SearchMode
 import com.motoroute.ui.search.SearchScreen
 import com.motoroute.ui.settings.SettingsScreen
+import com.motoroute.ui.theme.Radius
+import com.motoroute.ui.theme.Elevation
 import com.motoroute.ui.theme.LocalRideColors
 
 private enum class Screen { MAP, SEARCH, DATA, DOWNLOAD, SETTINGS, ROUTE_OPTIONS }
@@ -501,7 +503,12 @@ private fun SearchBar(text: String?, onClick: () -> Unit, modifier: Modifier = M
     val colors = LocalRideColors.current
     Surface(
         color = colors.panel.copy(alpha = 0.96f),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(Radius.Lg),
+        // Depth, not separation - the plate still carries its own casing where
+        // one is needed (Design_System.md, Regel 2). A search bar with no lift
+        // at all is the single thing that most made the resting screen read as
+        // "assembled" rather than "designed".
+        shadowElevation = Elevation.Floating,
         modifier = modifier
             .height(64.dp)
             .clickable(onClick = onClick),
@@ -559,15 +566,16 @@ private fun PoiCard(
 
     Surface(
         color = colors.panel,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(Radius.Md),
         border = BorderStroke(1.dp, colors.panelRim),
+        shadowElevation = Elevation.Floating,
         modifier = modifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Surface(
                     color = if (isBarrier) colors.danger else colors.primary,
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(Radius.Sm),
                 ) {
                     Icon(
                         painter = painterResource(iconRes),
@@ -605,7 +613,7 @@ private fun PoiCard(
                 ) {
                     Surface(
                         color = colors.primary,
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(Radius.Sm),
                         modifier = Modifier
                             .weight(1f)
                             .clickable { onDestination(hit) },
@@ -622,7 +630,7 @@ private fun PoiCard(
                     }
                     Surface(
                         color = colors.panelSunken,
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(Radius.Sm),
                         border = BorderStroke(1.dp, colors.panelRim),
                         modifier = Modifier
                             .weight(1f)

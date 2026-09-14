@@ -426,7 +426,7 @@ fun GloveButton(
     Surface(
         onClick = onClick,
         enabled = enabled,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(Radius.Md),
         color = background.copy(alpha = 0.86f),
         modifier = modifier
             .defaultMinSize(minWidth = size, minHeight = size)

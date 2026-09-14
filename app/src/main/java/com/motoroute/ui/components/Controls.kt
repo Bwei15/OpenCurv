@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.motoroute.R
+import com.motoroute.ui.theme.Radius
 import com.motoroute.ui.theme.LocalRideColors
 import com.motoroute.ui.theme.TapTargetSize
 import java.util.Locale
@@ -99,7 +100,7 @@ fun IconTapButton(
     Surface(
         onClick = onClick,
         enabled = enabled,
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(Radius.Md),
         color = background,
         modifier = modifier
             .defaultMinSize(minWidth = TapTargetSize, minHeight = TapTargetSize)
@@ -131,7 +132,7 @@ fun PrimaryButton(
     Button(
         onClick = onClick,
         enabled = enabled,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(Radius.Md),
         colors = ButtonDefaults.buttonColors(
             containerColor = container,
             contentColor = content,
@@ -156,7 +157,7 @@ fun SecondaryButton(
     Button(
         onClick = onClick,
         enabled = enabled,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(Radius.Md),
         colors = ButtonDefaults.buttonColors(
             containerColor = colors.panel,
             contentColor = colors.onPanel,
@@ -178,7 +179,7 @@ fun PanelCard(
     val colors = LocalRideColors.current
     Surface(
         color = colors.panel,
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(Radius.Lg),
         modifier = modifier.fillMaxWidth(),
     ) {
         Column(
